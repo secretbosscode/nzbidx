@@ -16,6 +16,18 @@ Placeholder for project description.
 
     docker compose exec api python scripts/seed_os.py
 
+## SafeSearch and Adult Content
+
+The API exposes two environment flags to control adult content:
+
+* `SAFESEARCH` (default `on`): when enabled, adult categories are removed from
+  all responses and from the `caps` category listing. Set to `off` to allow
+  adult categories to be returned.
+* `ALLOW_XXX` (default `false`): when `false`, the XXX category (id `6000`) is
+  entirely disabled. Requests that explicitly target this category receive an
+  empty RSS feed with a comment noting that adult content is disabled. Enable
+  this flag **and** set `SAFESEARCH=off` to expose XXX results.
+
 ## Production Deployment
 
 Use the production override file to run the stack with persistent data stores and healthcheck ordering:

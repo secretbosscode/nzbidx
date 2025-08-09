@@ -66,7 +66,14 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .db import ping
-from .newznab import caps_xml, get_nzb, rss_xml
+from .newznab import (
+    adult_content_allowed,
+    adult_disabled_xml,
+    caps_xml,
+    get_nzb,
+    is_adult_category,
+    rss_xml,
+)
 from .rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
@@ -137,25 +144,44 @@ def _os_search(
     q: Optional[str],
     *,
     category: Optional[str] = None,
-    extra: Optional[dict[str, str]] = None,
+    extra: Optional[dict[str, object]] = None,
     artist: Optional[str] = None,
 ) -> list[dict[str, str]]:
-    """Run a search against OpenSearch and return RSS item dicts.
-
-    ``q`` is the user query. ``category`` restricts results to a specific
-    Newznab category. ``extra`` allows additional field matches, e.g. season or
-    imdbid. Missing OpenSearch or errors simply result in an empty list.
-    """
+    """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
     if opensearch and q:
         try:
-            must = []
-            if q:
-                must.append({"match": {"norm_title": q}})
+            must: list[dict[str, object]] = [{"match": {"norm_title": q}}]
+            filters: list[dict[str, object]] = []
+
             if extra:
                 for field, value in extra.items():
-                    if value:
-                        must.append({"match": {field: value}})
+                    if field == "tags":
+                        values = value if isinstance(value, list) else [value]
+                        for v in values:
+                            if v:
+                                must.append({"match": {"tags": v}})
+                    elif field == "year" and value:
+                        try:
+                            year_int = int(value)
+                            filters.append(
+                                {
+                                    "range": {
+                                        "posted_at": {
+                                            "gte": f"{year_int}-01-01",
+                                            "lt": f"{year_int + 1}-01-01",
+                                        }
+                                    }
+                                }
+                            )
+                        except ValueError:
+                            pass
+                    else:
+                        values = value if isinstance(value, list) else [value]
+                        for v in values:
+                            if v:
+                                must.append({"match": {field: v}})
+
             if artist:
                 must.append(
                     {
@@ -167,15 +193,17 @@ def _os_search(
                         }
                     }
                 )
-            body: dict[str, dict] = {"query": {"bool": {"must": must}}}
+
             if category:
-                body["query"]["bool"].setdefault("filter", []).append(
-                    {"term": {"category": category}}
-                )
+                filters.append({"term": {"category": category}})
+
             if os.getenv("ALLOW_XXX", "false").lower() != "true":
-                body["query"]["bool"].setdefault("must_not", []).append(
-                    {"term": {"category": "xxx"}}
-                )
+                filters.append({"term": {"category": "xxx"}})
+
+            body: dict[str, dict] = {"query": {"bool": {"must": must}}}
+            if filters:
+                body["query"]["bool"]["filter"] = filters
+
             result = opensearch.search(index="nzbidx-releases-v1", body=body)
             for hit in result.get("hits", {}).get("hits", []):
                 src = hit.get("_source", {})
@@ -191,64 +219,3 @@ def _os_search(
         except Exception:
             items = []
     return items
-
-
-async def api(request: Request) -> Response:
-    """Newznab compatible endpoint."""
-    params = request.query_params
-    t = params.get("t")
-    if t == "caps":
-        return Response(caps_xml(), media_type="application/xml")
-
-    if t == "search":
-        q = params.get("q")
-        items = _os_search(q)
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "tvsearch":
-        q = params.get("q")
-        season = params.get("season")
-        episode = params.get("ep")
-        items = _os_search(
-            q,
-            category="5000",
-            extra={"season": season, "episode": episode},
-        )
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "music":
-        q = params.get("q")
-        artist = params.get("artist")
-        items = _os_search(q, category="3000", artist=artist)
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "movie":
-        q = params.get("q")
-        imdbid = params.get("imdbid")
-        items = _os_search(q, category="2000", extra={"imdbid": imdbid})
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "getnzb":
-        release_id = params.get("id")
-        if not release_id:
-            return JSONResponse({"detail": "missing id"}, status_code=400)
-        return Response(get_nzb(release_id, cache), media_type="application/x-nzb")
-
-    return JSONResponse({"detail": "unsupported request"}, status_code=400)
-
-
-routes = [
-    Route("/health", health),
-    Route("/api", api),
-]
-
-app = Starlette(
-    routes=routes,
-    on_startup=[init_opensearch, init_cache],
-    middleware=[Middleware(RateLimitMiddleware)],
-)
-
-if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8080)
