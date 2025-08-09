@@ -1,9 +1,9 @@
-"""Newznab protocol utilities."""
+"""Helpers for the Newznab API."""
 
 
-class NewznabClient:
-    """Placeholder for Newznab client."""
-
-    def search(self) -> None:
-        """Search method stub."""
-        pass
+def caps_xml() -> str:
+    """Return a minimal Newznab caps XML document."""
+    return (
+        "<caps><server version=\"0.1\" title=\"nzbidx\"/>"
+        "<limits max=\"100\" default=\"50\"/></caps>"
+    )
