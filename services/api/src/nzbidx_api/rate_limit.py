@@ -53,7 +53,7 @@ class RateLimiter:
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Apply simple IP based rate limiting."""
+    """Apply IP based rate limiting configurable via ``RATE_LIMIT_RPM``."""
 
     def __init__(self, app, rpm: int | None = None) -> None:
         super().__init__(app)
