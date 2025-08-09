@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import ORJSONResponse
 from opensearchpy import OpenSearch
 
+from .db import ping
 from .newznab import caps_xml
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ def init_opensearch() -> None:
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Health check endpoint."""
-    return {"status": "ok"}
+    db_status = "ok" if await ping() else "down"
+    return {"status": "ok", "db": db_status}
 
 
 @app.get("/api")

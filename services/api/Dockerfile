@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
-RUN pip install --no-cache-dir fastapi uvicorn[standard] orjson opensearch-py
+RUN pip install --no-cache-dir fastapi uvicorn[standard] orjson opensearch-py sqlalchemy>=2 asyncpg
 
 # Copy application source
 COPY src/ .

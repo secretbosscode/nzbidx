@@ -7,5 +7,7 @@ dependencies = [
     "orjson",
     "opensearch-py",
     "httpx",
+    "sqlalchemy>=2",
+    "asyncpg",
 ]
 
