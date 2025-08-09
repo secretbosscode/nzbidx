@@ -1,0 +1,32 @@
+name: auto-conflict-resolver
+on:
+  workflow_dispatch:
+    inputs:
+      policy:
+        description: 'Resolution policy: PREFER_BASE or PREFER_PR'
+        required: false
+        default: 'PREFER_BASE'
+  schedule:
+    - cron: '17 5 * * *'  # daily
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup GH CLI
+        uses: cli/cli@v2
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Resolve conflicts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          POLICY: ${{ github.event.inputs.policy || 'PREFER_BASE' }}
+        run: bash scripts/resolve_conflicts.sh
