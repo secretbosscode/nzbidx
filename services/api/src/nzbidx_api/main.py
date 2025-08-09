@@ -66,7 +66,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .db import ping
-from .newznab import caps_xml, get_nzb, rss_xml
+from .newznab import MOVIES_CAT, TV_CAT, caps_xml, get_nzb, rss_xml
 from .rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ async def api(request: Request) -> Response:
         episode = params.get("ep")
         items = _os_search(
             q,
-            category="5000",
+            category=TV_CAT,
             extra={"season": season, "episode": episode},
         )
         return Response(rss_xml(items), media_type="application/xml")
@@ -201,7 +201,7 @@ async def api(request: Request) -> Response:
     if t == "movie":
         q = params.get("q")
         imdbid = params.get("imdbid")
-        items = _os_search(q, category="2000", extra={"imdbid": imdbid})
+        items = _os_search(q, category=MOVIES_CAT, extra={"imdbid": imdbid})
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "getnzb":

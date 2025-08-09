@@ -1,5 +1,6 @@
 """Helpers for the Newznab API."""
 
+import os
 from typing import Optional
 
 # Optional redis dependency for caching
@@ -9,11 +10,25 @@ except Exception:  # pragma: no cover - optional dependency
     Redis = None  # type: ignore
 
 
+MOVIES_CAT = os.getenv("MOVIES_CAT_ID", "2000")
+TV_CAT = os.getenv("TV_CAT_ID", "5000")
+AUDIO_CAT = os.getenv("AUDIO_CAT_ID", "3000")
+BOOKS_CAT = os.getenv("BOOKS_CAT_ID", "7000")
+ADULT_CAT = os.getenv("ADULT_CAT_ID", "6000")
+
+
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
     return (
         '<caps><server version="0.1" title="nzbidx"/>'
-        '<limits max="100" default="50"/></caps>'
+        '<limits max="100" default="50"/>'
+        "<categories>"
+        f'<category id="{MOVIES_CAT}" name="Movies"/>'
+        f'<category id="{TV_CAT}" name="TV"/>'
+        f'<category id="{AUDIO_CAT}" name="Audio/Music"/>'
+        f'<category id="{BOOKS_CAT}" name="Books/eBooks"/>'
+        f'<category id="{ADULT_CAT}" name="XXX/Adult"/>'
+        "</categories></caps>"
     )
 
 
