@@ -1,3 +1,4 @@
+```python
 """Parsers for ingest service."""
 
 from __future__ import annotations
@@ -5,19 +6,46 @@ from __future__ import annotations
 import re
 
 
+def normalize_subject(subject: str) -> str:
+    """Return a cleaned, human-readable version of a Usenet subject line.
+
+    Lightweight normalization:
+    - Convert separators ('.', '_') to spaces
+    - Remove explicit 'yEnc' markers
+    - Drop part counters like '(01/15)' or '[12345/12346]'
+    - Remove common filler words (e.g., 'repost', 'sample')
+    - Collapse whitespace, trim separators, and lowercase
+    """
+    if not subject:
+        return ""
+
+    # Convert common separators to spaces.
+    cleaned = subject.replace(".", " ").replace("_", " ")
+
+    # Remove explicit yEnc markers.
+    cleaned = re.sub(r"(?i)\byenc\b", "", cleaned)
+
+    # Drop part/size information such as "(01/15)" or "[12345/12346]".
+    cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
+
+    # Remove common filler words.
+    fillers = ("repost", "sample")
+    cleaned = re.sub(
+        r"\b(" + "|".join(map(re.escape, fillers)) + r")\b",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # Collapse whitespace and trim leading/trailing separators or dashes.
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
+
+    # Lowercase for consistent comparisons.
+    return cleaned.lower()
+
+
 def parse() -> None:
     """Parse data stub."""
     pass
-
-
-def normalize_subject(subject: str) -> str:
-    """Return a normalized version of an NNTP subject line.
-
-    The normalisation is intentionally simple for now – it lowers the case and
-    collapses repeating whitespace so tests can reason about duplicate
-    detection.  Real-world logic can be much more sophisticated.
-    """
-
-    # Replace any amount of whitespace with a single space and lowercase the
-    # result.  Strip leading/trailing whitespace so titles can be compared.
-    return re.sub(r"\s+", " ", subject).strip().lower()
+```

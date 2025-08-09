@@ -1,5 +1,9 @@
 """Helpers for the Newznab API."""
 
+from typing import Optional
+
+from redis import Redis
+
 
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
@@ -43,3 +47,21 @@ def nzb_xml_stub(release_id: str) -> str:
         "</file>"
         "</nzb>"
     )
+
+
+def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
+    """Return an NZB document for ``release_id`` using ``cache``.
+
+    If ``cache`` is provided the result is stored under ``nzb:<release_id>``
+    with a TTL of 24 hours and retrieved from there on subsequent calls.
+    """
+
+    key = f"nzb:{release_id}"
+    if cache:
+        cached = cache.get(key)
+        if cached:
+            return cached.decode("utf-8")
+        xml = nzb_xml_stub(release_id)
+        cache.setex(key, 86400, xml)
+        return xml
+    return nzb_xml_stub(release_id)
