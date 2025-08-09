@@ -61,6 +61,49 @@ async def health(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok", "db": db_status})
 
 
+def _os_search(
+    q: Optional[str],
+    *,
+    category: Optional[str] = None,
+    extra: Optional[dict[str, str]] = None,
+) -> list[dict[str, str]]:
+    """Run a search against OpenSearch and return RSS item dicts.
+
+    ``q`` is the user query. ``category`` restricts results to a specific
+    Newznab category. ``extra`` allows additional field matches, e.g. season or
+    imdbid. Missing OpenSearch or errors simply result in an empty list.
+    """
+
+    items: list[dict[str, str]] = []
+    if opensearch and q:
+        try:
+            must = [{"match": {"norm_title": q}}]
+            if extra:
+                for field, value in extra.items():
+                    if value:
+                        must.append({"match": {field: value}})
+            body: dict[str, dict] = {"query": {"bool": {"must": must}}}
+            if category:
+                body["query"]["bool"].setdefault("filter", []).append(
+                    {"term": {"category": category}}
+                )
+            result = opensearch.search(index="nzbidx-releases-v1", body=body)
+            for hit in result.get("hits", {}).get("hits", []):
+                src = hit.get("_source", {})
+                items.append(
+                    {
+                        "title": src.get("norm_title", ""),
+                        "guid": hit.get("_id", ""),
+                        "pubDate": src.get("posted_at", ""),
+                        "category": src.get("category", ""),
+                        "link": f"/api?t=getnzb&id={hit.get('_id','')}",
+                    }
+                )
+        except Exception:
+            items = []
+    return items
+
+
 async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
@@ -70,24 +113,24 @@ async def api(request: Request) -> Response:
 
     if t == "search":
         q = params.get("q")
-        items: list[dict[str, str]] = []
-        if opensearch and q:
-            try:
-                body = {"query": {"match": {"norm_title": q}}}
-                result = opensearch.search(index="nzbidx-releases-v1", body=body)
-                for hit in result.get("hits", {}).get("hits", []):
-                    src = hit.get("_source", {})
-                    items.append(
-                        {
-                            "title": src.get("norm_title", ""),
-                            "guid": hit.get("_id", ""),
-                            "pubDate": src.get("posted_at", ""),
-                            "category": src.get("category", ""),
-                            "link": f"/api?t=getnzb&id={hit.get('_id','')}",
-                        }
-                    )
-            except Exception:
-                items = []
+        items = _os_search(q)
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "tvsearch":
+        q = params.get("q")
+        season = params.get("season")
+        episode = params.get("ep")
+        items = _os_search(
+            q,
+            category="5000",
+            extra={"season": season, "episode": episode},
+        )
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "movie":
+        q = params.get("q")
+        imdbid = params.get("imdbid")
+        items = _os_search(q, category="2000", extra={"imdbid": imdbid})
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "getnzb":
