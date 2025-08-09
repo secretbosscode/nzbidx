@@ -1,0 +1,1 @@
+"""nzbidx ingest package."""
