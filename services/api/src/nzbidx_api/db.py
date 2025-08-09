@@ -4,19 +4,32 @@ from __future__ import annotations
 
 import os
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from typing import Optional
+
+# Optional SQLAlchemy dependency
+try:  # pragma: no cover - import guard
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+except Exception:  # pragma: no cover - optional dependency
+    text = None  # type: ignore
+    AsyncEngine = None  # type: ignore
+    create_async_engine = None  # type: ignore
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost:5432/postgres")
 DATABASE_URL = os.path.expandvars(DATABASE_URL)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
-engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=False)
+if create_async_engine:
+    engine: Optional[AsyncEngine] = create_async_engine(DATABASE_URL, echo=False)
+else:  # pragma: no cover - no sqlalchemy available
+    engine = None
 
 
 async def ping() -> bool:
     """Check database connectivity."""
+    if not engine or not text:
+        return False
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))

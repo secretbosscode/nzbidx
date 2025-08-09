@@ -2,7 +2,11 @@
 
 from typing import Optional
 
-from redis import Redis
+# Optional redis dependency for caching
+try:  # pragma: no cover - import guard
+    from redis import Redis
+except Exception:  # pragma: no cover - optional dependency
+    Redis = None  # type: ignore
 
 
 def caps_xml() -> str:
