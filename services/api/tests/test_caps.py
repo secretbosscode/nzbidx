@@ -1,6 +1,6 @@
 """Tests for the caps endpoint."""
 
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 from pathlib import Path
 import sys
 
