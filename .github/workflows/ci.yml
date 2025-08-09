@@ -44,6 +44,18 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Resolve conflicts with base
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          git merge origin/${{ github.event.pull_request.base.ref }} --no-edit -X ours
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
       - name: Merge Codex PR
         run: gh pr merge ${{ github.event.pull_request.number }} --merge --auto
         env:
