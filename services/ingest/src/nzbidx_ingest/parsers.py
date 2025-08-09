@@ -3,9 +3,92 @@
 from __future__ import annotations
 
 import re
+from typing import Dict, List
 
 
-def normalize_subject(subject: str) -> str:
+def extract_music_tags(subject: str) -> Dict[str, str]:
+    """Return music related tags from a subject line.
+
+    Handles scene style strings like ``Artist-Album-2021-FLAC`` or
+    ``Artist-Album-2021-MP3-320``. The returned dict may contain the keys
+    ``artist``, ``album``, ``year``, ``format`` and ``bitrate``.
+    """
+
+    pattern = re.compile(
+        r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
+        r"(?P<format>FLAC|MP3)(?:-(?P<bitrate>\d{3}))?",
+        re.IGNORECASE,
+    )
+    match = pattern.search(subject)
+    if not match:
+        return {}
+
+    tags = match.groupdict()
+    tags = {k: v.replace(".", " ") if v else v for k, v in tags.items() if v}
+    # normalise known tokens
+    if "format" in tags:
+        tags["format"] = tags["format"].upper()
+    return tags
+
+
+def extract_book_tags(subject: str) -> Dict[str, str]:
+    """Return book related tags from a subject line.
+
+    Expected patterns look like ``Author-Title-2020-EPUB`` or optionally
+    include an ISBN number: ``Author-Title-2020-PDF-1234567890``.
+    Returns a dict with ``author``, ``title``, ``year``, ``format`` and
+    optional ``isbn`` keys when found.
+    """
+
+    pattern = re.compile(
+        r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
+        r"(?P<format>EPUB|MOBI|PDF)(?:-(?P<isbn>\d{10,13}))?",
+        re.IGNORECASE,
+    )
+    match = pattern.search(subject)
+    if not match:
+        return {}
+
+    tags = match.groupdict()
+    tags = {k: v.replace(".", " ") if v else v for k, v in tags.items() if v}
+    tags["format"] = tags["format"].upper()
+    return tags
+
+
+def extract_xxx_tags(subject: str) -> Dict[str, str]:
+    """Return adult content related tags from a subject line.
+
+    Supports two common patterns:
+
+    ``Studio.Name.2022.1080p`` -> ``studio``, ``date`` and ``resolution``
+    ``Site.Name.2023.07.12``   -> ``site`` and ``date``
+    """
+
+    studio_re = re.compile(
+        r"(?P<studio>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4})\.(?P<resolution>\d{3,4}p)",
+        re.IGNORECASE,
+    )
+    site_re = re.compile(
+        r"(?P<site>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4}\.\d{2}\.\d{2})",
+        re.IGNORECASE,
+    )
+
+    match = studio_re.search(subject)
+    if match:
+        tags = match.groupdict()
+        tags["studio"] = tags["studio"].replace(".", " ")
+        return {k: v for k, v in tags.items() if v}
+
+    match = site_re.search(subject)
+    if match:
+        tags = match.groupdict()
+        tags["site"] = tags["site"].replace(".", " ")
+        return {k: v for k, v in tags.items() if v}
+
+    return {}
+
+
+def normalize_subject(subject: str, *, with_tags: bool = False) -> tuple[str, List[str]] | str:
     """Return a cleaned, human-readable version of a Usenet subject line.
 
     Lightweight normalization:
@@ -14,9 +97,20 @@ def normalize_subject(subject: str) -> str:
     - Drop part counters like '(01/15)' or '[12345/12346]'
     - Remove common filler words (e.g., 'repost', 'sample')
     - Collapse whitespace and trim separators
+
+    In addition to the normalisation the function extracts hints from the
+    subject using :func:`extract_music_tags`, :func:`extract_book_tags` and
+    :func:`extract_xxx_tags`. Values from these helpers are merged into a list
+    of lowercase tags with duplicates removed.
     """
     if not subject:
-        return ""
+        return ("", []) if with_tags else ""
+
+    # Extract tags before subject cleaning as many patterns rely on original
+    # separators (``-`` and ``.``).
+    tag_dict: Dict[str, str] = {}
+    for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
+        tag_dict.update(extractor(subject))
 
     # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")
@@ -40,7 +134,9 @@ def normalize_subject(subject: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
 
-    # Return the normalized subject preserving original case.
+    tags = sorted({value.lower() for value in tag_dict.values() if value})
+    if with_tags:
+        return cleaned, tags
     return cleaned
 
 
