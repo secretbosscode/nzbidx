@@ -30,7 +30,7 @@ def normalize_subject(subject: str) -> str:
     # Remove common filler words.
     fillers = ("repost", "sample")
     cleaned = re.sub(
-        r"\b(" + "|".join(map(re.escape, fillers)) + r")\b",
+        rf"\b({'|'.join(map(re.escape, fillers))})\b",
         "",
         cleaned,
         flags=re.IGNORECASE,
@@ -40,6 +40,7 @@ def normalize_subject(subject: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
 
+    # Return the normalized subject preserving original case.
     return cleaned
 
 
