@@ -3,6 +3,24 @@
 from __future__ import annotations
 
 import re
+from typing import Optional
+
+LANGUAGE_TOKENS = {
+    "[ITA]": "it",
+    "[FRENCH]": "fr",
+    "[GERMAN]": "de",
+}
+
+
+def detect_language(subject: str) -> Optional[str]:
+    """Return a language code if a known token is present."""
+    if not subject:
+        return None
+    upper = subject.upper()
+    for token, code in LANGUAGE_TOKENS.items():
+        if token in upper:
+            return code
+    return None
 
 
 def normalize_subject(subject: str) -> str:
@@ -12,6 +30,7 @@ def normalize_subject(subject: str) -> str:
     - Convert separators ('.', '_') to spaces
     - Remove explicit 'yEnc' markers
     - Drop part counters like '(01/15)' or '[12345/12346]'
+    - Remove language tags like '[FRENCH]'
     - Remove common filler words (e.g., 'repost', 'sample')
     - Collapse whitespace and trim separators
     """
@@ -26,6 +45,9 @@ def normalize_subject(subject: str) -> str:
 
     # Drop part/size information such as "(01/15)" or "[12345/12346]".
     cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
+
+    # Remove language tags like [FRENCH], [GERMAN], [ITA].
+    cleaned = re.sub(r"\[(?:ITA|FRENCH|GERMAN)\]", "", cleaned, flags=re.IGNORECASE)
 
     # Remove common filler words.
     fillers = ("repost", "sample")

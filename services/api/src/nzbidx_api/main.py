@@ -138,6 +138,7 @@ def _os_search(
     *,
     category: Optional[str] = None,
     extra: Optional[dict[str, str]] = None,
+    artist: Optional[str] = None,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts.
 
@@ -148,15 +149,32 @@ def _os_search(
     items: list[dict[str, str]] = []
     if opensearch and q:
         try:
-            must = [{"match": {"norm_title": q}}]
+            must = []
+            if q:
+                must.append({"match": {"norm_title": q}})
             if extra:
                 for field, value in extra.items():
                     if value:
                         must.append({"match": {field: value}})
+            if artist:
+                must.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"match": {"tags": artist}},
+                                {"match": {"norm_title": artist}},
+                            ]
+                        }
+                    }
+                )
             body: dict[str, dict] = {"query": {"bool": {"must": must}}}
             if category:
                 body["query"]["bool"].setdefault("filter", []).append(
                     {"term": {"category": category}}
+                )
+            if os.getenv("ALLOW_XXX", "false").lower() != "true":
+                body["query"]["bool"].setdefault("must_not", []).append(
+                    {"term": {"category": "xxx"}}
                 )
             result = opensearch.search(index="nzbidx-releases-v1", body=body)
             for hit in result.get("hits", {}).get("hits", []):
@@ -196,6 +214,12 @@ async def api(request: Request) -> Response:
             category="5000",
             extra={"season": season, "episode": episode},
         )
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "music":
+        q = params.get("q")
+        artist = params.get("artist")
+        items = _os_search(q, category="3000", artist=artist)
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "movie":

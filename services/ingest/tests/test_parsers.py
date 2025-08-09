@@ -1,6 +1,10 @@
 import pytest
+from pathlib import Path
+import sys
 
-from nzbidx_ingest.parsers import normalize_subject
+sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
+
+from nzbidx_ingest.parsers import detect_language, normalize_subject
 
 
 @pytest.mark.parametrize(
@@ -18,3 +22,15 @@ from nzbidx_ingest.parsers import normalize_subject
 )
 def test_normalize_subject(subject: str, expected: str) -> None:
     assert normalize_subject(subject) == expected
+
+
+@pytest.mark.parametrize(
+    "subject,lang",
+    [
+        ("Cool release [GERMAN]", "de"),
+        ("Something [FRENCH]", "fr"),
+        ("Nothing here", None),
+    ],
+)
+def test_detect_language(subject: str, lang: str | None) -> None:
+    assert detect_language(subject) == lang
