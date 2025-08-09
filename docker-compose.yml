@@ -2,12 +2,13 @@ version: '3.9'
 services:
   api:
     build: ./services/api
+    env_file:
+      - .env.example
     ports:
       - "8080:8080"
-    environment:
-      - OPENSEARCH_URL=${OPENSEARCH_URL:-http://opensearch:9200}
     depends_on:
       - opensearch
+      - postgres
   placeholder:
     image: alpine
   opensearch:
@@ -17,3 +18,11 @@ services:
       - plugins.security.disabled=true
     ports:
       - "9200:9200"
+  postgres:
+    image: postgres:16
+    env_file:
+      - .env.example
+    volumes:
+      - ./db/init/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    ports:
+      - "5432:5432"

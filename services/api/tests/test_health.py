@@ -17,4 +17,6 @@ def test_health() -> None:
     """``/health`` should return a simple status payload."""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert "db" in payload
