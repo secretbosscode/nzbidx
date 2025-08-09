@@ -137,7 +137,7 @@ def _os_search(
     q: Optional[str],
     *,
     category: Optional[str] = None,
-    extra: Optional[dict[str, str]] = None,
+    extra: Optional[dict[str, object]] = None,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts.
 
@@ -149,15 +149,39 @@ def _os_search(
     if opensearch and q:
         try:
             must = [{"match": {"norm_title": q}}]
+            filters: list[dict[str, object]] = []
+            if category:
+                filters.append({"term": {"category": category}})
             if extra:
                 for field, value in extra.items():
-                    if value:
-                        must.append({"match": {field: value}})
+                    if field == "tags":
+                        values = value if isinstance(value, list) else [value]
+                        for v in values:
+                            if v:
+                                must.append({"match": {"tags": v}})
+                    elif field == "year" and value:
+                        try:
+                            year_int = int(value)
+                            filters.append(
+                                {
+                                    "range": {
+                                        "posted_at": {
+                                            "gte": f"{year_int}-01-01",
+                                            "lt": f"{year_int + 1}-01-01",
+                                        }
+                                    }
+                                }
+                            )
+                        except ValueError:
+                            pass
+                    else:
+                        values = value if isinstance(value, list) else [value]
+                        for v in values:
+                            if v:
+                                must.append({"match": {field: v}})
             body: dict[str, dict] = {"query": {"bool": {"must": must}}}
-            if category:
-                body["query"]["bool"].setdefault("filter", []).append(
-                    {"term": {"category": category}}
-                )
+            if filters:
+                body["query"]["bool"]["filter"] = filters
             result = opensearch.search(index="nzbidx-releases-v1", body=body)
             for hit in result.get("hits", {}).get("hits", []):
                 src = hit.get("_source", {})
@@ -202,6 +226,35 @@ async def api(request: Request) -> Response:
         q = params.get("q")
         imdbid = params.get("imdbid")
         items = _os_search(q, category="2000", extra={"imdbid": imdbid})
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "music":
+        q = params.get("q")
+        artist = params.get("artist")
+        album = params.get("album")
+        year = params.get("year")
+        track = params.get("track")
+        label = params.get("label")
+        cat = os.getenv("AUDIO_CAT_ID", "3000")
+        items = _os_search(
+            q,
+            category=cat,
+            extra={"tags": [artist, album, track, label], "year": year},
+        )
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "book":
+        q = params.get("q")
+        author = params.get("author")
+        title = params.get("title")
+        year = params.get("year")
+        isbn = params.get("isbn")
+        cat = os.getenv("BOOKS_CAT_ID", "7000")
+        items = _os_search(
+            q,
+            category=cat,
+            extra={"tags": [author, title, isbn], "year": year},
+        )
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "getnzb":
