@@ -66,7 +66,14 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .db import ping
-from .newznab import caps_xml, get_nzb, rss_xml
+from .newznab import (
+    adult_content_allowed,
+    adult_disabled_xml,
+    caps_xml,
+    get_nzb,
+    is_adult_category,
+    rss_xml,
+)
 from .rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
@@ -203,12 +210,20 @@ async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
     t = params.get("t")
+    cat = params.get("cat")
+    if (
+        cat
+        and any(is_adult_category(c.strip()) for c in cat.split(","))
+        and not adult_content_allowed()
+    ):
+        return Response(adult_disabled_xml(), media_type="application/xml")
+
     if t == "caps":
         return Response(caps_xml(), media_type="application/xml")
 
     if t == "search":
         q = params.get("q")
-        items = _os_search(q)
+        items = _os_search(q, category=cat)
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "tvsearch":
