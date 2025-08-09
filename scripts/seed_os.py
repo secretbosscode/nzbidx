@@ -1,3 +1,5 @@
+"""Utility script to seed OpenSearch with sample release data."""
+
 from __future__ import annotations
 
 import os
