@@ -85,7 +85,7 @@ def main() -> int:
         "Test Release One",
     ]
     for subject in subjects:
-        norm_title = normalize_subject(subject)
+        norm_title = normalize_subject(subject).lower()
         if insert_release(db, norm_title):
             index_release(os_client, norm_title)
 

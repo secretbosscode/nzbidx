@@ -1,4 +1,3 @@
-```python
 """Parsers for ingest service."""
 
 from __future__ import annotations
@@ -41,11 +40,11 @@ def normalize_subject(subject: str) -> str:
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
 
-    # Lowercase for consistent comparisons.
-    return cleaned.lower()
+    # Return the normalized subject preserving original case.
+    return cleaned
 
 
 def parse() -> None:
     """Parse data stub."""
     pass
-```
+
