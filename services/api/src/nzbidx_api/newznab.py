@@ -4,8 +4,8 @@
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
     return (
-        "<caps><server version=\"0.1\" title=\"nzbidx\"/>"
-        "<limits max=\"100\" default=\"50\"/></caps>"
+        '<caps><server version="0.1" title="nzbidx"/>'
+        '<limits max="100" default="50"/></caps>'
     )
 
 
@@ -27,18 +27,18 @@ def rss_xml(items: list[dict[str, str]]) -> str:
         "</item>"
         for i in items
     )
-    return f"<rss version=\"2.0\"><channel>{items_xml}</channel></rss>"
+    return f'<rss version="2.0"><channel>{items_xml}</channel></rss>'
 
 
 def nzb_xml_stub(release_id: str) -> str:
     """Return a minimal NZB document for the given ``release_id``."""
 
     return (
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-        "<nzb xmlns=\"http://www.newzbin.com/DTD/2003/nzb\">"
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<nzb xmlns="http://www.newzbin.com/DTD/2003/nzb">'
         "<file>"
         "<segments>"
-        "<segment bytes=\"0\" number=\"1\">dummy@message.id</segment>"
+        '<segment bytes="0" number="1">dummy@message.id</segment>'
         "</segments>"
         "</file>"
         "</nzb>"
