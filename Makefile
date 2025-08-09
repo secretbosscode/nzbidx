@@ -13,7 +13,7 @@ test:
 	pytest
 
 fmt:
-	black .
+        black .
 
 lint:
-	ruff .
+        ruff check .

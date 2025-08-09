@@ -14,3 +14,11 @@ curl localhost:8080/health
 ```bash
 sudo sysctl -w vm.max_map_count=262144
 ```
+
+## Production Deployment
+
+Use the production override file to run the stack with persistent data stores and healthcheck ordering:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
