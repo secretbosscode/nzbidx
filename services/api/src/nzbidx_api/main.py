@@ -145,20 +145,15 @@ def _os_search(
     *,
     category: Optional[str] = None,
     extra: Optional[dict[str, object]] = None,
+    artist: Optional[str] = None,
 ) -> list[dict[str, str]]:
-    """Run a search against OpenSearch and return RSS item dicts.
-
-    ``q`` is the user query. ``category`` restricts results to a specific
-    Newznab category. ``extra`` allows additional field matches, e.g. season or
-    imdbid. Missing OpenSearch or errors simply result in an empty list.
-    """
+    """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
     if opensearch and q:
         try:
-            must = [{"match": {"norm_title": q}}]
+            must: list[dict[str, object]] = [{"match": {"norm_title": q}}]
             filters: list[dict[str, object]] = []
-            if category:
-                filters.append({"term": {"category": category}})
+
             if extra:
                 for field, value in extra.items():
                     if field == "tags":
@@ -186,9 +181,29 @@ def _os_search(
                         for v in values:
                             if v:
                                 must.append({"match": {field: v}})
+
+            if artist:
+                must.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"match": {"tags": artist}},
+                                {"match": {"norm_title": artist}},
+                            ]
+                        }
+                    }
+                )
+
+            if category:
+                filters.append({"term": {"category": category}})
+
+            if os.getenv("ALLOW_XXX", "false").lower() != "true":
+                filters.append({"term": {"category": "xxx"}})
+
             body: dict[str, dict] = {"query": {"bool": {"must": must}}}
             if filters:
                 body["query"]["bool"]["filter"] = filters
+
             result = opensearch.search(index="nzbidx-releases-v1", body=body)
             for hit in result.get("hits", {}).get("hits", []):
                 src = hit.get("_source", {})
@@ -204,95 +219,3 @@ def _os_search(
         except Exception:
             items = []
     return items
-
-
-async def api(request: Request) -> Response:
-    """Newznab compatible endpoint."""
-    params = request.query_params
-    t = params.get("t")
-    cat = params.get("cat")
-    if (
-        cat
-        and any(is_adult_category(c.strip()) for c in cat.split(","))
-        and not adult_content_allowed()
-    ):
-        return Response(adult_disabled_xml(), media_type="application/xml")
-
-    if t == "caps":
-        return Response(caps_xml(), media_type="application/xml")
-
-    if t == "search":
-        q = params.get("q")
-        items = _os_search(q, category=cat)
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "tvsearch":
-        q = params.get("q")
-        season = params.get("season")
-        episode = params.get("ep")
-        items = _os_search(
-            q,
-            category="5000",
-            extra={"season": season, "episode": episode},
-        )
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "movie":
-        q = params.get("q")
-        imdbid = params.get("imdbid")
-        items = _os_search(q, category="2000", extra={"imdbid": imdbid})
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "music":
-        q = params.get("q")
-        artist = params.get("artist")
-        album = params.get("album")
-        year = params.get("year")
-        track = params.get("track")
-        label = params.get("label")
-        cat = os.getenv("AUDIO_CAT_ID", "3000")
-        items = _os_search(
-            q,
-            category=cat,
-            extra={"tags": [artist, album, track, label], "year": year},
-        )
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "book":
-        q = params.get("q")
-        author = params.get("author")
-        title = params.get("title")
-        year = params.get("year")
-        isbn = params.get("isbn")
-        cat = os.getenv("BOOKS_CAT_ID", "7000")
-        items = _os_search(
-            q,
-            category=cat,
-            extra={"tags": [author, title, isbn], "year": year},
-        )
-        return Response(rss_xml(items), media_type="application/xml")
-
-    if t == "getnzb":
-        release_id = params.get("id")
-        if not release_id:
-            return JSONResponse({"detail": "missing id"}, status_code=400)
-        return Response(get_nzb(release_id, cache), media_type="application/x-nzb")
-
-    return JSONResponse({"detail": "unsupported request"}, status_code=400)
-
-
-routes = [
-    Route("/health", health),
-    Route("/api", api),
-]
-
-app = Starlette(
-    routes=routes,
-    on_startup=[init_opensearch, init_cache],
-    middleware=[Middleware(RateLimitMiddleware)],
-)
-
-if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8080)

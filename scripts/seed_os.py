@@ -20,18 +20,24 @@ def main() -> None:
             "category": "movies",
             "posted_at": "2024-01-01T00:00:00Z",
             "size_bytes": 123,
+            "language": "en",
+            "tags": ["fake", "release", "1"],
         },
         {
             "norm_title": "Fake Release 2",
             "category": "tv",
             "posted_at": "2024-01-02T00:00:00Z",
             "size_bytes": 456,
+            "language": "en",
+            "tags": ["fake", "release", "2"],
         },
         {
             "norm_title": "Fake Release 3",
             "category": "music",
             "posted_at": "2024-01-03T00:00:00Z",
             "size_bytes": 789,
+            "language": "en",
+            "tags": ["fake", "release", "3"],
         },
     ]
 

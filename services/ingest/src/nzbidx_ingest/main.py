@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from .logging import setup_logging
 from .nntp_client import NNTPClient
-from .parsers import normalize_subject
+from .parsers import detect_language, normalize_subject
 
 import logging
 import os
@@ -53,16 +53,27 @@ def insert_release(conn: sqlite3.Connection, norm_title: str) -> bool:
     return cur.rowcount > 0
 
 
-def index_release(client: Optional[object], norm_title: str) -> None:
+def index_release(
+    client: Optional[object],
+    norm_title: str,
+    *,
+    language: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+) -> None:
     """Index the release into OpenSearch."""
 
     if not client:
         return
+    body: dict[str, object] = {"norm_title": norm_title}
+    if language:
+        body["language"] = language
+    if tags:
+        body["tags"] = tags
     try:  # pragma: no cover - network errors
         client.index(
             index="nzbidx-releases-v1",
             id=norm_title,
-            body={"norm_title": norm_title},
+            body=body,
             refresh=True,
         )
     except Exception as exc:  # pragma: no cover - network errors
@@ -86,8 +97,10 @@ def main() -> int:
     ]
     for subject in subjects:
         norm_title = normalize_subject(subject).lower()
+        language = detect_language(subject)
+        tags = norm_title.split()
         if insert_release(db, norm_title):
-            index_release(os_client, norm_title)
+            index_release(os_client, norm_title, language=language, tags=tags)
 
     return 0
 

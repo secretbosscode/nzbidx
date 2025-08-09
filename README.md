@@ -33,4 +33,11 @@ The API exposes two environment flags to control adult content:
 Use the production override file to run the stack with persistent data stores and healthcheck ordering:
 
     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+## Configuration
+
+- `ALLOW_XXX` controls whether adult content is searchable. It is disabled by
+  default and must be explicitly set to `true` to opt in.
+- Only metadata is indexed; binaries are stripped during ingest. An admin
+  takedown endpoint is planned for future releases.
 ```
