@@ -1,3 +1,18 @@
 {
-  "template": {}
+  "index_patterns": ["nzbidx-releases-*"] ,
+  "template": {
+    "mappings": {
+      "properties": {
+        "norm_title": {
+          "type": "text",
+          "fields": {
+            "keyword": {"type": "keyword"}
+          }
+        },
+        "category": {"type": "keyword"},
+        "posted_at": {"type": "date"},
+        "size_bytes": {"type": "long"}
+      }
+    }
+  }
 }

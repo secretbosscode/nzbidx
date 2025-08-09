@@ -5,5 +5,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "orjson",
+    "opensearch-py",
+    "httpx",
 ]
 
