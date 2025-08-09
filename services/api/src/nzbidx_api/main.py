@@ -1,3 +1,4 @@
+```python
 """API service entrypoint using Starlette."""
 
 import json
@@ -12,9 +13,11 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
+from starlette.middleware import Middleware
 
 from .db import ping
 from .newznab import caps_xml, get_nzb, rss_xml
+from .rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -162,9 +165,14 @@ routes = [
     Route("/api", api),
 ]
 
-app = Starlette(routes=routes, on_startup=[init_opensearch, init_cache])
+app = Starlette(
+    routes=routes,
+    on_startup=[init_opensearch, init_cache],
+    middleware=[Middleware(RateLimitMiddleware)],
+)
 
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8080)
+```
