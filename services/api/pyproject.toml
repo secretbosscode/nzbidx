@@ -9,5 +9,6 @@ dependencies = [
     "httpx",
     "sqlalchemy>=2",
     "asyncpg",
+    "redis",
 ]
 
