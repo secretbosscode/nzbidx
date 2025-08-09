@@ -26,10 +26,14 @@ def init_opensearch() -> None:
     url = os.getenv("OPENSEARCH_URL", "http://opensearch:9200")
     try:
         client = OpenSearch(url, timeout=2)
-        template_path = Path(__file__).resolve().parents[3] / "opensearch" / "index-template.json"
+        template_path = (
+            Path(__file__).resolve().parents[3] / "opensearch" / "index-template.json"
+        )
         with template_path.open("r", encoding="utf-8") as f:
             template_body = json.load(f)
-        client.indices.put_index_template(name="nzbidx-releases-template", body=template_body)
+        client.indices.put_index_template(
+            name="nzbidx-releases-template", body=template_body
+        )
         if not client.indices.exists(index="nzbidx-releases-v1"):
             client.indices.create(index="nzbidx-releases-v1")
         if os.getenv("SEED_OS_SAMPLE") == "true":
@@ -40,7 +44,9 @@ def init_opensearch() -> None:
                 "size_bytes": 0,
             }
             try:
-                client.index(index="nzbidx-releases-v1", id="1", body=sample, refresh=True)
+                client.index(
+                    index="nzbidx-releases-v1", id="1", body=sample, refresh=True
+                )
             except Exception:
                 pass
         opensearch = client

@@ -9,8 +9,14 @@ services:
     depends_on:
       - opensearch
       - postgres
-  placeholder:
-    image: alpine
+  ingest:
+    build: ./services/ingest
+    env_file:
+      - .env.example
+    depends_on:
+      - opensearch
+      - postgres
+      - redis
   opensearch:
     image: opensearchproject/opensearch:2
     environment:
@@ -26,3 +32,7 @@ services:
       - ./db/init/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     ports:
       - "5432:5432"
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
