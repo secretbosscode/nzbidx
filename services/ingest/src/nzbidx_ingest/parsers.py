@@ -3,7 +3,25 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+# Language detection tokens found in many Usenet subjects
+LANGUAGE_TOKENS: Dict[str, str] = {
+    "[ITA]": "it",
+    "[FRENCH]": "fr",
+    "[GERMAN]": "de",
+}
+
+
+def detect_language(subject: str) -> Optional[str]:
+    """Return a language code if a known token is present in the subject."""
+    if not subject:
+        return None
+    upper = subject.upper()
+    for token, code in LANGUAGE_TOKENS.items():
+        if token in upper:
+            return code
+    return None
 
 
 def extract_music_tags(subject: str) -> Dict[str, str]:
@@ -13,7 +31,6 @@ def extract_music_tags(subject: str) -> Dict[str, str]:
     ``Artist-Album-2021-MP3-320``. The returned dict may contain the keys
     ``artist``, ``album``, ``year``, ``format`` and ``bitrate``.
     """
-
     pattern = re.compile(
         r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
         r"(?P<format>FLAC|MP3)(?:-(?P<bitrate>\d{3}))?",
@@ -25,7 +42,6 @@ def extract_music_tags(subject: str) -> Dict[str, str]:
 
     tags = match.groupdict()
     tags = {k: v.replace(".", " ") if v else v for k, v in tags.items() if v}
-    # normalise known tokens
     if "format" in tags:
         tags["format"] = tags["format"].upper()
     return tags
@@ -39,7 +55,6 @@ def extract_book_tags(subject: str) -> Dict[str, str]:
     Returns a dict with ``author``, ``title``, ``year``, ``format`` and
     optional ``isbn`` keys when found.
     """
-
     pattern = re.compile(
         r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
         r"(?P<format>EPUB|MOBI|PDF)(?:-(?P<isbn>\d{10,13}))?",
@@ -63,7 +78,6 @@ def extract_xxx_tags(subject: str) -> Dict[str, str]:
     ``Studio.Name.2022.1080p`` -> ``studio``, ``date`` and ``resolution``
     ``Site.Name.2023.07.12``   -> ``site`` and ``date``
     """
-
     studio_re = re.compile(
         r"(?P<studio>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4})\.(?P<resolution>\d{3,4}p)",
         re.IGNORECASE,
@@ -95,19 +109,17 @@ def normalize_subject(subject: str, *, with_tags: bool = False) -> tuple[str, Li
     - Convert separators ('.', '_') to spaces
     - Remove explicit 'yEnc' markers
     - Drop part counters like '(01/15)' or '[12345/12346]'
+    - Remove language tokens (e.g., '[FRENCH]', '[GERMAN]', '[ITA]')
     - Remove common filler words (e.g., 'repost', 'sample')
     - Collapse whitespace and trim separators
 
-    In addition to the normalisation the function extracts hints from the
-    subject using :func:`extract_music_tags`, :func:`extract_book_tags` and
-    :func:`extract_xxx_tags`. Values from these helpers are merged into a list
-    of lowercase tags with duplicates removed.
+    Also extracts hints via extract_* helpers and returns them as lowercase tags
+    (when ``with_tags=True``).
     """
     if not subject:
         return ("", []) if with_tags else ""
 
-    # Extract tags before subject cleaning as many patterns rely on original
-    # separators (``-`` and ``.``).
+    # Extract tags before cleaning (patterns rely on '-' and '.')
     tag_dict: Dict[str, str] = {}
     for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
         tag_dict.update(extractor(subject))
@@ -121,13 +133,15 @@ def normalize_subject(subject: str, *, with_tags: bool = False) -> tuple[str, Li
     # Drop part/size information such as "(01/15)" or "[12345/12346]".
     cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
 
+    # Remove language tokens based on LANGUAGE_TOKENS keys.
+    if LANGUAGE_TOKENS:
+        tokens_pattern = "|".join(map(re.escape, LANGUAGE_TOKENS.keys()))
+        cleaned = re.sub(tokens_pattern, "", cleaned, flags=re.IGNORECASE)
+
     # Remove common filler words.
     fillers = ("repost", "sample")
     cleaned = re.sub(
-        rf"\b({'|'.join(map(re.escape, fillers))})\b",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
+        rf"\b({'|'.join(map(re.escape, fillers))})\b", "", cleaned, flags=re.IGNORECASE
     )
 
     # Collapse whitespace and trim leading/trailing separators or dashes.

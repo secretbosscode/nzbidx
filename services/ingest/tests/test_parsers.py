@@ -1,6 +1,12 @@
 import pytest
+from pathlib import Path
+import sys
+
+# Ensure src is importable when tests run in container/workflows
+sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from nzbidx_ingest.parsers import (
+    detect_language,
     extract_book_tags,
     extract_music_tags,
     extract_xxx_tags,
@@ -145,3 +151,15 @@ def test_extract_xxx_tags(subject: str, expected_norm: str, expected_tags: dict)
     assert norm == expected_norm
     assert extract_xxx_tags(subject) == expected_tags
     assert set(tags) == {v.lower() for v in expected_tags.values()}
+
+
+@pytest.mark.parametrize(
+    "subject,lang",
+    [
+        ("Cool release [GERMAN]", "de"),
+        ("Something [FRENCH]", "fr"),
+        ("Nothing here", None),
+    ],
+)
+def test_detect_language(subject: str, lang: str | None) -> None:
+    assert detect_language(subject) == lang
