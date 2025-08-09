@@ -7,4 +7,5 @@ name = "nzbidx-ingest"
 version = "0.0.0"
 dependencies = [
     "python-dotenv",
+    "opensearch-py",
 ]
