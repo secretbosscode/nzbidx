@@ -3,7 +3,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
-RUN pip install --no-cache-dir fastapi uvicorn[standard] orjson opensearch-py sqlalchemy>=2 asyncpg
+# Include httpx to support Starlette's TestClient used in tests
+RUN pip install --no-cache-dir fastapi uvicorn[standard] orjson opensearch-py sqlalchemy>=2 asyncpg httpx
 
 # Copy application source
 COPY src/ .
