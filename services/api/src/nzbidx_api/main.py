@@ -7,17 +7,19 @@ from pathlib import Path
 from typing import Optional
 
 from opensearchpy import OpenSearch
+from redis import Redis
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from .db import ping
-from .newznab import caps_xml, nzb_xml_stub, rss_xml
+from .newznab import caps_xml, get_nzb, rss_xml
 
 logger = logging.getLogger(__name__)
 
 opensearch: Optional[OpenSearch] = None
+cache: Optional[Redis] = None
 
 
 def init_opensearch() -> None:
@@ -53,6 +55,19 @@ def init_opensearch() -> None:
         logger.info("OpenSearch ready")
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("OpenSearch unavailable: %s", exc)
+
+
+def init_cache() -> None:
+    """Connect to Redis for caching NZB documents."""
+    global cache
+    url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    try:
+        client = Redis.from_url(url)
+        client.ping()
+        cache = client
+        logger.info("Redis ready")
+    except Exception as exc:  # pragma: no cover - optional dependency
+        logger.warning("Redis unavailable: %s", exc)
 
 
 async def health(request: Request) -> JSONResponse:
@@ -94,7 +109,7 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return JSONResponse({"detail": "missing id"}, status_code=400)
-        return Response(nzb_xml_stub(release_id), media_type="application/x-nzb")
+        return Response(get_nzb(release_id, cache), media_type="application/x-nzb")
 
     return JSONResponse({"detail": "unsupported request"}, status_code=400)
 
@@ -104,7 +119,7 @@ routes = [
     Route("/api", api),
 ]
 
-app = Starlette(routes=routes, on_startup=[init_opensearch])
+app = Starlette(routes=routes, on_startup=[init_opensearch, init_cache])
 
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
     import uvicorn
