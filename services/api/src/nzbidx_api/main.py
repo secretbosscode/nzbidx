@@ -28,6 +28,7 @@ try:  # pragma: no cover - import guard
 except Exception:  # pragma: no cover - optional dependency
     class Request:  # type: ignore
         """Very small subset of Starlette's Request used for testing."""
+
         def __init__(self, scope: dict) -> None:
             self.query_params = scope.get("query_params", {})
 
