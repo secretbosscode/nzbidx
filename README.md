@@ -14,3 +14,9 @@ curl localhost:8080/health
 ```bash
 sudo sysctl -w vm.max_map_count=262144
 ```
+
+## Seed OpenSearch
+
+```bash
+docker compose exec api python scripts/seed_os.py
+```
