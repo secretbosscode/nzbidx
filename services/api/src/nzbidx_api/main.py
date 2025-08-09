@@ -97,6 +97,8 @@ def init_opensearch() -> None:
             sample = {
                 "norm_title": "Test Release",
                 "category": "test",
+                "language": "en",
+                "tags": ["sample"],
                 "posted_at": "1970-01-01T00:00:00Z",
                 "size_bytes": 0,
             }
@@ -137,6 +139,7 @@ def _os_search(
     q: Optional[str],
     *,
     category: Optional[str] = None,
+    tag: Optional[str] = None,
     extra: Optional[dict[str, str]] = None,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts.
@@ -157,6 +160,10 @@ def _os_search(
             if category:
                 body["query"]["bool"].setdefault("filter", []).append(
                     {"term": {"category": category}}
+                )
+            if tag:
+                body["query"]["bool"].setdefault("filter", []).append(
+                    {"prefix": {"tags": tag}}
                 )
             result = opensearch.search(index="nzbidx-releases-v1", body=body)
             for hit in result.get("hits", {}).get("hits", []):
@@ -184,16 +191,20 @@ async def api(request: Request) -> Response:
 
     if t == "search":
         q = params.get("q")
-        items = _os_search(q)
+        cat = params.get("cat")
+        tag = params.get("tag")
+        items = _os_search(q, category=cat, tag=tag)
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "tvsearch":
         q = params.get("q")
         season = params.get("season")
         episode = params.get("ep")
+        tag = params.get("tag")
         items = _os_search(
             q,
             category="5000",
+            tag=tag,
             extra={"season": season, "episode": episode},
         )
         return Response(rss_xml(items), media_type="application/xml")
@@ -201,7 +212,8 @@ async def api(request: Request) -> Response:
     if t == "movie":
         q = params.get("q")
         imdbid = params.get("imdbid")
-        items = _os_search(q, category="2000", extra={"imdbid": imdbid})
+        tag = params.get("tag")
+        items = _os_search(q, category="2000", tag=tag, extra={"imdbid": imdbid})
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "getnzb":

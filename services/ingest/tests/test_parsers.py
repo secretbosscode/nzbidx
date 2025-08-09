@@ -1,6 +1,6 @@
 import pytest
 
-from nzbidx_ingest.parsers import normalize_subject
+from nzbidx_ingest.parsers import extract_tags, normalize_subject
 
 
 @pytest.mark.parametrize(
@@ -14,7 +14,12 @@ from nzbidx_ingest.parsers import normalize_subject
         ),
         ("REPOST__Another.Movie.Part1.yEnc (05/05)", "Another Movie Part1"),
         ("My.File.Name_[12345/12346] yEnc", "My File Name"),
+        ("Tagged.Release.[music]", "Tagged Release"),
     ],
 )
 def test_normalize_subject(subject: str, expected: str) -> None:
     assert normalize_subject(subject) == expected
+
+
+def test_extract_tags() -> None:
+    assert extract_tags("Song Title [music rock]") == ["music", "rock"]

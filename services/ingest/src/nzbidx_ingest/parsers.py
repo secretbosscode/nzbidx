@@ -4,6 +4,22 @@ from __future__ import annotations
 
 import re
 
+_TAG_RE = re.compile(r"\[([^\[\]]+)\]")
+
+
+def extract_tags(subject: str) -> list[str]:
+    """Extract lowercased tags from bracketed segments in ``subject``."""
+    if not subject:
+        return []
+    tags: list[str] = []
+    for match in _TAG_RE.finditer(subject):
+        content = match.group(1)
+        for tag in re.split(r"[\s,]+", content):
+            tag = tag.strip().lower()
+            if tag:
+                tags.append(tag)
+    return tags
+
 
 def normalize_subject(subject: str) -> str:
     """Return a cleaned, human-readable version of a Usenet subject line.
@@ -20,6 +36,9 @@ def normalize_subject(subject: str) -> str:
 
     # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")
+
+    # Remove bracketed tags.
+    cleaned = _TAG_RE.sub("", cleaned)
 
     # Remove explicit yEnc markers.
     cleaned = re.sub(r"(?i)\byenc\b", "", cleaned)

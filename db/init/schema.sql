@@ -12,8 +12,15 @@ CREATE TABLE IF NOT EXISTS release (
     id SERIAL PRIMARY KEY,
     group_id INTEGER REFERENCES usenet_group(id),
     poster_id INTEGER REFERENCES poster(id),
-    title TEXT NOT NULL
+    title TEXT NOT NULL,
+    category TEXT,
+    language TEXT,
+    tags TEXT[]
 );
+
+ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT;
+ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS tags TEXT[];
 
 CREATE TABLE IF NOT EXISTS release_file (
     id SERIAL PRIMARY KEY,
