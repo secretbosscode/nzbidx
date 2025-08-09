@@ -16,6 +16,5 @@ from nzbidx_ingest.parsers import normalize_subject
         ("My.File.Name_[12345/12346] yEnc", "My File Name"),
     ],
 )
-
 def test_normalize_subject(subject: str, expected: str) -> None:
     assert normalize_subject(subject) == expected
