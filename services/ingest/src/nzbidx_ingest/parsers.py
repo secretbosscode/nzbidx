@@ -1,3 +1,4 @@
+```python
 """Parsers for ingest service."""
 
 from __future__ import annotations
@@ -6,34 +7,45 @@ import re
 
 
 def normalize_subject(subject: str) -> str:
-    """Return a cleaned up version of a Usenet subject line.
+    """Return a cleaned, human-readable version of a Usenet subject line.
 
-    The normalisation tries to extract a human readable title from a wide
-    variety of obfuscated subject lines.  The implementation is purposely
-    lightweight; it removes yEnc tags, part counters and a few common filler
-    words while converting separators to single spaces.
+    Lightweight normalization:
+    - Convert separators ('.', '_') to spaces
+    - Remove explicit 'yEnc' markers
+    - Drop part counters like '(01/15)' or '[12345/12346]'
+    - Remove common filler words (e.g., 'repost', 'sample')
+    - Collapse whitespace, trim separators, and lowercase
     """
+    if not subject:
+        return ""
 
-    # Convert separators to spaces to simplify boundary handling.
+    # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")
 
     # Remove explicit yEnc markers.
-    cleaned = re.sub(r"(?i)yenc", "", cleaned)
+    cleaned = re.sub(r"(?i)\byenc\b", "", cleaned)
 
-    # Drop part/size information such as ``(01/15)`` or ``[12345/12346]``.
+    # Drop part/size information such as "(01/15)" or "[12345/12346]".
     cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
 
-    # Remove common filler words now that separators have been normalised.
-    for filler in ("repost", "sample"):
-        cleaned = re.sub(rf"\b{filler}\b", "", cleaned, flags=re.IGNORECASE)
+    # Remove common filler words.
+    fillers = ("repost", "sample")
+    cleaned = re.sub(
+        r"\b(" + "|".join(map(re.escape, fillers)) + r")\b",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
 
-    # Collapse whitespace and strip leading/trailing separators.
+    # Collapse whitespace and trim leading/trailing separators or dashes.
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
 
-    return cleaned
+    # Lowercase for consistent comparisons.
+    return cleaned.lower()
 
 
 def parse() -> None:
     """Parse data stub."""
     pass
+```
