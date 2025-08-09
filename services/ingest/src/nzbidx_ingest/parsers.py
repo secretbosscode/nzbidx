@@ -13,7 +13,7 @@ def normalize_subject(subject: str) -> str:
     - Remove explicit 'yEnc' markers
     - Drop part counters like '(01/15)' or '[12345/12346]'
     - Remove common filler words (e.g., 'repost', 'sample')
-    - Collapse whitespace, trim separators, and lowercase
+    - Collapse whitespace and trim separators
     """
     if not subject:
         return ""
@@ -30,7 +30,7 @@ def normalize_subject(subject: str) -> str:
     # Remove common filler words.
     fillers = ("repost", "sample")
     cleaned = re.sub(
-        r"\b(" + "|".join(map(re.escape, fillers)) + r")\b",
+        rf"\b({'|'.join(map(re.escape, fillers))})\b",
         "",
         cleaned,
         flags=re.IGNORECASE,
@@ -47,4 +47,3 @@ def normalize_subject(subject: str) -> str:
 def parse() -> None:
     """Parse data stub."""
     pass
-
