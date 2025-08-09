@@ -11,9 +11,11 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
+from starlette.middleware import Middleware
 
 from .db import ping
 from .newznab import caps_xml, nzb_xml_stub, rss_xml
+from .rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +106,11 @@ routes = [
     Route("/api", api),
 ]
 
-app = Starlette(routes=routes, on_startup=[init_opensearch])
+app = Starlette(
+    routes=routes,
+    on_startup=[init_opensearch],
+    middleware=[Middleware(RateLimitMiddleware)],
+)
 
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
     import uvicorn
