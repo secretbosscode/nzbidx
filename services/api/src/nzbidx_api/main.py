@@ -6,12 +6,48 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from opensearchpy import OpenSearch
-from redis import Redis
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
+# Optional third party dependencies
+try:  # pragma: no cover - import guard
+    from opensearchpy import OpenSearch
+except Exception:  # pragma: no cover - optional dependency
+    OpenSearch = None  # type: ignore
+
+try:  # pragma: no cover - import guard
+    from redis import Redis
+except Exception:  # pragma: no cover - optional dependency
+    Redis = None  # type: ignore
+# Minimal fallbacks if Starlette is unavailable
+try:  # pragma: no cover - import guard
+    from starlette.applications import Starlette
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, Response
+    from starlette.routing import Route
+except Exception:  # pragma: no cover - optional dependency
+    class Request:  # type: ignore
+        """Very small subset of Starlette's Request used for testing."""
+
+        def __init__(self, scope: dict) -> None:
+            self.query_params = scope.get("query_params", {})
+
+    class Response:  # type: ignore
+        def __init__(self, content: str, *, status_code: int = 200, media_type: str = "text/plain") -> None:
+            self.status_code = status_code
+            self.body = content.encode("utf-8")
+            self.headers = {"content-type": media_type}
+
+    class JSONResponse(Response):  # type: ignore
+        def __init__(self, content: dict, *, status_code: int = 200) -> None:
+            import json
+
+            super().__init__(json.dumps(content), status_code=status_code, media_type="application/json")
+
+    class Route:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+    class Starlette:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
 
 from .db import ping
 from .newznab import caps_xml, get_nzb, rss_xml
@@ -25,6 +61,8 @@ cache: Optional[Redis] = None
 def init_opensearch() -> None:
     """Connect to OpenSearch and ensure indices exist."""
     global opensearch
+    if OpenSearch is None:
+        return
     url = os.getenv("OPENSEARCH_URL", "http://opensearch:9200")
     try:
         client = OpenSearch(url, timeout=2)
@@ -60,6 +98,8 @@ def init_opensearch() -> None:
 def init_cache() -> None:
     """Connect to Redis for caching NZB documents."""
     global cache
+    if Redis is None:
+        return
     url = os.getenv("REDIS_URL", "redis://redis:6379/0")
     try:
         client = Redis.from_url(url)

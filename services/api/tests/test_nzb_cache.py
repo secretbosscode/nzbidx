@@ -3,17 +3,31 @@
 from pathlib import Path
 import sys
 
-import fakeredis
-
 # Ensure the application package is importable
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from nzbidx_api import newznab  # noqa: E402
 
 
+class DummyRedis:
+    """Minimal Redis-like cache used for testing."""
+
+    def __init__(self) -> None:
+        self.store: dict[str, bytes] = {}
+
+    def get(self, key: str):
+        return self.store.get(key)
+
+    def setex(self, key: str, ttl: int, value: str) -> None:  # pragma: no cover - ttl unused
+        if isinstance(value, str):
+            self.store[key] = value.encode()
+        else:
+            self.store[key] = value
+
+
 def test_get_nzb_uses_cache(monkeypatch) -> None:
     """``get_nzb`` should cache NZB documents in Redis."""
-    fake = fakeredis.FakeRedis()
+    fake = DummyRedis()
     calls = {"count": 0}
 
     original = newznab.nzb_xml_stub
