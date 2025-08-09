@@ -32,3 +32,19 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t api services/api
       - run: docker run --rm -v ${{ github.workspace }}/services/api:/app -w /app api sh -c "pip install pytest && pytest tests -q"
+
+  merge:
+    needs:
+      - lint
+      - test-ingest
+      - test-api
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'github-actions[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge Codex PR
+        run: gh pr merge ${{ github.event.pull_request.number }} --merge --auto
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
