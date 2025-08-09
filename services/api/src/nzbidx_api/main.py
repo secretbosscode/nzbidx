@@ -1,4 +1,3 @@
-```python
 """API service entrypoint using Starlette."""
 
 import json
@@ -26,20 +25,32 @@ try:  # pragma: no cover - import guard
     from starlette.routing import Route
     from starlette.middleware import Middleware
 except Exception:  # pragma: no cover - optional dependency
+
     class Request:  # type: ignore
         """Very small subset of Starlette's Request used for testing."""
+
         def __init__(self, scope: dict) -> None:
             self.query_params = scope.get("query_params", {})
 
     class Response:  # type: ignore
-        def __init__(self, content: str, *, status_code: int = 200, media_type: str = "text/plain") -> None:
+        def __init__(
+            self,
+            content: str,
+            *,
+            status_code: int = 200,
+            media_type: str = "text/plain",
+        ) -> None:
             self.status_code = status_code
             self.body = content.encode("utf-8")
             self.headers = {"content-type": media_type}
 
     class JSONResponse(Response):  # type: ignore
         def __init__(self, content: dict, *, status_code: int = 200) -> None:
-            super().__init__(json.dumps(content), status_code=status_code, media_type="application/json")
+            super().__init__(
+                json.dumps(content),
+                status_code=status_code,
+                media_type="application/json",
+            )
 
     class Route:  # type: ignore
         def __init__(self, *args, **kwargs) -> None:
@@ -52,6 +63,7 @@ except Exception:  # pragma: no cover - optional dependency
     class Starlette:  # type: ignore
         def __init__(self, *args, **kwargs) -> None:
             pass
+
 
 from .db import ping
 from .newznab import caps_xml, get_nzb, rss_xml
@@ -216,4 +228,3 @@ if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8080)
-```

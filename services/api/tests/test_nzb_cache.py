@@ -18,7 +18,9 @@ class DummyRedis:
     def get(self, key: str):
         return self.store.get(key)
 
-    def setex(self, key: str, ttl: int, value: str) -> None:  # pragma: no cover - ttl unused
+    def setex(
+        self, key: str, ttl: int, value: str
+    ) -> None:  # pragma: no cover - ttl unused
         if isinstance(value, str):
             self.store[key] = value.encode()
         else:

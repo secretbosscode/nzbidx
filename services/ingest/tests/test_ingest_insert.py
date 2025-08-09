@@ -20,9 +20,7 @@ def test_ingest_inserts_and_indexes(monkeypatch):
             self.calls.append(kwargs)
 
     dummy_os = DummyOS()
-    monkeypatch.setattr(
-        "nzbidx_ingest.main.connect_opensearch", lambda: dummy_os
-    )
+    monkeypatch.setattr("nzbidx_ingest.main.connect_opensearch", lambda: dummy_os)
 
     monkeypatch.delenv("NNTP_HOST_1", raising=False)
 

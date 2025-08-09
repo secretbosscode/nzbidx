@@ -13,7 +13,9 @@ from nzbidx_api.main import api  # noqa: E402
 
 class DummyRequest:
     def __init__(self, query_string: bytes):
-        self.query_params = {k: v[0] for k, v in parse_qs(query_string.decode()).items()}
+        self.query_params = {
+            k: v[0] for k, v in parse_qs(query_string.decode()).items()
+        }
 
 
 def test_search_rss() -> None:
