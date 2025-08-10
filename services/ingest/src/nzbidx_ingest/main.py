@@ -7,7 +7,13 @@ import os
 import sqlite3
 from typing import Optional
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional dependency
+
+    def load_dotenv(*args: object, **kwargs: object) -> None:
+        return None
+
 
 from nzbidx_common.os import OS_RELEASES_ALIAS
 
