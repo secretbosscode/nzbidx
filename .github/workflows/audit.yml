@@ -24,6 +24,7 @@ jobs:
       - run: pip install -e services/${{ matrix.service }}
       - run: pip install pip-audit
       - run: pip-audit
+
   sbom:
     runs-on: ubuntu-latest
     strategy:
@@ -35,7 +36,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -e services/${{ matrix.service }}
-      - run: pip install cyclonedx-py
+      - run: pip install cyclonedx-bom
       - run: cyclonedx-py environment -o sbom-${{ matrix.service }}.json
       - uses: actions/upload-artifact@v4
         with:

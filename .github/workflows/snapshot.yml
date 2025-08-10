@@ -5,13 +5,12 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
-env:
-  SNAPSHOT_SCHEDULE: ${{ vars.SNAPSHOT_SCHEDULE || 'false' }}
-
 jobs:
   snapshot:
-    if: vars.SNAPSHOT_SCHEDULE == 'true'
+    if: ${{ vars.SNAPSHOT_SCHEDULE == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      SNAPSHOT_SCHEDULE: ${{ vars.SNAPSHOT_SCHEDULE || 'false' }}
     steps:
       - uses: actions/checkout@v3
       - run: bash scripts/snapshot.sh
