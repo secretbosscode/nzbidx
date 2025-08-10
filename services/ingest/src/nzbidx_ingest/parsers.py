@@ -118,7 +118,9 @@ def extract_xxx_tags(subject: str) -> Dict[str, str]:
     return {}
 
 
-def normalize_subject(subject: str, *, with_tags: bool = False) -> tuple[str, List[str]] | str:
+def normalize_subject(
+    subject: str, *, with_tags: bool = False
+) -> tuple[str, List[str]] | str:
     """Return a cleaned, human-readable version of a Usenet subject line.
 
     Lightweight normalization:

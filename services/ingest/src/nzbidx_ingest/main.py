@@ -102,7 +102,10 @@ def _infer_category(subject: str) -> Optional[str]:
         return CATEGORY_MAP["music"]
     if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
         return CATEGORY_MAP["books"]
-    if any(k in s for k in ("brazzers", "realitykings", "onlyfans", "pornhub", "adult", "xxx")):
+    if any(
+        k in s
+        for k in ("brazzers", "realitykings", "onlyfans", "pornhub", "adult", "xxx")
+    ):
         return CATEGORY_MAP["xxx"]
     return None
 

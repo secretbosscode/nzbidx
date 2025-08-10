@@ -39,7 +39,12 @@ def test_normalize_subject(subject: str, expected: str) -> None:
         (
             "Metallica-BlackAlbum-1991-FLAC",
             "Metallica-BlackAlbum-1991-FLAC",
-            {"artist": "Metallica", "album": "BlackAlbum", "year": "1991", "format": "FLAC"},
+            {
+                "artist": "Metallica",
+                "album": "BlackAlbum",
+                "year": "1991",
+                "format": "FLAC",
+            },
         ),
         (
             "Nirvana-Nevermind-1991-MP3-320",
@@ -65,7 +70,9 @@ def test_normalize_subject(subject: str, expected: str) -> None:
         ),
     ],
 )
-def test_extract_music_tags(subject: str, expected_norm: str, expected_tags: dict) -> None:
+def test_extract_music_tags(
+    subject: str, expected_norm: str, expected_tags: dict
+) -> None:
     norm, tags = normalize_subject(subject, with_tags=True)
     assert norm == expected_norm
     assert extract_music_tags(subject) == expected_tags
@@ -108,7 +115,9 @@ def test_extract_music_tags(subject: str, expected_norm: str, expected_tags: dic
         ),
     ],
 )
-def test_extract_book_tags(subject: str, expected_norm: str, expected_tags: dict) -> None:
+def test_extract_book_tags(
+    subject: str, expected_norm: str, expected_tags: dict
+) -> None:
     norm, tags = normalize_subject(subject, with_tags=True)
     assert norm == expected_norm
     assert extract_book_tags(subject) == expected_tags
@@ -146,7 +155,9 @@ def test_extract_book_tags(subject: str, expected_norm: str, expected_tags: dict
         ),
     ],
 )
-def test_extract_xxx_tags(subject: str, expected_norm: str, expected_tags: dict) -> None:
+def test_extract_xxx_tags(
+    subject: str, expected_norm: str, expected_tags: dict
+) -> None:
     norm, tags = normalize_subject(subject, with_tags=True)
     assert norm == expected_norm
     assert extract_xxx_tags(subject) == expected_tags
