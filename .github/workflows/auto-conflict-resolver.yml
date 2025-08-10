@@ -13,7 +13,7 @@ permissions:
   pull-requests: write
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
