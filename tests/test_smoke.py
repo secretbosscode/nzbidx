@@ -1,6 +1,5 @@
-"""Smoke tests for nzbidx project."""
+"""Smoke tests for the nzbidx project."""
 
-
-def test_repo_smoke():
+def test_smoke():
     """Basic smoke test that always passes."""
     assert True
