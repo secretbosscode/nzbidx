@@ -210,10 +210,10 @@ fails if vulnerabilities are found.
 Local audit and SBOM generation:
 
 ```bash
-pip install pip-audit cyclonedx-bom
+pip install pip-audit cyclonedx-py
 pip install -e services/api
 pip-audit
-cyclonedx-py -e -o sbom-api.json
+cyclonedx-py environment -o sbom-api.json
 ```
 
 See [docs/sbom.md](docs/sbom.md) for details.
