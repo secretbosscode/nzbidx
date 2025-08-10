@@ -16,6 +16,7 @@ from .main import (
     connect_db,
     connect_opensearch,
 )
+from email.utils import parsedate_to_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,20 @@ def run_once() -> None:
             subject = header.get("subject", "")
             norm_title, tags = normalize_subject(subject, with_tags=True)
             norm_title = norm_title.lower()
+            posted = header.get("date")
+            day_bucket = ""
+            if posted:
+                try:
+                    day_bucket = parsedate_to_datetime(str(posted)).strftime("%Y-%m-%d")
+                except Exception:
+                    day_bucket = ""
+            dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject)
             category = _infer_category(subject)
-            if insert_release(db, norm_title, category, language, tags):
+            if insert_release(db, dedupe_key, category, language, tags):
                 index_release(
                     os_client,
-                    norm_title,
+                    dedupe_key,
                     category=category,
                     language=language,
                     tags=tags,

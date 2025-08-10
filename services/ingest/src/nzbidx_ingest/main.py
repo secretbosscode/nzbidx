@@ -66,6 +66,9 @@ def insert_release(
     return cur.rowcount > 0
 
 
+_os_warned = False
+
+
 def index_release(
     client: Optional[object],
     norm_title: str,
@@ -75,6 +78,7 @@ def index_release(
     tags: Optional[list[str]] = None,
 ) -> None:
     """Index the release into OpenSearch (no-op if client is None)."""
+    global _os_warned
     if not client:
         return
     body: dict[str, object] = {"norm_title": norm_title}
@@ -92,7 +96,9 @@ def index_release(
             refresh=True,
         )
     except Exception as exc:  # pragma: no cover - network errors
-        logger.warning("opensearch_index_failed", extra={"error": str(exc)})
+        if not _os_warned:
+            logger.warning("opensearch_index_failed", extra={"error": str(exc)})
+            _os_warned = True
 
 
 def _infer_category(subject: str) -> Optional[str]:

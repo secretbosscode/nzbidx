@@ -5,56 +5,24 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, ingest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install black ruff
-      - run: black --check .
-      - run: ruff check .
-
-  test-ingest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      - run: pip install -e services/ingest pytest
-      - run: pytest services/ingest/tests -q
-
-  test-api:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t api services/api
-      - run: docker run --rm -v ${{ github.workspace }}/services/api:/app -w /app api sh -c "pip install pytest && pytest tests -q"
-
-  merge:
-    needs:
-      - lint
-    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'github-actions[bot]'
-    permissions:
-      contents: write
-      pull-requests: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-      - name: Resolve conflicts with base
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git fetch origin ${{ github.event.pull_request.base.ref }}
-          git merge origin/${{ github.event.pull_request.base.ref }} --no-edit -X ours
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-      - name: Merge Codex PR
-        run: gh pr merge ${{ github.event.pull_request.number }} --merge --auto
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: docker compose up -d
+      - run: |
+          for i in {1..30}; do
+            curl -sf localhost:8080/health && break
+            sleep 1
+          done
+      - run: pip install -e services/${{ matrix.service }}
+      - run: pip install pytest ruff black
+      - run: ruff check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
+      - run: black --check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
+      - run: pytest -q services/${{ matrix.service }}/tests

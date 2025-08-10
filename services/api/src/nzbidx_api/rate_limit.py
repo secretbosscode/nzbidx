@@ -11,9 +11,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 try:  # pragma: no cover - optional dependency
-    import redis.asyncio as redis
+    from redis import Redis
 except Exception:  # pragma: no cover - optional dependency
-    redis = None
+    Redis = None  # type: ignore
 
 
 class RateLimiter:
@@ -23,29 +23,25 @@ class RateLimiter:
         self.limit = limit
         self.window = window
         url = os.getenv("REDIS_URL")
-        if redis and url:
-            # Redis backend
-            self.client = redis.from_url(url)
+        if Redis and url:
+            self.client = Redis.from_url(url)
             self.use_redis = True
         else:
-            # In-memory backend
             self.client: Dict[int, Dict[str, int]] = {}
             self.use_redis = False
 
-    async def increment(self, key: str) -> int:
+    def increment(self, key: str) -> int:
         """Increment and return current count for ``key``."""
         now = int(time.time())
         bucket = now // self.window
-        if self.use_redis:  # pragma: no cover - requires redis
-            redis_key = f"ratelimit:{bucket}:{key}"
-            current = await self.client.incr(redis_key)
+        if self.use_redis:  # pragma: no cover - requires redis server
+            redis_key = f"rl:{bucket}:{key}"
+            current = self.client.incr(redis_key)
             if current == 1:
-                await self.client.expire(redis_key, self.window)
+                self.client.expire(redis_key, self.window)
             return int(current)
-        # In-memory
         counts = self.client.setdefault(bucket, {})
         counts[key] = counts.get(key, 0) + 1
-        # cleanup old buckets
         for old in list(self.client.keys()):
             if old != bucket:
                 del self.client[old]
@@ -68,7 +64,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         client_ip = request.client.host if request.client else "anonymous"
-        count = await self.limiter.increment(client_ip)
+        count = self.limiter.increment(client_ip)
         if count > self.limit:
             return JSONResponse({"error": "rate limit exceeded"}, status_code=429)
         return await call_next(request)

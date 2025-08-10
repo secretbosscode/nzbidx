@@ -26,6 +26,11 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         )
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        path = ""
+        if hasattr(request, "url"):
+            path = getattr(request.url, "path", "")
+        if not path.startswith("/api"):
+            return await call_next(request)
         if not self.valid_keys:
             return await call_next(request)
         provided = request.headers.get("X-Api-Key")

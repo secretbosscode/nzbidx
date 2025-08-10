@@ -3,28 +3,60 @@
 import json
 from pathlib import Path
 import sys
-from urllib.parse import parse_qs
 import asyncio
 
 # Ensure the application package is importable
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
-from nzbidx_api.main import health  # noqa: E402
+import nzbidx_api.main as main  # noqa: E402
 
 
 class DummyRequest:
-    def __init__(self, query_string: bytes = b""):
-        self.query_params = {
-            k: v[0] for k, v in parse_qs(query_string.decode()).items()
-        }
+    def __init__(self):
+        self.query_params = {}
 
 
-def test_health() -> None:
-    """``/health`` should return a simple status payload."""
-    request = DummyRequest()
-    response = asyncio.run(health(request))
-    assert response.status_code == 200
-    payload = json.loads(response.body)
-    assert payload["status"] == "ok"
-    for key in ("db", "os", "redis"):
-        assert key in payload
+def test_health_all_ok(monkeypatch) -> None:
+    class OS:
+        def info(self):
+            return {}
+
+    class Redis:
+        def ping(self):
+            return True
+
+    monkeypatch.setattr(main, "opensearch", OS())
+    monkeypatch.setattr(main, "cache", Redis())
+
+    async def ok_ping():
+        return True
+
+    monkeypatch.setattr(main, "ping", ok_ping)
+    resp = asyncio.run(main.health(DummyRequest()))
+    payload = json.loads(resp.body)
+    assert payload["db"] == "ok"
+    assert payload["os"] == "ok"
+    assert payload["redis"] == "ok"
+
+
+def test_health_all_down(monkeypatch) -> None:
+    class OS:
+        def info(self):
+            raise RuntimeError("boom")
+
+    class Redis:
+        def ping(self):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(main, "opensearch", OS())
+    monkeypatch.setattr(main, "cache", Redis())
+
+    async def bad_ping():
+        return False
+
+    monkeypatch.setattr(main, "ping", bad_ping)
+    resp = asyncio.run(main.health(DummyRequest()))
+    payload = json.loads(resp.body)
+    assert payload["db"] == "down"
+    assert payload["os"] == "down"
+    assert payload["redis"] == "down"

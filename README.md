@@ -31,12 +31,15 @@ The ingest worker polls configured NNTP groups and stores release metadata. Set 
     export NNTP_GROUPS=alt.binaries.example
     docker compose exec ingest python -m nzbidx_ingest
 
-## API Keys
+## Auth & Rate Limit
 
 Protect the `/api` endpoints by supplying one or more keys:
 
     export API_KEYS=dev
     curl -H 'X-Api-Key: dev' 'http://localhost:8080/api?t=caps'
+
+Requests are limited per IP using `RATE_LIMIT` requests per `RATE_WINDOW`
+seconds. Exceeding the limit returns HTTP 429.
 
 ## Newznab Categories and Adult Content
 
