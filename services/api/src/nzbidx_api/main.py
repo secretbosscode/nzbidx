@@ -1,8 +1,10 @@
 """API service entrypoint using Starlette."""
 
+import hashlib
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +26,8 @@ try:  # pragma: no cover - import guard
     from starlette.responses import JSONResponse, Response
     from starlette.routing import Route
     from starlette.middleware import Middleware
+    from starlette.middleware.cors import CORSMiddleware
+    from starlette.middleware.base import BaseHTTPMiddleware
 except Exception:  # pragma: no cover - optional dependency
 
     class Request:  # type: ignore
@@ -60,6 +64,14 @@ except Exception:  # pragma: no cover - optional dependency
         def __init__(self, *args, **kwargs) -> None:
             pass
 
+    class CORSMiddleware:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+    class BaseHTTPMiddleware:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
     class Starlette:  # type: ignore
         def __init__(self, *args, **kwargs) -> None:
             pass
@@ -82,11 +94,35 @@ from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
 from .search_cache import cache_rss, get_cached_rss
 from .search import search_releases
+from .middleware_security import SecurityMiddleware
+from .config import cors_origins, max_request_bytes, search_ttl_seconds
 
 logger = logging.getLogger(__name__)
 
 opensearch: Optional[OpenSearch] = None
 cache: Optional[Redis] = None
+
+
+class TimingMiddleware(BaseHTTPMiddleware):
+    """Log timing for ``/api`` responses."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
+        start = time.monotonic()
+        response = await call_next(request)
+        path = getattr(getattr(request, "url", None), "path", "")
+        if path.startswith("/api"):
+            duration = int((time.monotonic() - start) * 1000)
+            ip = request.client.host if request.client else ""
+            logger.info(
+                "request",
+                extra={
+                    "route": path,
+                    "status": response.status_code,
+                    "duration_ms": duration,
+                    "remote_ip": ip,
+                },
+            )
+        return response
 
 
 def init_opensearch() -> None:
@@ -150,23 +186,28 @@ def init_cache() -> None:
 async def health(request: Request) -> JSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
-    os_status = "down"
+    payload = {"status": "ok", "db": db_status}
     if opensearch:
+        start = time.monotonic()
         try:  # pragma: no cover - network errors
             opensearch.info()
-            os_status = "ok"
+            payload["os"] = "ok"
+            payload["os_latency_ms"] = int((time.monotonic() - start) * 1000)
         except Exception:
-            pass
-    redis_status = "down"
+            payload["os"] = "down"
+    else:
+        payload["os"] = "down"
     if cache:
+        start = time.monotonic()
         try:  # pragma: no cover - network errors
             cache.ping()
-            redis_status = "ok"
+            payload["redis"] = "ok"
+            payload["redis_latency_ms"] = int((time.monotonic() - start) * 1000)
         except Exception:
-            pass
-    return JSONResponse(
-        {"status": "ok", "db": db_status, "os": os_status, "redis": redis_status}
-    )
+            payload["redis"] = "down"
+    else:
+        payload["redis"] = "down"
+    return JSONResponse(payload)
 
 
 def _os_search(
@@ -175,6 +216,8 @@ def _os_search(
     category: Optional[str] = None,
     tag: Optional[str] = None,
     extra: Optional[dict[str, object]] = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
@@ -229,7 +272,7 @@ def _os_search(
             if must_not:
                 query["must_not"] = must_not
 
-            items = search_releases(opensearch, query)
+            items = search_releases(opensearch, query, limit=limit, offset=offset)
         except Exception:
             items = []
     return items
@@ -238,6 +281,20 @@ def _os_search(
 def _xml_response(body: str) -> Response:
     """Return ``body`` as an XML response."""
     return Response(body, media_type="application/xml")
+
+
+def _cached_xml_response(
+    request: Request, body: str, *, allow_304: bool = True
+) -> Response:
+    """Return ``body`` with caching headers and optional 304 support."""
+    etag = hashlib.sha1(body.encode("utf-8")).hexdigest()
+    headers = {
+        "Cache-Control": f"public, max-age={search_ttl_seconds()}",
+        "ETag": etag,
+    }
+    if allow_304 and request.headers.get("If-None-Match") == etag:
+        return Response("", status_code=304, headers=headers)
+    return Response(body, media_type="application/xml", headers=headers)
 
 
 def _params_key(params) -> str:
@@ -251,6 +308,17 @@ async def api(request: Request) -> Response:
     t = params.get("t")
     cat = params.get("cat")
     no_cache = request.headers.get("Cache-Control") == "no-cache"
+
+    try:
+        limit = int(params.get("limit", "") or 50)
+    except ValueError:
+        limit = 50
+    if limit > 100:
+        return JSONResponse({"detail": "limit too high"}, status_code=400)
+    try:
+        offset = int(params.get("offset", "0"))
+    except ValueError:
+        offset = 0
 
     # Adult category gating
     if (
@@ -267,21 +335,25 @@ async def api(request: Request) -> Response:
         cache_key = f"search:{_params_key(params)}"
         cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
-            return _xml_response(cached)
+            return _cached_xml_response(request, cached)
         q = params.get("q")
+        if q and len(q) > 256:
+            return JSONResponse({"detail": "query too long"}, status_code=400)
         tag = params.get("tag")
-        items = _os_search(q, category=cat, tag=tag)
+        items = _os_search(q, category=cat, tag=tag, limit=limit, offset=offset)
         xml = rss_xml(items)
         if not no_cache:
             cache_rss(cache_key, xml)
-        return _xml_response(xml)
+        return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "tvsearch":
         cache_key = f"tvsearch:{_params_key(params)}"
         cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
-            return _xml_response(cached)
+            return _cached_xml_response(request, cached)
         q = params.get("q")
+        if q and len(q) > 256:
+            return JSONResponse({"detail": "query too long"}, status_code=400)
         season = params.get("season")
         episode = params.get("ep")
         tag = params.get("tag")
@@ -290,32 +362,45 @@ async def api(request: Request) -> Response:
             category=TV_CAT,
             tag=tag,
             extra={"season": season, "episode": episode},
+            limit=limit,
+            offset=offset,
         )
         xml = rss_xml(items)
         if not no_cache:
             cache_rss(cache_key, xml)
-        return _xml_response(xml)
+        return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "movie":
         cache_key = f"movie:{_params_key(params)}"
         cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
-            return _xml_response(cached)
+            return _cached_xml_response(request, cached)
         q = params.get("q")
+        if q and len(q) > 256:
+            return JSONResponse({"detail": "query too long"}, status_code=400)
         imdbid = params.get("imdbid")
         tag = params.get("tag")
-        items = _os_search(q, category=MOVIES_CAT, tag=tag, extra={"imdbid": imdbid})
+        items = _os_search(
+            q,
+            category=MOVIES_CAT,
+            tag=tag,
+            extra={"imdbid": imdbid},
+            limit=limit,
+            offset=offset,
+        )
         xml = rss_xml(items)
         if not no_cache:
             cache_rss(cache_key, xml)
-        return _xml_response(xml)
+        return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "music":
         cache_key = f"music:{_params_key(params)}"
         cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
-            return _xml_response(cached)
+            return _cached_xml_response(request, cached)
         q = params.get("q")
+        if q and len(q) > 256:
+            return JSONResponse({"detail": "query too long"}, status_code=400)
         tags = [params.get("artist"), params.get("album")]
         year = params.get("year")
         tag = params.get("tag")
@@ -327,18 +412,22 @@ async def api(request: Request) -> Response:
             category=AUDIO_CAT,
             tag=tag,
             extra=extra,
+            limit=limit,
+            offset=offset,
         )
         xml = rss_xml(items)
         if not no_cache:
             cache_rss(cache_key, xml)
-        return _xml_response(xml)
+        return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "book":
         cache_key = f"book:{_params_key(params)}"
         cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
-            return _xml_response(cached)
+            return _cached_xml_response(request, cached)
         q = params.get("q")
+        if q and len(q) > 256:
+            return JSONResponse({"detail": "query too long"}, status_code=400)
         tag = params.get("tag")
         tags = [params.get("author"), params.get("title"), params.get("isbn")]
         year = params.get("year")
@@ -350,11 +439,13 @@ async def api(request: Request) -> Response:
             category=BOOKS_CAT,
             tag=tag,
             extra=extra,
+            limit=limit,
+            offset=offset,
         )
         xml = rss_xml(items)
         if not no_cache:
             cache_rss(cache_key, xml)
-        return _xml_response(xml)
+        return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "getnzb":
         release_id = params.get("id")
@@ -369,11 +460,20 @@ routes = [
     Route("/health", health),
     Route("/api", api),
 ]
+middleware = [
+    Middleware(ApiKeyMiddleware),
+    Middleware(RateLimitMiddleware),
+    Middleware(SecurityMiddleware, max_request_bytes=max_request_bytes()),
+    Middleware(TimingMiddleware),
+]
+origins = cors_origins()
+if origins:
+    middleware.append(Middleware(CORSMiddleware, allow_origins=origins))
 
 app = Starlette(
     routes=routes,
     on_startup=[init_opensearch, init_cache],
-    middleware=[Middleware(ApiKeyMiddleware), Middleware(RateLimitMiddleware)],
+    middleware=middleware,
 )
 
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs

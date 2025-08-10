@@ -10,6 +10,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from .config import rate_limit, rate_window
+
 try:  # pragma: no cover - optional dependency
     from redis import Redis
 except Exception:  # pragma: no cover - optional dependency
@@ -55,10 +57,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self, app, limit: int | None = None, window: int | None = None
     ) -> None:
         super().__init__(app)
-        limit_val = limit if limit is not None else int(os.getenv("RATE_LIMIT", "60"))
-        window_val = (
-            window if window is not None else int(os.getenv("RATE_WINDOW", "60"))
-        )
+        limit_val = limit if limit is not None else rate_limit()
+        window_val = window if window is not None else rate_window()
         self.limiter = RateLimiter(limit_val, window_val)
         self.limit = limit_val
 

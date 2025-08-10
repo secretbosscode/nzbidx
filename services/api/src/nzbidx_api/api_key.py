@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from typing import Set
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from .config import api_keys
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -20,10 +21,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app) -> None:
         super().__init__(app)
-        keys = os.getenv("API_KEYS")
-        self.valid_keys: Set[str] = (
-            {k.strip() for k in keys.split(",") if k.strip()} if keys else set()
-        )
+        self.valid_keys: Set[str] = api_keys()
 
     async def dispatch(self, request: Request, call_next) -> Response:
         path = ""

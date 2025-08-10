@@ -1,0 +1,26 @@
+"""Security related middleware."""
+
+from __future__ import annotations
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+
+
+class SecurityMiddleware(BaseHTTPMiddleware):
+    """Add security headers and enforce a request size limit."""
+
+    def __init__(self, app, max_request_bytes: int) -> None:
+        super().__init__(app)
+        self.max_request_bytes = max_request_bytes
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        length = request.headers.get("content-length")
+        if length and int(length) > self.max_request_bytes:
+            return JSONResponse({"detail": "request too large"}, status_code=413)
+        response = await call_next(request)
+        headers = response.headers
+        headers.setdefault("X-Content-Type-Options", "nosniff")
+        headers.setdefault("Referrer-Policy", "no-referrer")
+        headers.setdefault("X-Frame-Options", "DENY")
+        return response

@@ -41,6 +41,20 @@ Protect the `/api` endpoints by supplying one or more keys:
 Requests are limited per IP using `RATE_LIMIT` requests per `RATE_WINDOW`
 seconds. Exceeding the limit returns HTTP 429.
 
+## Pagination & Caching
+
+RSS endpoints accept `limit` (default `50`, max `100`) and `offset` query
+parameters. Requests exceeding the maximum return HTTP 400. Successful
+responses include `Cache-Control: public, max-age=<SEARCH_TTL_SECONDS>` and an
+`ETag` header; subsequent requests with `If-None-Match` receive HTTP 304.
+Supplying `Cache-Control: no-cache` forces a fresh response.
+
+## Security Headers
+
+All responses include basic security headers (`X-Content-Type-Options:
+nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`). Set
+`CORS_ORIGINS` to enable CORS for specific origins.
+
 ## Newznab Categories and Adult Content
 
 The API exposes a handful of default category IDs:

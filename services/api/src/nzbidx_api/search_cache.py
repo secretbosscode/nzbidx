@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Optional
 
 try:  # pragma: no cover - optional dependency
@@ -32,5 +31,6 @@ def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` if caching is enabled."""
     client = _client()
     if client:
-        ttl = int(os.getenv("SEARCH_TTL_SECONDS", "60"))
-        client.setex(f"rss:{key}", ttl, xml)
+        from .config import search_ttl_seconds
+
+        client.setex(f"rss:{key}", search_ttl_seconds(), xml)
