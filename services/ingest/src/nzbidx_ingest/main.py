@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sqlite3
 from typing import Optional
 
@@ -24,7 +25,54 @@ from .parsers import detect_language, normalize_subject, extract_tags
 logger = logging.getLogger(__name__)
 
 # Newznab-style category IDs
-CATEGORY_MAP = {"music": "3000", "books": "7000", "xxx": "6000"}
+CATEGORY_MAP = {
+    "reserved": "0000",
+    "console": "1000",
+    "console_nds": "1010",
+    "console_psp": "1020",
+    "console_wii": "1030",
+    "console_xbox": "1040",
+    "console_xbox360": "1050",
+    "console_wiiware": "1060",
+    "console_xbox360_dlc": "1070",
+    "movies": "2000",
+    "movies_foreign": "2010",
+    "movies_other": "2020",
+    "movies_sd": "2030",
+    "movies_hd": "2040",
+    "movies_bluray": "2050",
+    "movies_3d": "2060",
+    "audio": "3000",
+    "music": "3000",
+    "audio_mp3": "3010",
+    "audio_video": "3020",
+    "audio_audiobook": "3030",
+    "audio_lossless": "3040",
+    "pc": "4000",
+    "pc_0day": "4010",
+    "pc_iso": "4020",
+    "pc_mac": "4030",
+    "pc_mobile_other": "4040",
+    "pc_games": "4050",
+    "pc_mobile_ios": "4060",
+    "pc_mobile_android": "4070",
+    "tv": "5000",
+    "tv_foreign": "5020",
+    "tv_sd": "5030",
+    "tv_hd": "5040",
+    "tv_other": "5050",
+    "tv_sport": "5060",
+    "xxx": "6000",
+    "xxx_dvd": "6010",
+    "xxx_wmv": "6020",
+    "xxx_xvid": "6030",
+    "xxx_x264": "6040",
+    "other": "7000",
+    "misc": "7010",
+    "ebook": "7020",
+    "books": "7020",
+    "comics": "7030",
+}
 
 
 def connect_db() -> sqlite3.Connection:
@@ -119,23 +167,68 @@ def _infer_category(subject: str) -> Optional[str]:
             return CATEGORY_MAP[tag]
 
     # Fallback explicit markers (redundant, but resilient if extract_tags changes)
-    if "[music]" in s:
-        return CATEGORY_MAP["music"]
-    if "[books]" in s or "[book]" in s:
-        return CATEGORY_MAP["books"]
+    if "[movies]" in s or "[movie]" in s:
+        return CATEGORY_MAP["movies"]
+    if "[tv]" in s:
+        return CATEGORY_MAP["tv"]
+    if "[music]" in s or "[audio]" in s:
+        return CATEGORY_MAP["audio"]
+    if "[books]" in s or "[book]" in s or "[ebook]" in s:
+        return CATEGORY_MAP["ebook"]
     if "[xxx]" in s:
         return CATEGORY_MAP["xxx"]
-
-    # Heuristic keyword checks
-    if any(k in s for k in ("flac", "mp3", "aac", "album")):
-        return CATEGORY_MAP["music"]
-    if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
-        return CATEGORY_MAP["books"]
     if any(
         k in s
         for k in ("brazzers", "realitykings", "onlyfans", "pornhub", "adult", "xxx")
     ):
+        if "dvd" in s:
+            return CATEGORY_MAP["xxx_dvd"]
+        if "wmv" in s:
+            return CATEGORY_MAP["xxx_wmv"]
+        if "xvid" in s:
+            return CATEGORY_MAP["xxx_xvid"]
+        if "x264" in s or "h264" in s:
+            return CATEGORY_MAP["xxx_x264"]
         return CATEGORY_MAP["xxx"]
+
+    # TV
+    if re.search(r"s\d{1,2}e\d{1,2}", s) or "season" in s or "episode" in s:
+        if "sport" in s or "sports" in s:
+            return CATEGORY_MAP["tv_sport"]
+        if any(k in s for k in ("1080p", "720p", "x264", "x265", "hd")):
+            return CATEGORY_MAP["tv_hd"]
+        if any(k in s for k in ("xvid", "dvdrip", "sd")):
+            return CATEGORY_MAP["tv_sd"]
+        return CATEGORY_MAP["tv"]
+
+    # Movies
+    if any(k in s for k in ("bluray", "blu-ray")):
+        return CATEGORY_MAP["movies_bluray"]
+    if "3d" in s:
+        return CATEGORY_MAP["movies_3d"]
+    if any(k in s for k in ("1080p", "720p", "x264", "x265", "hdrip", "webrip", "hd")):
+        return CATEGORY_MAP["movies_hd"]
+    if any(k in s for k in ("dvdrip", "xvid", "cam", "ts", "sd")):
+        return CATEGORY_MAP["movies_sd"]
+
+    # Audio
+    if "audiobook" in s or "audio book" in s:
+        return CATEGORY_MAP["audio_audiobook"]
+    if any(k in s for k in ("flac", "lossless")):
+        return CATEGORY_MAP["audio_lossless"]
+    if any(k in s for k in ("mp3", "aac", "m4a")):
+        return CATEGORY_MAP["audio_mp3"]
+    if "video" in s and "music" in s:
+        return CATEGORY_MAP["audio_video"]
+    if any(k in s for k in ("album", "single", "music")):
+        return CATEGORY_MAP["audio"]
+
+    # Books
+    if any(k in s for k in ("cbz", "cbr", "comic")):
+        return CATEGORY_MAP["comics"]
+    if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
+        return CATEGORY_MAP["ebook"]
+
     return None
 
 

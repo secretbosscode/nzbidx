@@ -37,7 +37,7 @@ def is_adult_category(cat: Optional[str]) -> bool:
 MOVIES_CAT = os.getenv("MOVIES_CAT_ID", "2000")
 TV_CAT = os.getenv("TV_CAT_ID", "5000")
 AUDIO_CAT = os.getenv("AUDIO_CAT_ID", "3000")
-BOOKS_CAT = os.getenv("BOOKS_CAT_ID", "7000")
+BOOKS_CAT = os.getenv("BOOKS_CAT_ID", "7020")
 ADULT_CAT = os.getenv("ADULT_CAT_ID", "6000")
 
 
@@ -52,7 +52,7 @@ def caps_xml() -> str:
         f'<category id="{movies}" name="Movies"/>',
         f'<category id="{tv}" name="TV"/>',
         f'<category id="{audio}" name="Audio/Music"/>',
-        f'<category id="{books}" name="Books/eBooks"/>',
+        f'<category id="{books}" name="EBook"/>',
     ]
     if adult_content_allowed():
         categories.append(f'<category id="{adult}" name="XXX/Adult"/>')
