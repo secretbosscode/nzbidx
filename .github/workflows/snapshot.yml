@@ -13,5 +13,5 @@ jobs:
     if: env.SNAPSHOT_SCHEDULE == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: bash scripts/snapshot.sh
