@@ -9,6 +9,8 @@ try:  # pragma: no cover - import guard
 except Exception:  # pragma: no cover - optional dependency
     Redis = None  # type: ignore
 
+from . import nzb_builder
+
 ADULT_CATEGORY = 6000
 
 
@@ -95,18 +97,20 @@ def nzb_xml_stub(release_id: str) -> str:
 def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     """Return an NZB document for ``release_id`` using ``cache``.
 
-    If ``cache`` is provided the result is stored under ``nzb:<release_id>``
-    with a TTL of 24 hours and retrieved from there on subsequent calls.
+    The actual NZB building is delegated to :func:`nzb_builder.build_nzb_for_release`
+    which currently returns a stub XML document.  When ``cache`` is provided the
+    result is stored under ``nzb:<release_id>`` with a TTL of 24 hours and
+    retrieved from there on subsequent calls.
     """
     key = f"nzb:{release_id}"
     if cache:
         cached = cache.get(key)
         if cached:
             return cached.decode("utf-8")
-        xml = nzb_xml_stub(release_id)
+        xml = nzb_builder.build_nzb_for_release(release_id)
         cache.setex(key, 86400, xml)
         return xml
-    return nzb_xml_stub(release_id)
+    return nzb_builder.build_nzb_for_release(release_id)
 
 
 def adult_disabled_xml() -> str:

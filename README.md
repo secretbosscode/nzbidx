@@ -23,6 +23,19 @@ Only release metadata is stored; binaries are discarded during ingest.
 
     docker compose exec api python scripts/seed_os.py
 
+## Run Ingest Loop
+
+The ingest worker polls configured NNTP groups and stores release metadata:
+
+    docker compose exec ingest python -m nzbidx_ingest
+
+## API Keys
+
+Protect the `/api` endpoints by supplying one or more keys:
+
+    export API_KEYS=devkey
+    curl -H "X-Api-Key: devkey" 'http://localhost:8080/api?t=caps'
+
 ## Newznab Categories and Adult Content
 
 The API exposes a handful of default category IDs:
@@ -78,8 +91,8 @@ pip install -e .
 ruff check src tests
 pytest
 
-cd ../ingest
-pip install -e .
-ruff check src tests
-pytest
+    cd ../ingest
+    pip install -e .
+    ruff check src tests
+    pytest
 ```

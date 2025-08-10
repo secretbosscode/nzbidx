@@ -19,9 +19,9 @@ except Exception:  # pragma: no cover - optional dependency
 class RateLimiter:
     """Track request counts per key within a time window."""
 
-    def __init__(self, rpm: int) -> None:
-        self.rpm = rpm
-        self.window = 60
+    def __init__(self, limit: int, window: int) -> None:
+        self.limit = limit
+        self.window = window
         url = os.getenv("REDIS_URL")
         if redis and url:
             # Redis backend
@@ -55,11 +55,12 @@ class RateLimiter:
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Apply simple IP based rate limiting."""
 
-    def __init__(self, app, rpm: int | None = None) -> None:
+    def __init__(self, app, limit: int | None = None, window: int | None = None) -> None:
         super().__init__(app)
-        limit = rpm if rpm is not None else int(os.getenv("RATE_LIMIT_RPM", "60"))
-        self.limiter = RateLimiter(limit)
-        self.limit = limit
+        limit_val = limit if limit is not None else int(os.getenv("RATE_LIMIT", "60"))
+        window_val = window if window is not None else int(os.getenv("RATE_WINDOW", "60"))
+        self.limiter = RateLimiter(limit_val, window_val)
+        self.limit = limit_val
 
     async def dispatch(self, request: Request, call_next) -> Response:
         client_ip = request.client.host if request.client else "anonymous"

@@ -78,7 +78,9 @@ from .newznab import (
     BOOKS_CAT,
     TV_CAT,
 )
+from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
+from .search_cache import cache_rss, get_cached_rss
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +145,23 @@ def init_cache() -> None:
 async def health(request: Request) -> JSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
-    return JSONResponse({"status": "ok", "db": db_status})
+    os_status = "down"
+    if opensearch:
+        try:  # pragma: no cover - network errors
+            opensearch.info()
+            os_status = "ok"
+        except Exception:
+            pass
+    redis_status = "down"
+    if cache:
+        try:  # pragma: no cover - network errors
+            cache.ping()
+            redis_status = "ok"
+        except Exception:
+            pass
+    return JSONResponse(
+        {"status": "ok", "db": db_status, "os": os_status, "redis": redis_status}
+    )
 
 
 def _os_search(
@@ -241,11 +259,17 @@ def _xml_response(body: str) -> Response:
     return Response(body, media_type="application/xml")
 
 
+def _params_key(params) -> str:
+    """Return a stable cache key for ``params``."""
+    return "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+
+
 async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
     t = params.get("t")
     cat = params.get("cat")
+    ttl = int(os.getenv("SEARCH_TTL_SECONDS", "60"))
 
     # Adult category gating
     if (
@@ -259,12 +283,22 @@ async def api(request: Request) -> Response:
         return _xml_response(caps_xml())
 
     if t == "search":
+        cache_key = f"search:{_params_key(params)}"
+        cached = get_cached_rss(cache_key)
+        if cached:
+            return _xml_response(cached)
         q = params.get("q")
         tag = params.get("tag")
         items = _os_search(q, category=cat, tag=tag)
-        return _xml_response(rss_xml(items))
+        xml = rss_xml(items)
+        cache_rss(cache_key, xml, ttl)
+        return _xml_response(xml)
 
     if t == "tvsearch":
+        cache_key = f"tvsearch:{_params_key(params)}"
+        cached = get_cached_rss(cache_key)
+        if cached:
+            return _xml_response(cached)
         q = params.get("q")
         season = params.get("season")
         episode = params.get("ep")
@@ -275,16 +309,28 @@ async def api(request: Request) -> Response:
             tag=tag,
             extra={"season": season, "episode": episode},
         )
-        return _xml_response(rss_xml(items))
+        xml = rss_xml(items)
+        cache_rss(cache_key, xml, ttl)
+        return _xml_response(xml)
 
     if t == "movie":
+        cache_key = f"movie:{_params_key(params)}"
+        cached = get_cached_rss(cache_key)
+        if cached:
+            return _xml_response(cached)
         q = params.get("q")
         imdbid = params.get("imdbid")
         tag = params.get("tag")
         items = _os_search(q, category=MOVIES_CAT, tag=tag, extra={"imdbid": imdbid})
-        return _xml_response(rss_xml(items))
+        xml = rss_xml(items)
+        cache_rss(cache_key, xml, ttl)
+        return _xml_response(xml)
 
     if t == "music":
+        cache_key = f"music:{_params_key(params)}"
+        cached = get_cached_rss(cache_key)
+        if cached:
+            return _xml_response(cached)
         q = params.get("q")
         artist = params.get("artist")
         tag = params.get("tag")
@@ -300,9 +346,15 @@ async def api(request: Request) -> Response:
             extra={k: v for k, v in extra.items() if v},
             artist=artist,
         )
-        return _xml_response(rss_xml(items))
+        xml = rss_xml(items)
+        cache_rss(cache_key, xml, ttl)
+        return _xml_response(xml)
 
     if t == "book":
+        cache_key = f"book:{_params_key(params)}"
+        cached = get_cached_rss(cache_key)
+        if cached:
+            return _xml_response(cached)
         q = params.get("q")
         tag = params.get("tag")
         extra = {
@@ -315,7 +367,9 @@ async def api(request: Request) -> Response:
             tag=tag,
             extra={k: v for k, v in extra.items() if v},
         )
-        return _xml_response(rss_xml(items))
+        xml = rss_xml(items)
+        cache_rss(cache_key, xml, ttl)
+        return _xml_response(xml)
 
     if t == "getnzb":
         release_id = params.get("id")
@@ -334,7 +388,7 @@ routes = [
 app = Starlette(
     routes=routes,
     on_startup=[init_opensearch, init_cache],
-    middleware=[Middleware(RateLimitMiddleware)],
+    middleware=[Middleware(ApiKeyMiddleware), Middleware(RateLimitMiddleware)],
 )
 
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
