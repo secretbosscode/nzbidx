@@ -149,6 +149,17 @@ pytest
     pytest
 ```
 
+## Database
+
+Development and tests default to SQLite and create tables on startup. To use
+PostgreSQL in production (e.g. docker-compose), set a `DATABASE_URL`:
+
+```bash
+DATABASE_URL=postgres://nzbidx:nzbidx@postgres:5432/nzbidx
+```
+
+Schema creation is idempotent; running with a new database is sufficient.
+
 ## Backups
 
 OpenSearch snapshots can be stored in S3 or GCS. Configure the repository via
@@ -161,6 +172,40 @@ export OS_S3_REGION=us-east-1
 # or GCS
 # export OS_GCS_BUCKET=my-bucket
 make snapshot-repo
+```
+
+### Restore
+
+1. Register the repository if needed.
+2. List snapshots via `GET /_snapshot/<repo>/_all`.
+3. Restore and remap the alias:
+
+```bash
+curl -XPOST \
+  http://localhost:9200/_snapshot/<repo>/<snap>/_restore \
+  -H 'Content-Type: application/json' -d '
+{
+  "indices": "nzbidx-releases-*",
+  "aliases": {"nzbidx-releases": {"is_write_index": true}}
+}
+'
+```
+
+Close indices if required; restoring over an existing alias may need
+`rename_pattern`/`rename_replacement`.
+
+## Operations
+
+See [RUNBOOK.md](RUNBOOK.md) for common on-call checks.
+
+Container logs stream to stdout/stderr; configure log rotation in Docker or
+Kubernetes to avoid unbounded growth. Example Docker daemon snippet:
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": {"max-size": "10m", "max-file": "5"}
+}
 ```
 
 ## Smoke Test
