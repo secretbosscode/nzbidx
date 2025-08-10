@@ -1,6 +1,14 @@
 # nzbidx
 
-Placeholder for project description.
+NZBIdx is a lightweight, Newznab-compatible indexer built around two
+Python services:
+
+* **API** – a FastAPI/Starlette application exposing search and NZB
+  retrieval endpoints backed by OpenSearch and Redis.
+* **Ingest** – a small worker that parses NNTP headers, normalises
+  subjects and indexes metadata into OpenSearch.
+
+Only release metadata is stored; binaries are discarded during ingest.
 
 ## Quickstart
 
@@ -59,3 +67,19 @@ Use the production override file to run the stack with persistent data stores an
   default and must be explicitly set to `true` to opt in.
 - Only metadata is indexed; binaries are stripped during ingest. An admin
   takedown endpoint is planned for future releases.
+
+## Development
+
+Run linters and tests for each service:
+
+```
+cd services/api
+pip install -e .
+ruff check src tests
+pytest
+
+cd ../ingest
+pip install -e .
+ruff check src tests
+pytest
+```
