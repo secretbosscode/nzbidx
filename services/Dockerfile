@@ -14,9 +14,12 @@ RUN pip install --no-cache-dir \
     asyncpg \
     redis \
     httpx \
-    fakeredis
+    fakeredis \
+    python-dotenv
 
-COPY src/ .
+COPY services/api/src/ ./
+COPY services/ingest/src/ ./
+COPY nzbidx_common/ ./nzbidx_common
 
 USER nzbidx
 VOLUME /tmp
