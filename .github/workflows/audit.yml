@@ -24,6 +24,7 @@ jobs:
       - run: pip install -e services/${{ matrix.service }}
       - run: pip install pip-audit
       - run: pip-audit
+
   sbom:
     runs-on: ubuntu-latest
     strategy:
