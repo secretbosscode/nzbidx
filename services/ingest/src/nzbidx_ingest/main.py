@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from .logging import setup_logging
 from .nntp_client import NNTPClient
-from .parsers import detect_language, normalize_subject
+from .parsers import detect_language, normalize_subject, extract_tags
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,13 @@ def index_release(
 def _infer_category(subject: str) -> Optional[str]:
     """Heuristic category detection from the raw subject."""
     s = subject.lower()
+
+    # First check for explicit bracketed tags like ``[music]`` or ``[books]``
+    # which are commonly used in Usenet subjects to indicate the category.
+    for tag in extract_tags(subject):
+        if tag in CATEGORY_MAP:
+            return CATEGORY_MAP[tag]
+
     if any(k in s for k in ("flac", "mp3", "aac", "album")):
         return CATEGORY_MAP["music"]
     if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
