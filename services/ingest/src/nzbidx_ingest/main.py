@@ -90,10 +90,10 @@ def index_release(
         body["tags"] = tags
     try:  # pragma: no cover - network errors
         client.index(
-            index="nzbidx-releases-v1",
+            index="nzbidx-releases",
             id=norm_title,
             body=body,
-            refresh=True,
+            refresh=False,
         )
     except Exception as exc:  # pragma: no cover - network errors
         if not _os_warned:

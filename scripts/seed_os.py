@@ -42,7 +42,7 @@ def main() -> None:
     ]
 
     for idx, body in enumerate(releases, start=1):
-        client.index(index="nzbidx-releases-v1", id=str(idx), body=body, refresh=True)
+        client.index(index="nzbidx-releases", id=str(idx), body=body, refresh="wait_for")
 
     print("Seeded 3 releases")
 

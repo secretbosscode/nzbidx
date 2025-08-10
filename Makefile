@@ -1,19 +1,22 @@
-.PHONY: up down logs test fmt lint
+.PHONY: compose-up compose-down logs test fmt lint seed-os
 
-up:
-	docker compose up -d
+compose-up:
+        docker compose up -d
 
-down:
-	docker compose down
+compose-down:
+        docker compose down
 
 logs:
-	docker compose logs -f
+        docker compose logs -f
 
 test:
-	pytest
+        pytest
 
 fmt:
         black .
 
 lint:
         ruff check .
+
+seed-os:
+        python scripts/seed_os.py

@@ -35,8 +35,11 @@ def run_once() -> None:
         headers = client.xover(group, start, end)
         if not headers:
             continue
+        metrics = {"processed": 0, "inserted": 0, "indexed": 0}
+        batch_start = time.monotonic()
         current = last
         for idx, header in enumerate(headers, start=start):
+            metrics["processed"] += 1
             subject = header.get("subject", "")
             norm_title, tags = normalize_subject(subject, with_tags=True)
             norm_title = norm_title.lower()
@@ -50,7 +53,10 @@ def run_once() -> None:
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject)
             category = _infer_category(subject)
-            if insert_release(db, dedupe_key, category, language, tags):
+            start_idx = time.monotonic()
+            inserted = insert_release(db, dedupe_key, category, language, tags)
+            if inserted:
+                metrics["inserted"] += 1
                 index_release(
                     os_client,
                     dedupe_key,
@@ -58,8 +64,15 @@ def run_once() -> None:
                     language=language,
                     tags=tags,
                 )
+                metrics["indexed"] += 1
+            latency = time.monotonic() - start_idx
+            if latency > 0.5:
+                time.sleep(min(latency, 5))
             current = idx
         cursors.set_cursor(group, current)
+        metrics["deduped"] = metrics["processed"] - metrics["inserted"]
+        metrics["duration_ms"] = int((time.monotonic() - batch_start) * 1000)
+        logger.info("ingest_batch", extra=metrics)
 
 
 def run_forever() -> None:

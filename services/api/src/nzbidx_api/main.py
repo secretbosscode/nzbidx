@@ -95,12 +95,96 @@ from .rate_limit import RateLimitMiddleware
 from .search_cache import cache_rss, get_cached_rss
 from .search import search_releases
 from .middleware_security import SecurityMiddleware
-from .config import cors_origins, max_request_bytes, search_ttl_seconds
+from .middleware_request_id import RequestIDMiddleware
+from .middleware_circuit import CircuitOpenError
+from .otel import current_trace_id, setup_tracing
+from .config import (
+    cors_origins,
+    max_request_bytes,
+    search_ttl_seconds,
+)
 
 logger = logging.getLogger(__name__)
 
+
+class JsonFormatter(logging.Formatter):
+    """Minimal JSON formatter for structured logs."""
+
+    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+        payload = {
+            "time": self.formatTime(record, "%Y-%m-%dT%H:%M:%SZ"),
+            "level": record.levelname.lower(),
+            "message": record.getMessage(),
+        }
+        for k, v in record.__dict__.items():
+            if k not in logging.LogRecord("", 0, "", 0, "", (), None).__dict__:
+                payload[k] = v
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+def setup_logging() -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
+setup_logging()
+setup_tracing()
+
+_START_TIME = time.monotonic()
+_VERSION_FILE = Path(__file__).resolve().parents[3] / "VERSION"
+VERSION = os.getenv("VERSION")
+if not VERSION and _VERSION_FILE.exists():
+    VERSION = _VERSION_FILE.read_text(encoding="utf-8").strip()
+
+
+def _git_sha() -> str:
+    try:
+        import subprocess
+
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=_VERSION_FILE.parent,
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:  # pragma: no cover - git not available
+        return ""
+
+
+BUILD = os.getenv("GIT_SHA", _git_sha())
+
 opensearch: Optional[OpenSearch] = None
 cache: Optional[Redis] = None
+
+
+def build_ilm_policy() -> dict[str, object]:
+    path = Path(__file__).resolve().parents[4] / "opensearch" / "ilm-policy.json"
+    with path.open("r", encoding="utf-8") as f:
+        policy = json.load(f)
+    from .config import ilm_delete_days, ilm_warm_days
+
+    policy["policy"]["phases"]["warm"]["min_age"] = f"{ilm_warm_days()}d"
+    policy["policy"]["phases"]["delete"]["min_age"] = f"{ilm_delete_days()}d"
+    return policy
+
+
+def build_index_template() -> dict[str, object]:
+    path = Path(__file__).resolve().parents[4] / "opensearch" / "index-template.json"
+    with path.open("r", encoding="utf-8") as f:
+        template = json.load(f)
+    settings = template.setdefault("template", {}).setdefault("settings", {})
+    settings.setdefault("refresh_interval", "5s")
+    settings["index.lifecycle.name"] = "nzbidx-releases-policy"
+    settings["index.lifecycle.rollover_alias"] = "nzbidx-releases"
+    return template
 
 
 class TimingMiddleware(BaseHTTPMiddleware):
@@ -116,10 +200,13 @@ class TimingMiddleware(BaseHTTPMiddleware):
             logger.info(
                 "request",
                 extra={
+                    "service": os.getenv("OTEL_SERVICE_NAME", "nzbidx-api"),
                     "route": path,
                     "status": response.status_code,
                     "duration_ms": duration,
-                    "remote_ip": ip,
+                    "ip": ip,
+                    "trace_id": current_trace_id(),
+                    "request_id": getattr(request.state, "request_id", ""),
                 },
             )
         return response
@@ -133,20 +220,15 @@ def init_opensearch() -> None:
     url = os.getenv("OPENSEARCH_URL", "http://opensearch:9200")
     try:
         client = OpenSearch(url, timeout=2)
-        template_path = (
-            Path(__file__).resolve().parents[3] / "opensearch" / "index-template.json"
-        )
-        with template_path.open("r", encoding="utf-8") as f:
-            template_body = json.load(f)
-        # Speed up indexing for development environments
-        template_body.setdefault("template", {}).setdefault("settings", {})[
-            "refresh_interval"
-        ] = "5s"
+        client.ilm.put_lifecycle(name="nzbidx-releases-policy", body=build_ilm_policy())
         client.indices.put_index_template(
-            name="nzbidx-releases-template", body=template_body
+            name="nzbidx-releases-template", body=build_index_template()
         )
-        if not client.indices.exists(index="nzbidx-releases-v1"):
-            client.indices.create(index="nzbidx-releases-v1")
+        if not client.indices.exists(index="nzbidx-releases-000001"):
+            client.indices.create(
+                index="nzbidx-releases-000001",
+                aliases={"nzbidx-releases": {"is_write_index": True}},
+            )
         if os.getenv("SEED_OS_SAMPLE") == "true":
             sample = {
                 "norm_title": "Test Release",
@@ -158,7 +240,10 @@ def init_opensearch() -> None:
             }
             try:
                 client.index(
-                    index="nzbidx-releases-v1", id="1", body=sample, refresh=True
+                    index="nzbidx-releases",
+                    id="1",
+                    body=sample,
+                    refresh="wait_for",
                 )
             except Exception:
                 pass
@@ -181,6 +266,23 @@ def init_cache() -> None:
         logger.info("Redis ready")
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("Redis unavailable: %s", exc)
+
+
+async def shutdown() -> None:
+    """Close global connections on shutdown."""
+    global opensearch, cache
+    if opensearch:
+        try:
+            opensearch.close()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        opensearch = None
+    if cache:
+        try:
+            cache.close()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        cache = None
 
 
 async def health(request: Request) -> JSONResponse:
@@ -207,6 +309,9 @@ async def health(request: Request) -> JSONResponse:
             payload["redis"] = "down"
     else:
         payload["redis"] = "down"
+    payload["version"] = VERSION or "dev"
+    payload["uptime_ms"] = int((time.monotonic() - _START_TIME) * 1000)
+    payload["build"] = BUILD
     return JSONResponse(payload)
 
 
@@ -451,16 +556,18 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return JSONResponse({"detail": "missing id"}, status_code=400)
-        return Response(get_nzb(release_id, cache), media_type="application/x-nzb")
+        try:
+            xml = get_nzb(release_id, cache)
+        except CircuitOpenError:
+            return JSONResponse({"detail": "service unavailable"}, status_code=503)
+        return Response(xml, media_type="application/x-nzb")
 
     return JSONResponse({"detail": "unsupported request"}, status_code=400)
 
 
-routes = [
-    Route("/health", health),
-    Route("/api", api),
-]
+routes = [Route("/health", health), Route("/api", api)]
 middleware = [
+    Middleware(RequestIDMiddleware),
     Middleware(ApiKeyMiddleware),
     Middleware(RateLimitMiddleware),
     Middleware(SecurityMiddleware, max_request_bytes=max_request_bytes()),
@@ -473,6 +580,7 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[init_opensearch, init_cache],
+    on_shutdown=[shutdown],
     middleware=middleware,
 )
 
