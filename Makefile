@@ -28,7 +28,7 @@ seed-os:
 	python scripts/seed_os.py
 
 snapshot-repo:
-        docker compose exec api python scripts/os_snapshot_repo.py
+	docker compose exec api python scripts/os_snapshot_repo.py
 
 release:
 	@[ -n "$(VERSION)" ] || (echo "VERSION required" && exit 1)
