@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .middleware_circuit import CircuitOpenError, redis_breaker
+from .middleware_circuit import CircuitOpenError, call_with_retry, redis_breaker
 from .otel import start_span
 
 try:  # pragma: no cover - optional dependency
@@ -26,7 +26,9 @@ def get_cached_rss(key: str) -> Optional[str]:
     if client:
         try:
             with start_span("redis.get"):
-                value = redis_breaker.call(client.get, f"rss:{key}")
+                value = call_with_retry(
+                    redis_breaker, "redis", client.get, f"rss:{key}"
+                )
             if value:
                 return value.decode("utf-8")
         except CircuitOpenError:
@@ -42,8 +44,13 @@ def cache_rss(key: str, xml: str) -> None:
 
         try:
             with start_span("redis.setex"):
-                redis_breaker.call(
-                    client.setex, f"rss:{key}", search_ttl_seconds(), xml
+                call_with_retry(
+                    redis_breaker,
+                    "redis",
+                    client.setex,
+                    f"rss:{key}",
+                    search_ttl_seconds(),
+                    xml,
                 )
         except CircuitOpenError:
             return

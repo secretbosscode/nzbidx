@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 import logging
 
 from .config import search_timeout_ms
-from .middleware_circuit import CircuitOpenError, os_breaker
+from .middleware_circuit import CircuitOpenError, call_with_retry, os_breaker
 from .otel import start_span
 
 try:  # pragma: no cover - optional dependency
@@ -34,17 +34,24 @@ def search_releases(
     }
     try:
         with start_span("opensearch.search"):
-            result = os_breaker.call(
+            result = call_with_retry(
+                os_breaker,
+                "opensearch",
                 client.search,
                 index="nzbidx-releases",
                 body=body,
                 request_timeout=search_timeout_ms() / 1000,
             )
     except CircuitOpenError:
+        logger.warning(
+            "breaker_open", extra={"dep": "opensearch", "breaker_state": "open"}
+        )
         return []
     except TypeError:
         try:
-            result = os_breaker.call(
+            result = call_with_retry(
+                os_breaker,
+                "opensearch",
                 client.search,
                 index="nzbidx-releases",
                 body=body,

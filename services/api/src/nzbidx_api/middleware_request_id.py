@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import uuid
+from contextvars import ContextVar
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -8,13 +10,29 @@ from starlette.responses import Response
 from .config import request_id_header
 
 
+_request_id_ctx: ContextVar[str] = ContextVar("request_id", default="")
+
+
+class _RequestIDFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
+        record.request_id = _request_id_ctx.get("")
+        return True
+
+
+logging.getLogger().addFilter(_RequestIDFilter())
+
+
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Attach a unique request id to each response."""
+    """Attach a unique request id to each response and log record."""
 
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
         header = request_id_header()
         req_id = request.headers.get(header) or str(uuid.uuid4())
         request.state.request_id = req_id
-        response = await call_next(request)
+        token = _request_id_ctx.set(req_id)
+        try:
+            response = await call_next(request)
+        finally:
+            _request_id_ctx.reset(token)
         response.headers.setdefault(header, req_id)
         return response

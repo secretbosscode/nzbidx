@@ -61,12 +61,30 @@ nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`,
 `X-Download-Options: noopen`, `Permissions-Policy: interest-cohort=()`).
 Set `CORS_ORIGINS` to enable CORS for specific origins.
 
-Each response also carries an `X-Request-ID` header. Clients may supply their
-own header (default `X-Request-ID`, configurable via `REQUEST_ID_HEADER`) to
-aid correlation.
+### Request ID & tracing
+
+Each response carries an `X-Request-ID` header. Clients may supply their own
+identifier (default `X-Request-ID`, configurable via `REQUEST_ID_HEADER`) to
+aid correlation. Structured logs include this `request_id` field.
 
 Tracing is automatically enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 Override the service name with `OTEL_SERVICE_NAME`.
+
+### Circuit breaker behavior
+
+OpenSearch and Redis calls use a small circuit breaker with jittered
+retries. After repeated failures the breaker opens and search endpoints
+return empty responses while NZB retrieval returns HTTP 503. The circuit
+half-opens after `CB_RESET_SECONDS` allowing a probe to close it on
+success. Retry behaviour is tunable via `RETRY_MAX`, `RETRY_BASE_MS` and
+`RETRY_JITTER_MS`.
+
+### ILM & rollover
+
+An ILM policy and index template manage monthly OpenSearch indices. The
+template sets the `nzbidx-releases` write alias and rolls over after 30
+days. Indices move to the warm phase after `ILM_WARM_DAYS` and are deleted
+after `ILM_DELETE_DAYS`.
 
 ## Newznab Categories and Adult Content
 

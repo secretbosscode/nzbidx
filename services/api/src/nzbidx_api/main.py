@@ -288,27 +288,30 @@ async def shutdown() -> None:
 async def health(request: Request) -> JSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
-    payload = {"status": "ok", "db": db_status}
+    req_id = getattr(getattr(request, "state", object()), "request_id", "")
+    payload = {"status": "ok", "db": db_status, "request_id": req_id}
     if opensearch:
         start = time.monotonic()
         try:  # pragma: no cover - network errors
             opensearch.info()
             payload["os"] = "ok"
-            payload["os_latency_ms"] = int((time.monotonic() - start) * 1000)
         except Exception:
             payload["os"] = "down"
+        payload["os_latency_ms"] = int((time.monotonic() - start) * 1000)
     else:
         payload["os"] = "down"
+        payload["os_latency_ms"] = 0
     if cache:
         start = time.monotonic()
         try:  # pragma: no cover - network errors
             cache.ping()
             payload["redis"] = "ok"
-            payload["redis_latency_ms"] = int((time.monotonic() - start) * 1000)
         except Exception:
             payload["redis"] = "down"
+        payload["redis_latency_ms"] = int((time.monotonic() - start) * 1000)
     else:
         payload["redis"] = "down"
+        payload["redis_latency_ms"] = 0
     payload["version"] = VERSION or "dev"
     payload["uptime_ms"] = int((time.monotonic() - _START_TIME) * 1000)
     payload["build"] = BUILD
