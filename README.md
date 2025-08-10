@@ -198,13 +198,13 @@ Close indices if required; restoring over an existing alias may need
 
 See [RUNBOOK.md](RUNBOOK.md) for common on-call checks.
 
-Container logs stream to stdout/stderr; configure log rotation in Docker or
-Kubernetes to avoid unbounded growth. Example Docker daemon snippet:
+Container logs stream to stdout/stderr. Configure log rotation (daily or by size)
+to avoid unbounded growth. Example Docker daemon snippet:
 
 ```json
 {
   "log-driver": "json-file",
-  "log-opts": {"max-size": "10m", "max-file": "5"}
+  "log-opts": {"max-size": "50m", "max-file": "7"}
 }
 ```
 
