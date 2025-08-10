@@ -12,7 +12,7 @@ env:
 
 jobs:
   pip-audit:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         service: [api, ingest]
@@ -25,7 +25,7 @@ jobs:
       - run: pip install pip-audit
       - run: pip-audit
   sbom:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         service: [api, ingest]

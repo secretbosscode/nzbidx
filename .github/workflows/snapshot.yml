@@ -8,7 +8,7 @@ on:
 jobs:
   snapshot:
     if: ${{ vars.SNAPSHOT_SCHEDULE == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       SNAPSHOT_SCHEDULE: ${{ vars.SNAPSHOT_SCHEDULE || 'false' }}
     steps:
