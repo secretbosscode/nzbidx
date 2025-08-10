@@ -9,6 +9,11 @@ services:
     depends_on:
       - opensearch
       - postgres
+    environment:
+      API_KEYS: devkey
+      SEARCH_TTL_SECONDS: 60
+      RATE_LIMIT: 60
+      RATE_WINDOW: 60
   ingest:
     build: ./services/ingest
     env_file:
@@ -17,6 +22,7 @@ services:
       - opensearch
       - postgres
       - redis
+    command: python -m nzbidx_ingest
   opensearch:
     image: opensearchproject/opensearch:2
     environment:

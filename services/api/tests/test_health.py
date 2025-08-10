@@ -26,4 +26,5 @@ def test_health() -> None:
     assert response.status_code == 200
     payload = json.loads(response.body)
     assert payload["status"] == "ok"
-    assert "db" in payload
+    for key in ("db", "os", "redis"):
+        assert key in payload

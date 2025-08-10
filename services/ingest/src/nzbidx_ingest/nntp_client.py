@@ -53,3 +53,10 @@ class NNTPClient:
     def _recv_line(sock: socket.socket) -> str:
         data = sock.recv(1024)
         return data.decode(errors="ignore").strip()
+
+    # The real client would issue ``XOVER`` or ``HDR`` commands.  For the
+    # minimal test environment this method simply returns an empty list and is
+    # monkeypatched in tests.
+    def xover(self, group: str, start: int, end: int) -> list[dict[str, object]]:
+        """Return header dicts for articles in ``group`` between ``start`` and ``end``."""
+        return []

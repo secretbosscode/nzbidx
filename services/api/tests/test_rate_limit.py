@@ -26,7 +26,7 @@ def create_app():
 
 
 def test_rate_limit_exceeded(monkeypatch):
-    monkeypatch.setenv("RATE_LIMIT_RPM", "3")
+    monkeypatch.setenv("RATE_LIMIT", "3")
     app = create_app()
     client = TestClient(app)
     for _ in range(3):
