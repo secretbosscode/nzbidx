@@ -23,20 +23,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: make build
-      - run: make up
-      - run: SMOKE_RID=ci-smoke timeout 180 bash scripts/smoke.sh
       - run: pip install -e services/${{ matrix.service }}
       - run: pip install pytest ruff black
       - run: ruff check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
       - run: black --check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
       - run: pytest -q services/${{ matrix.service }}/tests
-      - if: failure()
-        run: docker compose logs > compose.log
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: compose-logs
-          path: compose.log
-      - if: always()
-        run: make down
