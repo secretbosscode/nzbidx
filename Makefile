@@ -37,8 +37,8 @@ release:
 	@black --check .
 	@PYTHONPATH=. pytest -q services/api/tests services/ingest/tests
 	@bash scripts/smoke.sh
-        @pip install pip-audit >/dev/null
-        @pip-audit
+	@pip install pip-audit >/dev/null
+	@pip-audit
 	@DATE=$$(date +%Y-%m-%d); perl -0 -i -pe "s/^## \[Unreleased\]/## $(VERSION) ($$DATE)/" CHANGELOG.md
 	@git tag v$(VERSION)
 	@if [ -n "$$CI" ]; then \
