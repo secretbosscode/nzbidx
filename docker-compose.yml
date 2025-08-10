@@ -10,7 +10,7 @@ services:
       - opensearch
       - postgres
     environment:
-      API_KEYS: devkey
+      API_KEYS: dev
       SEARCH_TTL_SECONDS: 60
       RATE_LIMIT: 60
       RATE_WINDOW: 60

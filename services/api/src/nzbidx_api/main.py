@@ -81,6 +81,7 @@ from .newznab import (
 from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
 from .search_cache import cache_rss, get_cached_rss
+from .search import search_releases
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,10 @@ def init_opensearch() -> None:
         )
         with template_path.open("r", encoding="utf-8") as f:
             template_body = json.load(f)
+        # Speed up indexing for development environments
+        template_body.setdefault("template", {}).setdefault("settings", {})[
+            "refresh_interval"
+        ] = "5s"
         client.indices.put_index_template(
             name="nzbidx-releases-template", body=template_body
         )
@@ -170,7 +175,6 @@ def _os_search(
     category: Optional[str] = None,
     tag: Optional[str] = None,
     extra: Optional[dict[str, object]] = None,
-    artist: Optional[str] = None,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
@@ -207,18 +211,6 @@ def _os_search(
                             if v:
                                 must.append({"match": {field: v}})
 
-            if artist:
-                must.append(
-                    {
-                        "bool": {
-                            "should": [
-                                {"match": {"tags": artist}},
-                                {"match": {"norm_title": artist}},
-                            ]
-                        }
-                    }
-                )
-
             if category:
                 filters.append({"term": {"category": category}})
 
@@ -231,24 +223,13 @@ def _os_search(
             if not adult_content_allowed():
                 must_not.append({"term": {"category": "xxx"}})
 
-            body: dict[str, dict] = {"query": {"bool": {"must": must}}}
+            query: dict[str, object] = {"must": must}
             if filters:
-                body["query"]["bool"]["filter"] = filters
+                query["filter"] = filters
             if must_not:
-                body["query"]["bool"]["must_not"] = must_not
+                query["must_not"] = must_not
 
-            result = opensearch.search(index="nzbidx-releases-v1", body=body)
-            for hit in result.get("hits", {}).get("hits", []):
-                src = hit.get("_source", {})
-                items.append(
-                    {
-                        "title": src.get("norm_title", ""),
-                        "guid": hit.get("_id", ""),
-                        "pubDate": src.get("posted_at", ""),
-                        "category": src.get("category", ""),
-                        "link": f"/api?t=getnzb&id={hit.get('_id','')}",
-                    }
-                )
+            items = search_releases(opensearch, query)
         except Exception:
             items = []
     return items
@@ -269,7 +250,7 @@ async def api(request: Request) -> Response:
     params = request.query_params
     t = params.get("t")
     cat = params.get("cat")
-    ttl = int(os.getenv("SEARCH_TTL_SECONDS", "60"))
+    no_cache = request.headers.get("Cache-Control") == "no-cache"
 
     # Adult category gating
     if (
@@ -284,19 +265,20 @@ async def api(request: Request) -> Response:
 
     if t == "search":
         cache_key = f"search:{_params_key(params)}"
-        cached = get_cached_rss(cache_key)
+        cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _xml_response(cached)
         q = params.get("q")
         tag = params.get("tag")
         items = _os_search(q, category=cat, tag=tag)
         xml = rss_xml(items)
-        cache_rss(cache_key, xml, ttl)
+        if not no_cache:
+            cache_rss(cache_key, xml)
         return _xml_response(xml)
 
     if t == "tvsearch":
         cache_key = f"tvsearch:{_params_key(params)}"
-        cached = get_cached_rss(cache_key)
+        cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _xml_response(cached)
         q = params.get("q")
@@ -310,12 +292,13 @@ async def api(request: Request) -> Response:
             extra={"season": season, "episode": episode},
         )
         xml = rss_xml(items)
-        cache_rss(cache_key, xml, ttl)
+        if not no_cache:
+            cache_rss(cache_key, xml)
         return _xml_response(xml)
 
     if t == "movie":
         cache_key = f"movie:{_params_key(params)}"
-        cached = get_cached_rss(cache_key)
+        cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _xml_response(cached)
         q = params.get("q")
@@ -323,52 +306,54 @@ async def api(request: Request) -> Response:
         tag = params.get("tag")
         items = _os_search(q, category=MOVIES_CAT, tag=tag, extra={"imdbid": imdbid})
         xml = rss_xml(items)
-        cache_rss(cache_key, xml, ttl)
+        if not no_cache:
+            cache_rss(cache_key, xml)
         return _xml_response(xml)
 
     if t == "music":
         cache_key = f"music:{_params_key(params)}"
-        cached = get_cached_rss(cache_key)
+        cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _xml_response(cached)
         q = params.get("q")
-        artist = params.get("artist")
+        tags = [params.get("artist"), params.get("album")]
+        year = params.get("year")
         tag = params.get("tag")
-        extra = {
-            "album": params.get("album"),
-            "label": params.get("label"),
-            "year": params.get("year"),
-        }
+        extra = {"tags": [t for t in tags if t]}
+        if year:
+            extra["year"] = year
         items = _os_search(
             q,
             category=AUDIO_CAT,
             tag=tag,
-            extra={k: v for k, v in extra.items() if v},
-            artist=artist,
+            extra=extra,
         )
         xml = rss_xml(items)
-        cache_rss(cache_key, xml, ttl)
+        if not no_cache:
+            cache_rss(cache_key, xml)
         return _xml_response(xml)
 
     if t == "book":
         cache_key = f"book:{_params_key(params)}"
-        cached = get_cached_rss(cache_key)
+        cached = get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _xml_response(cached)
         q = params.get("q")
         tag = params.get("tag")
-        extra = {
-            "author": params.get("author"),
-            "year": params.get("year"),
-        }
+        tags = [params.get("author"), params.get("title"), params.get("isbn")]
+        year = params.get("year")
+        extra = {"tags": [t for t in tags if t]}
+        if year:
+            extra["year"] = year
         items = _os_search(
             q,
             category=BOOKS_CAT,
             tag=tag,
-            extra={k: v for k, v in extra.items() if v},
+            extra=extra,
         )
         xml = rss_xml(items)
-        cache_rss(cache_key, xml, ttl)
+        if not no_cache:
+            cache_rss(cache_key, xml)
         return _xml_response(xml)
 
     if t == "getnzb":

@@ -16,6 +16,7 @@ class DummyRequest:
         self.query_params = {
             k: v[0] for k, v in parse_qs(query_string.decode()).items()
         }
+        self.headers = {}
 
 
 def test_music_rss() -> None:
