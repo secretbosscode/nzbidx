@@ -55,8 +55,6 @@ services:
     environment:
       - discovery.type=single-node
       - plugins.security.disabled=true
-    ports:
-      - "9200:9200"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200"]
       interval: 10s
@@ -66,8 +64,6 @@ services:
     build: ./db
     env_file:
       - .env.example
-    ports:
-      - "${POSTGRES_PORT:-15432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
@@ -75,8 +71,6 @@ services:
       retries: 5
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
