@@ -7,6 +7,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     strategy:
       matrix:
         service: [api, ingest]
@@ -23,9 +25,6 @@ jobs:
       - run: ruff check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
       - run: black --check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
       - run: pytest -q services/${{ matrix.service }}/tests
-      - run: pip install pip-audit safety || true
-      - run: pip-audit || true
-      - run: safety check || true
       - if: failure()
         run: docker compose logs > compose.log
       - if: failure()

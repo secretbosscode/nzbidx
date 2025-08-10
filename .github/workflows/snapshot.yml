@@ -1,0 +1,17 @@
+name: Snapshots
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+env:
+  SNAPSHOT_SCHEDULE: ${{ vars.SNAPSHOT_SCHEDULE || 'false' }}
+
+jobs:
+  snapshot:
+    if: env.SNAPSHOT_SCHEDULE == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: bash scripts/snapshot.sh

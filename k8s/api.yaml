@@ -15,6 +15,13 @@ spec:
       containers:
       - name: api
         image: nzbidx-api:latest
+        env:
+        - name: OPENSEARCH_URL
+          value: http://opensearch:9200
+        - name: REDIS_URL
+          value: redis://redis:6379/0
+        - name: DATABASE_URL
+          value: postgresql://postgres:postgres@postgres:5432/postgres
         ports:
         - containerPort: 8080
         readinessProbe:
