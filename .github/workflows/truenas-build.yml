@@ -1,0 +1,88 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "0 4 * * *"
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ github.event_name == 'schedule' && 'ubuntu-latest' || 'self-hosted' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: |
+          pip install -e services/api pytest
+      - name: Run tests
+        run: pytest tests/test_smoke.py -q
+
+  build-and-push:
+    needs: test
+    runs-on: ${{ github.event_name == 'schedule' && 'ubuntu-latest' || 'self-hosted' }}
+    env:
+      DOCKER_BUILDKIT: '1'
+    strategy:
+      matrix:
+        include:
+          - context: services/api
+            image: nzbidx-api
+          - context: services/ingest
+            image: nzbidx-ingest
+          - context: db
+            image: nzbidx-db
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare buildx cache
+        run: mkdir -p ~/.cache/buildx
+
+      - name: Restore Docker layer cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/buildx
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Set image tag
+        id: vars
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push to TrueNAS registry
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Dockerfile
+          outputs: |
+            type=registry,registry.insecure=true,name=truenas:5000/${{ matrix.image }}:${{ steps.vars.outputs.tag }},push=true
+            type=registry,registry.insecure=true,name=truenas:5000/${{ matrix.image }}:latest,push=true
+          sbom: true
+          provenance: true
+          cache-from: type=local,src=~/.cache/buildx
+          cache-to: type=local,dest=~/.cache/buildx-new,mode=max
+
+      - name: Update Docker layer cache
+        run: |
+          rm -rf ~/.cache/buildx
+          if [ -d ~/.cache/buildx-new ]; then
+            mv ~/.cache/buildx-new ~/.cache/buildx
+          else
+            mkdir -p ~/.cache/buildx
+          fi
