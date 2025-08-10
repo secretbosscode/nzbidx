@@ -74,6 +74,8 @@ from .newznab import (
     is_adult_category,
     rss_xml,
     MOVIES_CAT,
+    AUDIO_CAT,
+    BOOKS_CAT,
     TV_CAT,
 )
 from .rate_limit import RateLimitMiddleware
@@ -206,9 +208,16 @@ def _os_search(
                 # Prefix on keyword field 'tags' (requires tags to be keyword in mapping)
                 filters.append({"prefix": {"tags": tag}})
 
+            # Block adult content by default unless explicitly allowed
+            must_not: list[dict[str, object]] = []
+            if not adult_content_allowed():
+                must_not.append({"term": {"category": "xxx"}})
+
             body: dict[str, dict] = {"query": {"bool": {"must": must}}}
             if filters:
                 body["query"]["bool"]["filter"] = filters
+            if must_not:
+                body["query"]["bool"]["must_not"] = must_not
 
             result = opensearch.search(index="nzbidx-releases-v1", body=body)
             for hit in result.get("hits", {}).get("hits", []):
@@ -268,6 +277,39 @@ async def api(request: Request) -> Response:
         imdbid = params.get("imdbid")
         tag = params.get("tag")
         items = _os_search(q, category=MOVIES_CAT, tag=tag, extra={"imdbid": imdbid})
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "music":
+        q = params.get("q")
+        artist = params.get("artist")
+        tag = params.get("tag")
+        extra = {
+            "album": params.get("album"),
+            "label": params.get("label"),
+            "year": params.get("year"),
+        }
+        items = _os_search(
+            q,
+            category=AUDIO_CAT,
+            tag=tag,
+            extra={k: v for k, v in extra.items() if v},
+            artist=artist,
+        )
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "book":
+        q = params.get("q")
+        tag = params.get("tag")
+        extra = {
+            "author": params.get("author"),
+            "year": params.get("year"),
+        }
+        items = _os_search(
+            q,
+            category=BOOKS_CAT,
+            tag=tag,
+            extra={k: v for k, v in extra.items() if v},
+        )
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "getnzb":

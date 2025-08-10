@@ -99,19 +99,26 @@ def _infer_category(subject: str) -> Optional[str]:
     """Heuristic category detection from the raw subject."""
     s = subject.lower()
 
-    # First check for explicit bracketed tags like ``[music]`` or ``[books]``
-    # which are commonly used in Usenet subjects to indicate the category.
+    # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
     for tag in extract_tags(subject):
         if tag in CATEGORY_MAP:
             return CATEGORY_MAP[tag]
 
+    # Fallback explicit markers (redundant, but resilient if extract_tags changes)
+    if "[music]" in s:
+        return CATEGORY_MAP["music"]
+    if "[books]" in s or "[book]" in s:
+        return CATEGORY_MAP["books"]
+    if "[xxx]" in s:
+        return CATEGORY_MAP["xxx"]
+
+    # Heuristic keyword checks
     if any(k in s for k in ("flac", "mp3", "aac", "album")):
         return CATEGORY_MAP["music"]
     if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
         return CATEGORY_MAP["books"]
     if any(
-        k in s
-        for k in ("brazzers", "realitykings", "onlyfans", "pornhub", "adult", "xxx")
+        k in s for k in ("brazzers", "realitykings", "onlyfans", "pornhub", "adult", "xxx")
     ):
         return CATEGORY_MAP["xxx"]
     return None
