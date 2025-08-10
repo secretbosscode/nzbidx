@@ -15,3 +15,7 @@ NNTP_GROUPS: List[str] = [
 INGEST_BATCH: int = int(os.getenv("INGEST_BATCH", "500"))
 INGEST_POLL_SECONDS: int = int(os.getenv("INGEST_POLL_SECONDS", "60"))
 CURSOR_DB: str = os.getenv("CURSOR_DB", "./cursors.sqlite")
+ILM_DELETE_DAYS: int = int(os.getenv("ILM_DELETE_DAYS", "180"))
+ILM_WARM_DAYS: int = int(os.getenv("ILM_WARM_DAYS", "14"))
+CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
+INGEST_OS_LATENCY_MS: int = int(os.getenv("INGEST_OS_LATENCY_MS", "1200"))

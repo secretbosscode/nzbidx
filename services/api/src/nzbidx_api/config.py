@@ -72,3 +72,33 @@ def ilm_warm_days() -> int:
 def request_id_header() -> str:
     """Header name used for request correlation."""
     return os.getenv("REQUEST_ID_HEADER", "X-Request-ID")
+
+
+@lru_cache()
+def cb_failure_threshold() -> int:
+    """Number of consecutive failures before the circuit trips."""
+    return _int_env("CB_FAILURE_THRESHOLD", 5)
+
+
+@lru_cache()
+def cb_reset_seconds() -> int:
+    """Seconds before a tripped circuit half-opens for probing."""
+    return _int_env("CB_RESET_SECONDS", 30)
+
+
+@lru_cache()
+def retry_max() -> int:
+    """Maximum number of retries for dependency calls."""
+    return _int_env("RETRY_MAX", 2)
+
+
+@lru_cache()
+def retry_base_ms() -> int:
+    """Base backoff in milliseconds for retries."""
+    return _int_env("RETRY_BASE_MS", 50)
+
+
+@lru_cache()
+def retry_jitter_ms() -> int:
+    """Additional random jitter applied to retries in milliseconds."""
+    return _int_env("RETRY_JITTER_MS", 200)
