@@ -39,9 +39,25 @@ def rate_window() -> int:
     return _int_env("RATE_WINDOW", 60)
 
 
+def key_rate_limit() -> int:
+    return _int_env("KEY_RATE_LIMIT", 100)
+
+
+def key_rate_window() -> int:
+    return _int_env("KEY_RATE_WINDOW", 60)
+
+
 @lru_cache()
 def max_request_bytes() -> int:
     return _int_env("MAX_REQUEST_BYTES", 1_048_576)
+
+
+def max_query_bytes() -> int:
+    return _int_env("MAX_QUERY_BYTES", 2048)
+
+
+def max_param_bytes() -> int:
+    return _int_env("MAX_PARAM_BYTES", 256)
 
 
 @lru_cache()
@@ -102,3 +118,13 @@ def retry_base_ms() -> int:
 def retry_jitter_ms() -> int:
     """Additional random jitter applied to retries in milliseconds."""
     return _int_env("RETRY_JITTER_MS", 200)
+
+
+@lru_cache()
+def os_primary_shards() -> int:
+    return _int_env("OS_PRIMARY_SHARDS", 1)
+
+
+@lru_cache()
+def os_replicas() -> int:
+    return _int_env("OS_REPLICAS", 0)

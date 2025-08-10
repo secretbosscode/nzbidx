@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nzbidx-ingest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nzbidx-ingest
+  template:
+    metadata:
+      labels:
+        app: nzbidx-ingest
+    spec:
+      containers:
+      - name: ingest
+        image: nzbidx-ingest:latest
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          timeoutSeconds: 2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nzbidx-ingest
+spec:
+  selector:
+    app: nzbidx-ingest
+  ports:
+  - port: 8080
+    targetPort: 8080

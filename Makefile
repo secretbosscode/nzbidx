@@ -1,22 +1,31 @@
-.PHONY: compose-up compose-down logs test fmt lint seed-os
+.PHONY: build up down smoke logs test fmt lint seed-os snapshot-repo
 
-compose-up:
-        docker compose up -d
+build:
+	docker compose build
 
-compose-down:
-        docker compose down
+up:
+	docker compose up -d
+
+down:
+	docker compose down -v
+
+smoke:
+	bash scripts/smoke.sh
 
 logs:
-        docker compose logs -f
+	docker compose logs -f
 
 test:
-        pytest
+	pytest
 
 fmt:
-        black .
+	black .
 
 lint:
-        ruff check .
+	ruff check .
 
 seed-os:
-        python scripts/seed_os.py
+	python scripts/seed_os.py
+
+snapshot-repo:
+	docker compose exec api python scripts/os_snapshot_repo.py

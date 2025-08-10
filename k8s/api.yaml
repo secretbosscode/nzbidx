@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nzbidx-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nzbidx-api
+  template:
+    metadata:
+      labels:
+        app: nzbidx-api
+    spec:
+      containers:
+      - name: api
+        image: nzbidx-api:latest
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          timeoutSeconds: 2
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nzbidx-api
+spec:
+  selector:
+    app: nzbidx-api
+  ports:
+  - port: 8080
+    targetPort: 8080

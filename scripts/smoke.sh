@@ -1,15 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 URL=${1:-http://localhost:8080}
-for i in {1..30}; do
-  if curl -sf "$URL/health" > /dev/null; then
+for i in {1..60}; do
+  if curl -fs "$URL/health" >/dev/null; then
     break
   fi
-  sleep 1
+  sleep 2
 done
-RID=smoke-123
-HDRS=$(curl -sD - -o /dev/null -H "X-Request-ID: $RID" "$URL/health")
-echo "$HDRS" | grep -q "X-Request-ID: $RID"
-curl -sf "$URL/api?t=caps" > /dev/null
-curl -sf "$URL/api?t=search&q=test" > /dev/null
+curl -fs "$URL/health" >/dev/null || {
+  echo "health check failed" >&2
+  exit 1
+}
+RID=${SMOKE_RID:-smoke-$(date +%s)}
+check_rid() {
+  local path=$1
+  local hdrs
+  hdrs=$(curl -fsD - -o /dev/null -H "X-Request-ID: $RID" "$URL$path")
+  echo "$hdrs" | grep -qi "X-Request-ID: $RID" || {
+    echo "request id mismatch on $path" >&2
+    exit 1
+  }
+}
+check_rid "/health"
+check_rid "/api?t=caps"
+curl -fs "$URL/api?t=search&q=test" >/dev/null
 echo "smoke ok"

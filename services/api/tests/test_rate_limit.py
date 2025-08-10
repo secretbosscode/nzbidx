@@ -34,4 +34,4 @@ def test_rate_limit_exceeded(monkeypatch):
         assert client.get("/ok").status_code == 200
     response = client.get("/ok")
     assert response.status_code == 429
-    assert response.json() == {"error": "rate limit exceeded"}
+    assert response.json()["error"]["code"] == "rate_limited"

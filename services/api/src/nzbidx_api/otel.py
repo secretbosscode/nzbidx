@@ -45,5 +45,13 @@ def start_span(name: str):
     if trace is None:
         yield
     else:  # pragma: no cover - span creation
-        with trace.get_tracer("nzbidx").start_as_current_span(name):
-            yield
+        with trace.get_tracer("nzbidx").start_as_current_span(name) as span:
+            yield span
+
+
+def set_span_attr(key: str, value: str) -> None:
+    if trace is None:
+        return
+    span = trace.get_current_span()
+    if span:
+        span.set_attribute(key, value)
