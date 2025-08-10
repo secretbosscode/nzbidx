@@ -3,6 +3,9 @@
 import os
 from typing import Optional
 
+from .middleware_circuit import CircuitOpenError, redis_breaker
+from .otel import start_span
+
 # Optional redis dependency for caching
 try:  # pragma: no cover - import guard
     from redis import Redis
@@ -104,12 +107,19 @@ def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     """
     key = f"nzb:{release_id}"
     if cache:
-        cached = cache.get(key)
-        if cached:
-            return cached.decode("utf-8")
-        xml = nzb_builder.build_nzb_for_release(release_id)
-        cache.setex(key, 86400, xml)
-        return xml
+        try:
+            with start_span("redis.get"):
+                cached = redis_breaker.call(cache.get, key)
+            if cached:
+                return cached.decode("utf-8")
+            xml = nzb_builder.build_nzb_for_release(release_id)
+            with start_span("redis.setex"):
+                redis_breaker.call(cache.setex, key, 86400, xml)
+            return xml
+        except CircuitOpenError:
+            raise
+        except Exception:
+            pass
     return nzb_builder.build_nzb_for_release(release_id)
 
 

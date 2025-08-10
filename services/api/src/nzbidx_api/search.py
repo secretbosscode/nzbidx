@@ -6,6 +6,10 @@ from typing import Any, Dict, List
 
 import logging
 
+from .config import search_timeout_ms
+from .middleware_circuit import CircuitOpenError, os_breaker
+from .otel import start_span
+
 try:  # pragma: no cover - optional dependency
     from opensearchpy import OpenSearch
 except Exception:  # pragma: no cover - optional dependency
@@ -29,10 +33,22 @@ def search_releases(
         "track_total_hits": False,
     }
     try:
-        result = client.search(index="nzbidx-releases-v1", body=body, request_timeout=2)
+        with start_span("opensearch.search"):
+            result = os_breaker.call(
+                client.search,
+                index="nzbidx-releases",
+                body=body,
+                request_timeout=search_timeout_ms() / 1000,
+            )
+    except CircuitOpenError:
+        return []
     except TypeError:
         try:
-            result = client.search(index="nzbidx-releases-v1", body=body)
+            result = os_breaker.call(
+                client.search,
+                index="nzbidx-releases",
+                body=body,
+            )
         except Exception as exc:
             logger.warning("OpenSearch search failed: %s", exc)
             return []

@@ -48,3 +48,27 @@ def max_request_bytes() -> int:
 def cors_origins() -> List[str]:
     value = os.getenv("CORS_ORIGINS", "")
     return [v.strip() for v in value.split(",") if v.strip()]
+
+
+@lru_cache()
+def search_timeout_ms() -> int:
+    """Request timeout in milliseconds for OpenSearch calls."""
+    return _int_env("SEARCH_TIMEOUT_MS", 2500)
+
+
+@lru_cache()
+def ilm_delete_days() -> int:
+    """Retention period for OpenSearch indices."""
+    return _int_env("ILM_DELETE_DAYS", 180)
+
+
+@lru_cache()
+def ilm_warm_days() -> int:
+    """Age in days before indices move to the warm phase."""
+    return _int_env("ILM_WARM_DAYS", 14)
+
+
+@lru_cache()
+def request_id_header() -> str:
+    """Header name used for request correlation."""
+    return os.getenv("REQUEST_ID_HEADER", "X-Request-ID")

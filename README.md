@@ -23,6 +23,11 @@ Only release metadata is stored; binaries are discarded during ingest.
 
     docker compose exec api python scripts/seed_os.py
 
+OpenSearch uses an index template and ILM policy. Monthly indices are created
+under the `nzbidx-releases` alias and rollover automatically. Indices move to
+the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
+`ILM_DELETE_DAYS` (default `180`).
+
 ## Ingest
 
 The ingest worker polls configured NNTP groups and stores release metadata. Set the required NNTP environment variables and run:
@@ -52,8 +57,16 @@ Supplying `Cache-Control: no-cache` forces a fresh response.
 ## Security Headers
 
 All responses include basic security headers (`X-Content-Type-Options:
-nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`). Set
-`CORS_ORIGINS` to enable CORS for specific origins.
+nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`,
+`X-Download-Options: noopen`, `Permissions-Policy: interest-cohort=()`).
+Set `CORS_ORIGINS` to enable CORS for specific origins.
+
+Each response also carries an `X-Request-ID` header. Clients may supply their
+own header (default `X-Request-ID`, configurable via `REQUEST_ID_HEADER`) to
+aid correlation.
+
+Tracing is automatically enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+Override the service name with `OTEL_SERVICE_NAME`.
 
 ## Newznab Categories and Adult Content
 

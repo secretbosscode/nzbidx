@@ -18,3 +18,5 @@ def test_security_headers() -> None:
     assert headers["x-content-type-options"] == "nosniff"
     assert headers["referrer-policy"] == "no-referrer"
     assert headers["x-frame-options"] == "DENY"  # uppercase check
+    assert headers["x-download-options"] == "noopen"
+    assert headers["permissions-policy"] == "interest-cohort=()"

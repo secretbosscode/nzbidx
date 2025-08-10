@@ -1,6 +1,10 @@
 {
   "index_patterns": ["nzbidx-releases-*"],
   "template": {
+    "settings": {
+      "index.lifecycle.name": "nzbidx-releases-policy",
+      "index.lifecycle.rollover_alias": "nzbidx-releases"
+    },
     "mappings": {
       "properties": {
         "norm_title": {

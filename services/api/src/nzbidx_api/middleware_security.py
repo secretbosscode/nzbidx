@@ -23,4 +23,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         headers.setdefault("X-Content-Type-Options", "nosniff")
         headers.setdefault("Referrer-Policy", "no-referrer")
         headers.setdefault("X-Frame-Options", "DENY")
+        headers.setdefault("X-Download-Options", "noopen")
+        headers.setdefault("Permissions-Policy", "interest-cohort=()")
         return response
