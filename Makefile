@@ -31,7 +31,15 @@ snapshot-repo:
         docker compose exec api python scripts/os_snapshot_repo.py
 
 release:
-	@[ -n "$(VERSION)" ] || (echo "VERSION required" && exit 1)
-	@git diff --quiet || (echo "git tree dirty" && exit 1)
-	@DATE=$$(date +%Y-%m-%d); perl -0 -i -pe "s/## \[Unreleased\]/## [Unreleased]\n\n## [$(VERSION)] - $$DATE/" CHANGELOG.md
-	@tag=v$(VERSION); git tag $$tag; echo "git tag $$tag"
+        @[ -n "$(VERSION)" ] || (echo "VERSION required" && exit 1)
+        @git diff --quiet || (echo "git tree dirty" && exit 1)
+        @DATE=$$(date +%Y-%m-%d); \
+                perl -0 -i -pe "s/## \[Unreleased\]/## $(VERSION) ($$DATE)/" CHANGELOG.md
+        @tag=v$(VERSION); git tag $$tag
+        @if [ -n "$$CI" ]; then \
+                git push origin main; \
+                git push origin $$tag; \
+        else \
+                echo git push origin main; \
+                echo git push origin $$tag; \
+        fi
