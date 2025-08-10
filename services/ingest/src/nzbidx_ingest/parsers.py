@@ -141,6 +141,8 @@ def normalize_subject(
     tag_dict: Dict[str, str] = {}
     for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
         tag_dict.update(extractor(subject))
+    for t in extract_tags(subject):
+        tag_dict[t] = t
 
     # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")

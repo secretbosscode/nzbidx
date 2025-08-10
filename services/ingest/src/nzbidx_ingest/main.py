@@ -98,6 +98,12 @@ def index_release(
 def _infer_category(subject: str) -> Optional[str]:
     """Heuristic category detection from the raw subject."""
     s = subject.lower()
+    if "[music]" in s:
+        return CATEGORY_MAP["music"]
+    if "[books]" in s or "[book]" in s:
+        return CATEGORY_MAP["books"]
+    if "[xxx]" in s:
+        return CATEGORY_MAP["xxx"]
     if any(k in s for k in ("flac", "mp3", "aac", "album")):
         return CATEGORY_MAP["music"]
     if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
