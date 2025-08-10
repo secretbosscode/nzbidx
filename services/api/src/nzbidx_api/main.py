@@ -59,8 +59,11 @@ except Exception:  # pragma: no cover - optional dependency
             )
 
     class Route:  # type: ignore
-        def __init__(self, *args, **kwargs) -> None:
-            pass
+        def __init__(self, path: str, endpoint: Callable, methods: Optional[list[str]] = None) -> None:
+            """Minimal route container used when Starlette isn't available."""
+            self.path = path
+            self.endpoint = endpoint
+            self.methods = methods or ["GET"]
 
     class Middleware:  # type: ignore
         def __init__(self, *args, **kwargs) -> None:
@@ -75,8 +78,26 @@ except Exception:  # pragma: no cover - optional dependency
             pass
 
     class Starlette:  # type: ignore
-        def __init__(self, *args, **kwargs) -> None:
-            pass
+        def __init__(
+            self,
+            *,
+            routes: Optional[list[Route]] = None,
+            on_startup: Optional[list[Callable]] = None,
+            on_shutdown: Optional[list[Callable]] = None,
+            middleware: Optional[list[Middleware]] = None,
+        ) -> None:
+            """Store basic application configuration for tests.
+
+            This stub only keeps track of routes so that a lightweight test
+            client can dispatch to the correct endpoint.  The full ASGI
+            interface and middleware handling provided by Starlette are far
+            beyond the needs of the smoke tests, so they are intentionally
+            omitted.
+            """
+            self.routes = routes or []
+            self.on_startup = on_startup or []
+            self.on_shutdown = on_shutdown or []
+            self.middleware = middleware or []
 
 
 from .db import ping
