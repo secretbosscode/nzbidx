@@ -104,6 +104,8 @@ def init_opensearch() -> None:
             sample = {
                 "norm_title": "Test Release",
                 "category": "test",
+                "language": "en",
+                "tags": ["sample"],
                 "posted_at": "1970-01-01T00:00:00Z",
                 "size_bytes": 0,
             }
@@ -144,6 +146,7 @@ def _os_search(
     q: Optional[str],
     *,
     category: Optional[str] = None,
+    tag: Optional[str] = None,
     extra: Optional[dict[str, object]] = None,
     artist: Optional[str] = None,
 ) -> list[dict[str, str]]:
@@ -163,7 +166,7 @@ def _os_search(
                                 must.append({"match": {"tags": v}})
                     elif field == "year" and value:
                         try:
-                            year_int = int(value)
+                            year_int = int(value)  # type: ignore[arg-type]
                             filters.append(
                                 {
                                     "range": {
@@ -174,7 +177,7 @@ def _os_search(
                                     }
                                 }
                             )
-                        except ValueError:
+                        except (ValueError, TypeError):
                             pass
                     else:
                         values = value if isinstance(value, list) else [value]
@@ -197,8 +200,9 @@ def _os_search(
             if category:
                 filters.append({"term": {"category": category}})
 
-            if os.getenv("ALLOW_XXX", "false").lower() != "true":
-                filters.append({"term": {"category": "xxx"}})
+            if tag:
+                # Prefix on keyword field 'tags' (requires tags to be keyword)
+                filters.append({"prefix": {"tags": tag}})
 
             body: dict[str, dict] = {"query": {"bool": {"must": must}}}
             if filters:
@@ -219,3 +223,72 @@ def _os_search(
         except Exception:
             items = []
     return items
+
+
+async def api(request: Request) -> Response:
+    """Newznab compatible endpoint."""
+    params = request.query_params
+    t = params.get("t")
+    cat = params.get("cat")
+
+    # Adult category gating
+    if (
+        cat
+        and any(is_adult_category(c.strip()) for c in cat.split(","))
+        and not adult_content_allowed()
+    ):
+        return Response(adult_disabled_xml(), media_type="application/xml")
+
+    if t == "caps":
+        return Response(caps_xml(), media_type="application/xml")
+
+    if t == "search":
+        q = params.get("q")
+        tag = params.get("tag")
+        items = _os_search(q, category=cat, tag=tag)
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "tvsearch":
+        q = params.get("q")
+        season = params.get("season")
+        episode = params.get("ep")
+        tag = params.get("tag")
+        items = _os_search(
+            q,
+            category="5000",
+            tag=tag,
+            extra={"season": season, "episode": episode},
+        )
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "movie":
+        q = params.get("q")
+        imdbid = params.get("imdbid")
+        tag = params.get("tag")
+        items = _os_search(q, category="2000", tag=tag, extra={"imdbid": imdbid})
+        return Response(rss_xml(items), media_type="application/xml")
+
+    if t == "getnzb":
+        release_id = params.get("id")
+        if not release_id:
+            return JSONResponse({"detail": "missing id"}, status_code=400)
+        return Response(get_nzb(release_id, cache), media_type="application/x-nzb")
+
+    return JSONResponse({"detail": "unsupported request"}, status_code=400)
+
+
+routes = [
+    Route("/health", health),
+    Route("/api", api),
+]
+
+app = Starlette(
+    routes=routes,
+    on_startup=[init_opensearch, init_cache],
+    middleware=[Middleware(RateLimitMiddleware)],
+)
+
+if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8080)

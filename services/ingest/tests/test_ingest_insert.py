@@ -12,7 +12,7 @@ from nzbidx_ingest.main import main
 def test_ingest_inserts_and_indexes(monkeypatch):
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (id INTEGER PRIMARY KEY AUTOINCREMENT, norm_title TEXT UNIQUE)"
+        "CREATE TABLE release (id INTEGER PRIMARY KEY AUTOINCREMENT, norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT)"
     )
     monkeypatch.setattr("nzbidx_ingest.main.connect_db", lambda: conn)
 
@@ -30,10 +30,13 @@ def test_ingest_inserts_and_indexes(monkeypatch):
 
     main()
 
-    rows = conn.execute("SELECT norm_title FROM release ORDER BY norm_title").fetchall()
-    assert [r[0] for r in rows] == ["another release", "test release one"]
-
-    assert [c["body"]["norm_title"] for c in dummy_os.calls] == [
-        "test release one",
-        "another release",
+    rows = conn.execute(
+        "SELECT norm_title, category, language, tags FROM release ORDER BY norm_title"
+    ).fetchall()
+    assert rows == [
+        ("another release", "7000", "en", "books"),
+        ("test release one", "3000", "en", "music"),
     ]
+
+    assert [c["body"]["category"] for c in dummy_os.calls] == ["3000", "7000"]
+    assert [c["body"]["tags"] for c in dummy_os.calls] == [["music"], ["books"]]

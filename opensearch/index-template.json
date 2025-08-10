@@ -10,6 +10,8 @@
           }
         },
         "category": {"type": "keyword"},
+        "language": {"type": "keyword"},
+        "tags": {"type": "keyword"},
         "posted_at": {"type": "date"},
         "size_bytes": {"type": "long"},
         "language": {"type": "keyword"},

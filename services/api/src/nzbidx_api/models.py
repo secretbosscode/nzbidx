@@ -1,11 +1,15 @@
 """Data models for the API service."""
 
 from dataclasses import dataclass
+from typing import Optional, Sequence
 
 
 @dataclass
-class ExampleModel:
-    """Example data model."""
+class Release:
+    """Representation of a usenet release."""
 
     id: int
-    name: str
+    norm_title: str
+    category: Optional[str] = None
+    language: Optional[str] = None
+    tags: Sequence[str] = ()
