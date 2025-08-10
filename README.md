@@ -247,8 +247,6 @@ docker compose up -d && scripts/smoke.sh
 - ``429`` – per-key quota or rate limit exceeded.
 - ``503`` – circuit breaker open or backend unavailable.
 - Port 8080 in use – remap in ``docker-compose.yml`` via ``ports: ["18080:8080"]``.
-- Postgres port in use – set ``POSTGRES_PORT`` to remap the Postgres port
-  (default ``15432``, e.g. ``POSTGRES_PORT=25432``).
 - Dependencies unhealthy – ``docker compose ps`` and ``docker compose logs <svc>``.
 - Snapshot repo not configured – ``make snapshot-repo`` no-ops until env vars set.
 - Smoke test times out – increase timeout or inspect ``docker compose logs``.
