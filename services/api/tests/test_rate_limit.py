@@ -26,10 +26,11 @@ def create_app():
 
 
 def test_rate_limit_exceeded(monkeypatch):
-    monkeypatch.setenv("RATE_LIMIT", "3")
+    monkeypatch.setenv("RATE_LIMIT", "2")
+    monkeypatch.setenv("RATE_WINDOW", "60")
     app = create_app()
     client = TestClient(app)
-    for _ in range(3):
+    for _ in range(2):
         assert client.get("/ok").status_code == 200
     response = client.get("/ok")
     assert response.status_code == 429
