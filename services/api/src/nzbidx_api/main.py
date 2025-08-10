@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Optional, Callable
 
+from nzbidx_common.os import OS_RELEASES_ALIAS
+
 # Optional third party dependencies
 try:  # pragma: no cover - import guard
     from opensearchpy import OpenSearch
@@ -195,7 +197,7 @@ def build_index_template() -> dict[str, object]:
     settings = template.setdefault("template", {}).setdefault("settings", {})
     settings.setdefault("refresh_interval", "5s")
     settings["index.lifecycle.name"] = "nzbidx-releases-policy"
-    settings["index.lifecycle.rollover_alias"] = "nzbidx-releases"
+    settings["index.lifecycle.rollover_alias"] = OS_RELEASES_ALIAS
     settings["number_of_shards"] = os_primary_shards()
     settings["number_of_replicas"] = os_replicas()
     return template
@@ -240,11 +242,27 @@ def init_opensearch() -> None:
         client.indices.put_index_template(
             name="nzbidx-releases-template", body=build_index_template()
         )
-        if not client.indices.exists(index="nzbidx-releases-000001"):
-            client.indices.create(
-                index="nzbidx-releases-000001",
-                aliases={"nzbidx-releases": {"is_write_index": True}},
-            )
+        try:
+            alias_info = client.indices.get_alias(name=OS_RELEASES_ALIAS)
+            if not any(
+                d["aliases"].get(OS_RELEASES_ALIAS, {}).get("is_write_index")
+                for d in alias_info.values()
+            ):
+                index_name = next(iter(alias_info))
+                client.indices.put_alias(
+                    index=index_name, name=OS_RELEASES_ALIAS, is_write_index=True
+                )
+        except Exception:
+            initial_index = f"{OS_RELEASES_ALIAS}-000001"
+            if not client.indices.exists(index=initial_index):
+                client.indices.create(
+                    index=initial_index,
+                    aliases={OS_RELEASES_ALIAS: {"is_write_index": True}},
+                )
+            else:
+                client.indices.put_alias(
+                    index=initial_index, name=OS_RELEASES_ALIAS, is_write_index=True
+                )
         if os.getenv("SEED_OS_SAMPLE") == "true":
             sample = {
                 "norm_title": "Test Release",
@@ -256,7 +274,7 @@ def init_opensearch() -> None:
             }
             try:
                 client.index(
-                    index="nzbidx-releases",
+                    index=OS_RELEASES_ALIAS,
                     id="1",
                     body=sample,
                     refresh="wait_for",

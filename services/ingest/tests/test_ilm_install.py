@@ -42,6 +42,14 @@ class DummyClient:
         self.index = True
         self.calls.append("index")
 
+    def get_alias(self, name: str):
+        if not self.index:
+            raise RuntimeError("missing")
+        return {"idx": {"aliases": {name: {"is_write_index": True}}}}
+
+    def put_alias(self, index: str, name: str, is_write_index: bool):
+        self.calls.append("alias")
+
 
 def test_install_idempotent() -> None:
     client = DummyClient()

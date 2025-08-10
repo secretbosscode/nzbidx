@@ -6,6 +6,7 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
+from nzbidx_common.os import OS_RELEASES_ALIAS
 from nzbidx_ingest.main import main
 
 
@@ -40,3 +41,7 @@ def test_ingest_inserts_and_indexes(monkeypatch):
 
     assert [c["body"]["category"] for c in dummy_os.calls] == ["3000", "7000"]
     assert [c["body"]["tags"] for c in dummy_os.calls] == [["music"], ["books"]]
+    assert [c["index"] for c in dummy_os.calls] == [
+        OS_RELEASES_ALIAS,
+        OS_RELEASES_ALIAS,
+    ]

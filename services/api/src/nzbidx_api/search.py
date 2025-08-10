@@ -9,6 +9,7 @@ import logging
 from .config import search_timeout_ms
 from .middleware_circuit import CircuitOpenError, call_with_retry, os_breaker
 from .otel import start_span
+from nzbidx_common.os import OS_RELEASES_ALIAS
 
 try:  # pragma: no cover - optional dependency
     from opensearchpy import OpenSearch
@@ -38,7 +39,7 @@ def search_releases(
                 os_breaker,
                 "opensearch",
                 client.search,
-                index="nzbidx-releases",
+                index=OS_RELEASES_ALIAS,
                 body=body,
                 request_timeout=search_timeout_ms() / 1000,
             )
@@ -53,7 +54,7 @@ def search_releases(
                 os_breaker,
                 "opensearch",
                 client.search,
-                index="nzbidx-releases",
+                index=OS_RELEASES_ALIAS,
                 body=body,
             )
         except Exception as exc:

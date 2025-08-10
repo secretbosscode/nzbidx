@@ -9,6 +9,8 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+from nzbidx_common.os import OS_RELEASES_ALIAS
+
 from .logging import setup_logging
 from .nntp_client import NNTPClient
 from .parsers import detect_language, normalize_subject, extract_tags
@@ -90,7 +92,7 @@ def index_release(
         body["tags"] = tags
     try:  # pragma: no cover - network errors
         client.index(
-            index="nzbidx-releases",
+            index=OS_RELEASES_ALIAS,
             id=norm_title,
             body=body,
             refresh=False,

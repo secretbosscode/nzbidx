@@ -6,6 +6,7 @@ import os
 
 from dotenv import load_dotenv
 from opensearchpy import OpenSearch
+from nzbidx_common.os import OS_RELEASES_ALIAS
 
 
 def main() -> None:
@@ -42,7 +43,9 @@ def main() -> None:
     ]
 
     for idx, body in enumerate(releases, start=1):
-        client.index(index="nzbidx-releases", id=str(idx), body=body, refresh="wait_for")
+        client.index(
+            index=OS_RELEASES_ALIAS, id=str(idx), body=body, refresh="wait_for"
+        )
 
     print("Seeded 3 releases")
 
