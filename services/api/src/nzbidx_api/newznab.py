@@ -14,7 +14,6 @@ ADULT_CATEGORY = 6000
 
 def adult_content_allowed() -> bool:
     """Return ``True`` if XXX content may be shown."""
-
     allow_xxx = os.getenv("ALLOW_XXX", "false").lower() == "true"
     safesearch_on = os.getenv("SAFESEARCH", "on").lower() != "off"
     return allow_xxx and not safesearch_on
@@ -22,7 +21,6 @@ def adult_content_allowed() -> bool:
 
 def is_adult_category(cat: Optional[str]) -> bool:
     """Return ``True`` if ``cat`` is an adult category id."""
-
     try:
         value = int(cat or 0)
     except ValueError:
@@ -30,15 +28,24 @@ def is_adult_category(cat: Optional[str]) -> bool:
     return ADULT_CATEGORY <= value < ADULT_CATEGORY + 1000
 
 
+# Customizable category IDs via env vars
+MOVIES_CAT = os.getenv("MOVIES_CAT_ID", "2000")
+TV_CAT = os.getenv("TV_CAT_ID", "5000")
+AUDIO_CAT = os.getenv("AUDIO_CAT_ID", "3000")
+BOOKS_CAT = os.getenv("BOOKS_CAT_ID", "7000")
+ADULT_CAT = os.getenv("ADULT_CAT_ID", "6000")
+
+
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
-
     categories = [
-        '<category id="2000" name="Movies"/>',
-        '<category id="5000" name="TV"/>',
+        f'<category id="{MOVIES_CAT}" name="Movies"/>',
+        f'<category id="{TV_CAT}" name="TV"/>',
+        f'<category id="{AUDIO_CAT}" name="Audio/Music"/>',
+        f'<category id="{BOOKS_CAT}" name="Books/eBooks"/>',
     ]
     if adult_content_allowed():
-        categories.append('<category id="6000" name="XXX"/>')
+        categories.append(f'<category id="{ADULT_CAT}" name="XXX/Adult"/>')
     cats_xml = f"<categories>{''.join(categories)}</categories>"
     return (
         '<caps><server version="0.1" title="nzbidx"/>'
@@ -54,7 +61,6 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     ``category`` and ``link`` keys. No escaping is performed as the values are
     expected to be safe for XML. Adult items are stripped when not allowed.
     """
-
     allow_adult = adult_content_allowed()
     safe_items = [
         i for i in items if allow_adult or not is_adult_category(i.get("category"))
@@ -74,7 +80,6 @@ def rss_xml(items: list[dict[str, str]]) -> str:
 
 def nzb_xml_stub(release_id: str) -> str:
     """Return a minimal NZB document for the given ``release_id``."""
-
     return (
         '<?xml version="1.0" encoding="utf-8"?>'
         '<nzb xmlns="http://www.newzbin.com/DTD/2003/nzb">'
@@ -93,7 +98,6 @@ def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     If ``cache`` is provided the result is stored under ``nzb:<release_id>``
     with a TTL of 24 hours and retrieved from there on subsequent calls.
     """
-
     key = f"nzb:{release_id}"
     if cache:
         cached = cache.get(key)
@@ -107,7 +111,6 @@ def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
 
 def adult_disabled_xml() -> str:
     """Return an empty RSS feed noting adult content is disabled."""
-
     return (
         '<rss version="2.0"><channel>'
         "<!-- adult content disabled -->"

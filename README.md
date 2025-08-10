@@ -1,4 +1,3 @@
-```markdown
 # nzbidx
 
 Placeholder for project description.
@@ -16,9 +15,29 @@ Placeholder for project description.
 
     docker compose exec api python scripts/seed_os.py
 
-## SafeSearch and Adult Content
+## Newznab Categories and Adult Content
 
-The API exposes two environment flags to control adult content:
+The API exposes a handful of default category IDs:
+
+    Movies: 2000
+    TV: 5000
+    Audio/Music: 3000
+    Books/eBooks: 7000
+    XXX/Adult: 6000
+
+Set the following environment variables to override these defaults:
+
+    MOVIES_CAT_ID
+    TV_CAT_ID
+    AUDIO_CAT_ID
+    BOOKS_CAT_ID
+    ADULT_CAT_ID
+
+Example:
+
+    export MOVIES_CAT_ID=1234
+
+### SafeSearch and XXX Control
 
 * `SAFESEARCH` (default `on`): when enabled, adult categories are removed from
   all responses and from the `caps` category listing. Set to `off` to allow
@@ -40,4 +59,3 @@ Use the production override file to run the stack with persistent data stores an
   default and must be explicitly set to `true` to opt in.
 - Only metadata is indexed; binaries are stripped during ingest. An admin
   takedown endpoint is planned for future releases.
-```

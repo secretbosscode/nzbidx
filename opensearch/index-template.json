@@ -1,21 +1,20 @@
 {
-  "index_patterns": ["nzbidx-releases-*"] ,
+  "index_patterns": ["nzbidx-releases-*"],
   "template": {
     "mappings": {
       "properties": {
         "norm_title": {
           "type": "text",
           "fields": {
-            "keyword": {"type": "keyword"}
+            "keyword": { "type": "keyword" }
           }
         },
-        "category": {"type": "keyword"},
-        "language": {"type": "keyword"},
-        "tags": {"type": "keyword"},
-        "posted_at": {"type": "date"},
-        "size_bytes": {"type": "long"},
-        "language": {"type": "keyword"},
-        "tags": {"type": "text"}
+        "category": { "type": "keyword" },
+        "subcat": { "type": "keyword" },
+        "language": { "type": "keyword" },
+        "tags": { "type": "keyword" },
+        "posted_at": { "type": "date" },
+        "size_bytes": { "type": "long" }
       }
     }
   }

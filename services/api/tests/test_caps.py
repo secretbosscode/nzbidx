@@ -22,5 +22,7 @@ def test_caps() -> None:
     """``/api?t=caps`` should return caps XML."""
     request = DummyRequest(b"t=caps")
     response = asyncio.run(api(request))
+    body = response.body.decode()
     assert response.status_code == 200
-    assert "<caps>" in response.body.decode()
+    assert "<caps>" in body
+    assert '<category id="2000" name="Movies"/>' in body

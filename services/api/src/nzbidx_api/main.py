@@ -73,6 +73,8 @@ from .newznab import (
     get_nzb,
     is_adult_category,
     rss_xml,
+    MOVIES_CAT,
+    TV_CAT,
 )
 from .rate_limit import RateLimitMiddleware
 
@@ -201,7 +203,7 @@ def _os_search(
                 filters.append({"term": {"category": category}})
 
             if tag:
-                # Prefix on keyword field 'tags' (requires tags to be keyword)
+                # Prefix on keyword field 'tags' (requires tags to be keyword in mapping)
                 filters.append({"prefix": {"tags": tag}})
 
             body: dict[str, dict] = {"query": {"bool": {"must": must}}}
@@ -255,7 +257,7 @@ async def api(request: Request) -> Response:
         tag = params.get("tag")
         items = _os_search(
             q,
-            category="5000",
+            category=TV_CAT,
             tag=tag,
             extra={"season": season, "episode": episode},
         )
@@ -265,7 +267,7 @@ async def api(request: Request) -> Response:
         q = params.get("q")
         imdbid = params.get("imdbid")
         tag = params.get("tag")
-        items = _os_search(q, category="2000", tag=tag, extra={"imdbid": imdbid})
+        items = _os_search(q, category=MOVIES_CAT, tag=tag, extra={"imdbid": imdbid})
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "getnzb":
