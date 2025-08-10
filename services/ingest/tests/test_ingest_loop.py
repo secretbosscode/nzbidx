@@ -14,7 +14,10 @@ def test_run_once_processes_headers(monkeypatch):
     monkeypatch.setenv("NNTP_GROUPS", "alt.test")
     ingest_loop.NNTP_GROUPS = ["alt.test"]
 
-    headers = [{"subject": "Great Song [music]"}]
+    headers = [
+        {"subject": "Great Song [music]"},
+        {"subject": "Another Tune [music]"},
+    ]
 
     class DummyClient:
         def connect(self):
@@ -51,6 +54,6 @@ def test_run_once_processes_headers(monkeypatch):
 
     ingest_loop.run_once()
 
-    assert inserted == ["great song"]
-    assert indexed == ["great song"]
-    assert last["alt.test"] == 1
+    assert inserted == ["great song", "another tune"]
+    assert indexed == ["great song", "another tune"]
+    assert last["alt.test"] == 2

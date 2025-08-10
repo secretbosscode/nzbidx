@@ -23,18 +23,20 @@ Only release metadata is stored; binaries are discarded during ingest.
 
     docker compose exec api python scripts/seed_os.py
 
-## Run Ingest Loop
+## Ingest
 
-The ingest worker polls configured NNTP groups and stores release metadata:
+The ingest worker polls configured NNTP groups and stores release metadata. Set the required NNTP environment variables and run:
 
+    export NNTP_HOST=news.example.net
+    export NNTP_GROUPS=alt.binaries.example
     docker compose exec ingest python -m nzbidx_ingest
 
 ## API Keys
 
 Protect the `/api` endpoints by supplying one or more keys:
 
-    export API_KEYS=devkey
-    curl -H "X-Api-Key: devkey" 'http://localhost:8080/api?t=caps'
+    export API_KEYS=dev
+    curl -H 'X-Api-Key: dev' 'http://localhost:8080/api?t=caps'
 
 ## Newznab Categories and Adult Content
 
