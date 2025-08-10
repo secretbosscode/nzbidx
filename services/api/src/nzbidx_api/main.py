@@ -66,7 +66,16 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .db import ping
-from .newznab import MOVIES_CAT, TV_CAT, caps_xml, get_nzb, rss_xml
+from .newznab import (
+    adult_content_allowed,
+    adult_disabled_xml,
+    caps_xml,
+    get_nzb,
+    is_adult_category,
+    rss_xml,
+    MOVIES_CAT,
+    TV_CAT,
+)
 from .rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
@@ -97,6 +106,8 @@ def init_opensearch() -> None:
             sample = {
                 "norm_title": "Test Release",
                 "category": "test",
+                "language": "en",
+                "tags": ["sample"],
                 "posted_at": "1970-01-01T00:00:00Z",
                 "size_bytes": 0,
             }
@@ -137,27 +148,68 @@ def _os_search(
     q: Optional[str],
     *,
     category: Optional[str] = None,
-    extra: Optional[dict[str, str]] = None,
+    tag: Optional[str] = None,
+    extra: Optional[dict[str, object]] = None,
+    artist: Optional[str] = None,
 ) -> list[dict[str, str]]:
-    """Run a search against OpenSearch and return RSS item dicts.
-
-    ``q`` is the user query. ``category`` restricts results to a specific
-    Newznab category. ``extra`` allows additional field matches, e.g. season or
-    imdbid. Missing OpenSearch or errors simply result in an empty list.
-    """
+    """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
     if opensearch and q:
         try:
-            must = [{"match": {"norm_title": q}}]
+            must: list[dict[str, object]] = [{"match": {"norm_title": q}}]
+            filters: list[dict[str, object]] = []
+
             if extra:
                 for field, value in extra.items():
-                    if value:
-                        must.append({"match": {field: value}})
-            body: dict[str, dict] = {"query": {"bool": {"must": must}}}
-            if category:
-                body["query"]["bool"].setdefault("filter", []).append(
-                    {"term": {"category": category}}
+                    if field == "tags":
+                        values = value if isinstance(value, list) else [value]
+                        for v in values:
+                            if v:
+                                must.append({"match": {"tags": v}})
+                    elif field == "year" and value:
+                        try:
+                            year_int = int(value)  # type: ignore[arg-type]
+                            filters.append(
+                                {
+                                    "range": {
+                                        "posted_at": {
+                                            "gte": f"{year_int}-01-01",
+                                            "lt": f"{year_int + 1}-01-01",
+                                        }
+                                    }
+                                }
+                            )
+                        except (ValueError, TypeError):
+                            pass
+                    else:
+                        values = value if isinstance(value, list) else [value]
+                        for v in values:
+                            if v:
+                                must.append({"match": {field: v}})
+
+            if artist:
+                must.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"match": {"tags": artist}},
+                                {"match": {"norm_title": artist}},
+                            ]
+                        }
+                    }
                 )
+
+            if category:
+                filters.append({"term": {"category": category}})
+
+            if tag:
+                # Prefix on keyword field 'tags' (requires tags to be keyword in mapping)
+                filters.append({"prefix": {"tags": tag}})
+
+            body: dict[str, dict] = {"query": {"bool": {"must": must}}}
+            if filters:
+                body["query"]["bool"]["filter"] = filters
+
             result = opensearch.search(index="nzbidx-releases-v1", body=body)
             for hit in result.get("hits", {}).get("hits", []):
                 src = hit.get("_source", {})
@@ -179,21 +231,34 @@ async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
     t = params.get("t")
+    cat = params.get("cat")
+
+    # Adult category gating
+    if (
+        cat
+        and any(is_adult_category(c.strip()) for c in cat.split(","))
+        and not adult_content_allowed()
+    ):
+        return Response(adult_disabled_xml(), media_type="application/xml")
+
     if t == "caps":
         return Response(caps_xml(), media_type="application/xml")
 
     if t == "search":
         q = params.get("q")
-        items = _os_search(q)
+        tag = params.get("tag")
+        items = _os_search(q, category=cat, tag=tag)
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "tvsearch":
         q = params.get("q")
         season = params.get("season")
         episode = params.get("ep")
+        tag = params.get("tag")
         items = _os_search(
             q,
             category=TV_CAT,
+            tag=tag,
             extra={"season": season, "episode": episode},
         )
         return Response(rss_xml(items), media_type="application/xml")
@@ -201,7 +266,8 @@ async def api(request: Request) -> Response:
     if t == "movie":
         q = params.get("q")
         imdbid = params.get("imdbid")
-        items = _os_search(q, category=MOVIES_CAT, extra={"imdbid": imdbid})
+        tag = params.get("tag")
+        items = _os_search(q, category=MOVIES_CAT, tag=tag, extra={"imdbid": imdbid})
         return Response(rss_xml(items), media_type="application/xml")
 
     if t == "getnzb":
