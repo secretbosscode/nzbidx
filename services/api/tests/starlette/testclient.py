@@ -13,7 +13,9 @@ class TestClient:
     def __enter__(self) -> "TestClient":
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - no cleanup needed
+    def __exit__(
+        self, exc_type, exc, tb
+    ) -> None:  # pragma: no cover - no cleanup needed
         return None
 
     def get(self, path: str, params: dict | None = None):

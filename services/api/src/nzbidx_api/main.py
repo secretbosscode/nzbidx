@@ -59,7 +59,9 @@ except Exception:  # pragma: no cover - optional dependency
             )
 
     class Route:  # type: ignore
-        def __init__(self, path: str, endpoint: Callable, methods: Optional[list[str]] = None) -> None:
+        def __init__(
+            self, path: str, endpoint: Callable, methods: Optional[list[str]] = None
+        ) -> None:
             """Minimal route container used when Starlette isn't available."""
             self.path = path
             self.endpoint = endpoint
