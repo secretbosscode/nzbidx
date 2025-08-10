@@ -236,6 +236,11 @@ def _os_search(
     return items
 
 
+def _xml_response(body: str) -> Response:
+    """Return ``body`` as an XML response."""
+    return Response(body, media_type="application/xml")
+
+
 async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
@@ -248,16 +253,16 @@ async def api(request: Request) -> Response:
         and any(is_adult_category(c.strip()) for c in cat.split(","))
         and not adult_content_allowed()
     ):
-        return Response(adult_disabled_xml(), media_type="application/xml")
+        return _xml_response(adult_disabled_xml())
 
     if t == "caps":
-        return Response(caps_xml(), media_type="application/xml")
+        return _xml_response(caps_xml())
 
     if t == "search":
         q = params.get("q")
         tag = params.get("tag")
         items = _os_search(q, category=cat, tag=tag)
-        return Response(rss_xml(items), media_type="application/xml")
+        return _xml_response(rss_xml(items))
 
     if t == "tvsearch":
         q = params.get("q")
@@ -270,14 +275,14 @@ async def api(request: Request) -> Response:
             tag=tag,
             extra={"season": season, "episode": episode},
         )
-        return Response(rss_xml(items), media_type="application/xml")
+        return _xml_response(rss_xml(items))
 
     if t == "movie":
         q = params.get("q")
         imdbid = params.get("imdbid")
         tag = params.get("tag")
         items = _os_search(q, category=MOVIES_CAT, tag=tag, extra={"imdbid": imdbid})
-        return Response(rss_xml(items), media_type="application/xml")
+        return _xml_response(rss_xml(items))
 
     if t == "music":
         q = params.get("q")
@@ -295,7 +300,7 @@ async def api(request: Request) -> Response:
             extra={k: v for k, v in extra.items() if v},
             artist=artist,
         )
-        return Response(rss_xml(items), media_type="application/xml")
+        return _xml_response(rss_xml(items))
 
     if t == "book":
         q = params.get("q")
@@ -310,7 +315,7 @@ async def api(request: Request) -> Response:
             tag=tag,
             extra={k: v for k, v in extra.items() if v},
         )
-        return Response(rss_xml(items), media_type="application/xml")
+        return _xml_response(rss_xml(items))
 
     if t == "getnzb":
         release_id = params.get("id")
