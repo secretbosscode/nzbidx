@@ -15,15 +15,18 @@ spec:
       containers:
       - name: ingest
         image: nzbidx-ingest:latest
+        env:
+        - name: OPENSEARCH_URL
+          value: http://opensearch:9200
+        - name: DATABASE_URL
+          value: postgresql://postgres:postgres@postgres:5432/postgres
         readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          timeoutSeconds: 2
+          exec:
+            command: ["bash", "-c", "pgrep -f nzbidx_ingest >/dev/null"]
+          periodSeconds: 30
         livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
+          exec:
+            command: ["bash", "-c", "pgrep -f nzbidx_ingest >/dev/null"]
           initialDelaySeconds: 10
           periodSeconds: 30
         resources:

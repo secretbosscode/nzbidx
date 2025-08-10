@@ -1,4 +1,5 @@
 # nzbidx
+[![Security Audit](https://github.com/nzbidx/nzbidx/actions/workflows/audit.yml/badge.svg)](https://github.com/nzbidx/nzbidx/actions/workflows/audit.yml)
 
 NZBIdx is a lightweight, Newznab-compatible indexer built around two
 Python services:
@@ -174,6 +175,12 @@ export OS_S3_REGION=us-east-1
 make snapshot-repo
 ```
 
+### Schedule
+
+Automated snapshots can be enabled by setting `SNAPSHOT_SCHEDULE=true` and
+running `scripts/snapshot.sh` from `cron` or by enabling the scheduled workflow
+in `.github/workflows/snapshot.yml`.
+
 ### Restore
 
 1. Register the repository if needed.
@@ -193,6 +200,23 @@ curl -XPOST \
 
 Close indices if required; restoring over an existing alias may need
 `rename_pattern`/`rename_replacement`.
+
+## Security
+
+The [security audit workflow](https://github.com/nzbidx/nzbidx/actions/workflows/audit.yml)
+runs `pip-audit` and generates CycloneDX SBOMs for both services. The audit
+fails on vulnerabilities at or above `${PIP_AUDIT_LEVEL:-high}`.
+
+Local audit and SBOM generation:
+
+```bash
+pip install pip-audit cyclonedx-bom
+pip install -e services/api
+pip-audit --fail-on ${PIP_AUDIT_LEVEL:-high}
+cyclonedx-bom -e -o sbom-api.json
+```
+
+See [docs/sbom.md](docs/sbom.md) for details.
 
 ## Operations
 
@@ -229,4 +253,6 @@ docker compose up -d && scripts/smoke.sh
 
 ## Kubernetes (examples only)
 
-Manifests under ``k8s/`` provide minimal ``Deployment`` and ``Service`` examples for API and ingest with readiness and liveness probes.
+Manifests under ``k8s/`` provide minimal ``Deployment`` and ``Service`` examples
+for API and ingest with readiness and liveness probes. See
+[`docs/k8s.md`](docs/k8s.md) for usage notes and persistence considerations.
