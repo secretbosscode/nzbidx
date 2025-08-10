@@ -16,4 +16,6 @@ class Response:  # pragma: no cover - trivial
 
 class JSONResponse(Response):  # pragma: no cover - trivial
     def __init__(self, content: dict, *, status_code: int = 200) -> None:
-        super().__init__(json.dumps(content), status_code=status_code, media_type="application/json")
+        super().__init__(
+            json.dumps(content), status_code=status_code, media_type="application/json"
+        )
