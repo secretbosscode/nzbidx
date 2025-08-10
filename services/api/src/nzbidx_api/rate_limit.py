@@ -8,9 +8,10 @@ from typing import Dict
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
 from .config import rate_limit, rate_window
+from .errors import rate_limited
 
 try:  # pragma: no cover - optional dependency
     from redis import Redis
@@ -66,5 +67,5 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = request.client.host if request.client else "anonymous"
         count = self.limiter.increment(client_ip)
         if count > self.limit:
-            return JSONResponse({"error": "rate limit exceeded"}, status_code=429)
+            return rate_limited()
         return await call_next(request)

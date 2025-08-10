@@ -14,6 +14,8 @@ from .config import (
     retry_jitter_ms,
     retry_max,
 )
+from .metrics_log import inc_breaker_open
+from .otel import set_span_attr, start_span
 
 T = TypeVar("T")
 
@@ -83,31 +85,35 @@ def call_with_retry(
     attempt = 0
     while True:
         try:
-            result = breaker.call(func, *args, **kwargs)
+            with start_span("dep_call"):
+                set_span_attr("dep", dep)
+                result = breaker.call(func, *args, **kwargs)
+                state = "open" if breaker.is_open() else "closed"
+                set_span_attr("breaker_state", state)
             logger.info(
                 "dep_call",
                 extra={
                     "dep": dep,
                     "retries": attempt,
-                    "breaker_state": "closed" if not breaker.is_open() else "open",
+                    "breaker_state": state,
                 },
             )
             return result
         except CircuitOpenError:
+            set_span_attr("breaker_state", "open")
             logger.warning(
                 "dep_unavailable",
                 extra={"dep": dep, "retries": attempt, "breaker_state": "open"},
             )
+            inc_breaker_open(dep)
             raise
         except Exception:
-            if attempt >= retries:
+            state = "half-open" if breaker.is_open() else "closed"
+            set_span_attr("breaker_state", state)
+            if breaker.is_open() or attempt >= retries:
                 logger.warning(
                     "dep_fail",
-                    extra={
-                        "dep": dep,
-                        "retries": attempt,
-                        "breaker_state": "half-open" if breaker.is_open() else "closed",
-                    },
+                    extra={"dep": dep, "retries": attempt, "breaker_state": state},
                 )
                 raise
             jitter = random.uniform(0, retry_jitter_ms() / 1000)

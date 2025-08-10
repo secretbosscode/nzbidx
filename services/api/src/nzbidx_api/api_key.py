@@ -6,9 +6,10 @@ from typing import Set
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
 from .config import api_keys
+from .errors import unauthorized
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -33,5 +34,5 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         provided = request.headers.get("X-Api-Key")
         if provided not in self.valid_keys:
-            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+            return unauthorized()
         return await call_next(request)

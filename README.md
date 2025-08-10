@@ -15,6 +15,8 @@ Only release metadata is stored; binaries are discarded during ingest.
     docker compose up -d
     curl localhost:8080/health
 
+The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
+
 > **Note**: OpenSearch requires `vm.max_map_count` to be at least 262144:
 
     sudo sysctl -w vm.max_map_count=262144
@@ -146,3 +148,40 @@ pytest
     ruff check src tests
     pytest
 ```
+
+## Backups
+
+OpenSearch snapshots can be stored in S3 or GCS. Configure the repository via
+environment variables and run the helper target (safe to run multiple times):
+
+```bash
+export OS_SNAP_REPO=nzbidx-snaps
+export OS_S3_BUCKET=my-bucket
+export OS_S3_REGION=us-east-1
+# or GCS
+# export OS_GCS_BUCKET=my-bucket
+make snapshot-repo
+```
+
+## Smoke Test
+
+Bring up the stack and run the smoke script which checks health, `caps` and a sample search:
+
+```bash
+docker compose up -d && scripts/smoke.sh
+```
+
+## Troubleshooting
+
+- ``vm.max_map_count`` too low – run ``sudo sysctl -w vm.max_map_count=262144``.
+- ``401`` – missing or invalid ``X-Api-Key`` header.
+- ``429`` – per-key quota or rate limit exceeded.
+- ``503`` – circuit breaker open or backend unavailable.
+- Port 8080 in use – remap in ``docker-compose.yml`` via ``ports: ["18080:8080"]``.
+- Dependencies unhealthy – ``docker compose ps`` and ``docker compose logs <svc>``.
+- Snapshot repo not configured – ``make snapshot-repo`` no-ops until env vars set.
+- Smoke test times out – increase timeout or inspect ``docker compose logs``.
+
+## Kubernetes (examples only)
+
+Manifests under ``k8s/`` provide minimal ``Deployment`` and ``Service`` examples for API and ingest with readiness and liveness probes.

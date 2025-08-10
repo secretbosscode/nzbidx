@@ -31,7 +31,8 @@ def test_missing_key(monkeypatch):
     client = TestClient(app)
     resp = client.get("/api")
     assert resp.status_code == 401
-    assert resp.json() == {"detail": "unauthorized"}
+    payload = resp.json()
+    assert payload["error"]["code"] == "unauthorized"
 
 
 def test_valid_key(monkeypatch):

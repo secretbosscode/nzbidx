@@ -1,11 +1,10 @@
 FROM python:3.11-slim
 
+RUN addgroup --system --gid 1000 nzbidx && \
+    adduser --system --uid 1000 --gid 1000 nzbidx
+
 WORKDIR /app
 
-# Install dependencies (API + tests)
-# - httpx: used by Starlette/FastAPI TestClient
-# - redis: required by app code
-# - fakeredis: enables cache tests without a real Redis server
 RUN pip install --no-cache-dir \
     fastapi \
     uvicorn[standard] \
@@ -17,7 +16,9 @@ RUN pip install --no-cache-dir \
     httpx \
     fakeredis
 
-# Copy application source
 COPY src/ .
+
+USER nzbidx
+VOLUME /tmp
 
 CMD ["uvicorn", "nzbidx_api.main:app", "--host", "0.0.0.0", "--port", "8080"]

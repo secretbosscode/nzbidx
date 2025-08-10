@@ -3,6 +3,7 @@
 from pathlib import Path
 import sys
 import asyncio
+import json
 
 
 # Ensure the application package is importable
@@ -24,6 +25,8 @@ class DummyRequest:
 def test_long_query_rejected(monkeypatch) -> None:
     resp = asyncio.run(main.api(DummyRequest(b"t=search&q=" + b"a" * 257)))
     assert resp.status_code == 400
+    payload = json.loads(resp.body)
+    assert payload["error"]["code"] == "invalid_params"
 
 
 def test_opensearch_timeout(monkeypatch, caplog) -> None:

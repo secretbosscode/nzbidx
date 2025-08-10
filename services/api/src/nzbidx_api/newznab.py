@@ -43,14 +43,19 @@ ADULT_CAT = os.getenv("ADULT_CAT_ID", "6000")
 
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
+    movies = os.getenv("MOVIES_CAT_ID", MOVIES_CAT)
+    tv = os.getenv("TV_CAT_ID", TV_CAT)
+    audio = os.getenv("AUDIO_CAT_ID", AUDIO_CAT)
+    books = os.getenv("BOOKS_CAT_ID", BOOKS_CAT)
+    adult = os.getenv("ADULT_CAT_ID", ADULT_CAT)
     categories = [
-        f'<category id="{MOVIES_CAT}" name="Movies"/>',
-        f'<category id="{TV_CAT}" name="TV"/>',
-        f'<category id="{AUDIO_CAT}" name="Audio/Music"/>',
-        f'<category id="{BOOKS_CAT}" name="Books/eBooks"/>',
+        f'<category id="{movies}" name="Movies"/>',
+        f'<category id="{tv}" name="TV"/>',
+        f'<category id="{audio}" name="Audio/Music"/>',
+        f'<category id="{books}" name="Books/eBooks"/>',
     ]
     if adult_content_allowed():
-        categories.append(f'<category id="{ADULT_CAT}" name="XXX/Adult"/>')
+        categories.append(f'<category id="{adult}" name="XXX/Adult"/>')
     cats_xml = f"<categories>{''.join(categories)}</categories>"
     return (
         '<caps><server version="0.1" title="nzbidx"/>'

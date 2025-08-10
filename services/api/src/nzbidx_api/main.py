@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 # Optional third party dependencies
 try:  # pragma: no cover - import guard
@@ -92,17 +92,28 @@ from .newznab import (
 )
 from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
+from .middleware_quota import QuotaMiddleware
 from .search_cache import cache_rss, get_cached_rss
 from .search import search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError
 from .otel import current_trace_id, setup_tracing
+from .errors import invalid_params, breaker_open
+from .log_sanitize import LogSanitizerFilter
+from .openapi import openapi_json
 from .config import (
     cors_origins,
     max_request_bytes,
+    max_query_bytes,
+    max_param_bytes,
     search_ttl_seconds,
+    os_primary_shards,
+    os_replicas,
 )
+from .metrics_log import start as start_metrics, inc_api_5xx
+
+_stop_metrics: Callable[[], None] | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +141,7 @@ def setup_logging() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
+    root.addFilter(LogSanitizerFilter())
     root.setLevel(logging.INFO)
 
 
@@ -184,6 +196,8 @@ def build_index_template() -> dict[str, object]:
     settings.setdefault("refresh_interval", "5s")
     settings["index.lifecycle.name"] = "nzbidx-releases-policy"
     settings["index.lifecycle.rollover_alias"] = "nzbidx-releases"
+    settings["number_of_shards"] = os_primary_shards()
+    settings["number_of_replicas"] = os_replicas()
     return template
 
 
@@ -209,6 +223,8 @@ class TimingMiddleware(BaseHTTPMiddleware):
                     "request_id": getattr(request.state, "request_id", ""),
                 },
             )
+        if response.status_code >= 500:
+            inc_api_5xx()
         return response
 
 
@@ -413,6 +429,16 @@ def _params_key(params) -> str:
 async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
+    raw_qs = getattr(request, "query_string", None)
+    if isinstance(raw_qs, (bytes, bytearray)):
+        qs_len = len(raw_qs)
+    else:
+        qs_len = sum(len(k) + len(v) + 1 for k, v in params.items())
+    if qs_len > max_query_bytes():
+        return invalid_params("query string too long")
+    for value in params.values():
+        if value and len(value) > max_param_bytes():
+            return invalid_params("invalid parameters")
     t = params.get("t")
     cat = params.get("cat")
     no_cache = request.headers.get("Cache-Control") == "no-cache"
@@ -422,7 +448,7 @@ async def api(request: Request) -> Response:
     except ValueError:
         limit = 50
     if limit > 100:
-        return JSONResponse({"detail": "limit too high"}, status_code=400)
+        return invalid_params("limit too high")
     try:
         offset = int(params.get("offset", "0"))
     except ValueError:
@@ -446,7 +472,7 @@ async def api(request: Request) -> Response:
             return _cached_xml_response(request, cached)
         q = params.get("q")
         if q and len(q) > 256:
-            return JSONResponse({"detail": "query too long"}, status_code=400)
+            return invalid_params("query too long")
         tag = params.get("tag")
         items = _os_search(q, category=cat, tag=tag, limit=limit, offset=offset)
         xml = rss_xml(items)
@@ -461,7 +487,7 @@ async def api(request: Request) -> Response:
             return _cached_xml_response(request, cached)
         q = params.get("q")
         if q and len(q) > 256:
-            return JSONResponse({"detail": "query too long"}, status_code=400)
+            return invalid_params("query too long")
         season = params.get("season")
         episode = params.get("ep")
         tag = params.get("tag")
@@ -485,7 +511,7 @@ async def api(request: Request) -> Response:
             return _cached_xml_response(request, cached)
         q = params.get("q")
         if q and len(q) > 256:
-            return JSONResponse({"detail": "query too long"}, status_code=400)
+            return invalid_params("query too long")
         imdbid = params.get("imdbid")
         tag = params.get("tag")
         items = _os_search(
@@ -508,7 +534,7 @@ async def api(request: Request) -> Response:
             return _cached_xml_response(request, cached)
         q = params.get("q")
         if q and len(q) > 256:
-            return JSONResponse({"detail": "query too long"}, status_code=400)
+            return invalid_params("query too long")
         tags = [params.get("artist"), params.get("album")]
         year = params.get("year")
         tag = params.get("tag")
@@ -535,7 +561,7 @@ async def api(request: Request) -> Response:
             return _cached_xml_response(request, cached)
         q = params.get("q")
         if q and len(q) > 256:
-            return JSONResponse({"detail": "query too long"}, status_code=400)
+            return invalid_params("query too long")
         tag = params.get("tag")
         tags = [params.get("author"), params.get("title"), params.get("isbn")]
         year = params.get("year")
@@ -558,20 +584,25 @@ async def api(request: Request) -> Response:
     if t == "getnzb":
         release_id = params.get("id")
         if not release_id:
-            return JSONResponse({"detail": "missing id"}, status_code=400)
+            return invalid_params("missing id")
         try:
             xml = get_nzb(release_id, cache)
         except CircuitOpenError:
-            return JSONResponse({"detail": "service unavailable"}, status_code=503)
+            return breaker_open()
         return Response(xml, media_type="application/x-nzb")
 
-    return JSONResponse({"detail": "unsupported request"}, status_code=400)
+    return invalid_params("unsupported request")
 
 
-routes = [Route("/health", health), Route("/api", api)]
+routes = [
+    Route("/health", health),
+    Route("/api", api),
+    Route("/openapi.json", openapi_json),
+]
 middleware = [
     Middleware(RequestIDMiddleware),
     Middleware(ApiKeyMiddleware),
+    Middleware(QuotaMiddleware),
     Middleware(RateLimitMiddleware),
     Middleware(SecurityMiddleware, max_request_bytes=max_request_bytes()),
     Middleware(TimingMiddleware),
@@ -582,10 +613,20 @@ if origins:
 
 app = Starlette(
     routes=routes,
-    on_startup=[init_opensearch, init_cache],
-    on_shutdown=[shutdown],
+    on_startup=[
+        init_opensearch,
+        init_cache,
+        lambda: _set_stop(start_metrics()),
+    ],
+    on_shutdown=[shutdown, lambda: _stop_metrics() if _stop_metrics else None],
     middleware=middleware,
 )
+
+
+def _set_stop(cb):
+    global _stop_metrics
+    _stop_metrics = cb
+
 
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
     import uvicorn
