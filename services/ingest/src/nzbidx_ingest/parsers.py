@@ -137,7 +137,10 @@ def normalize_subject(
     if not subject:
         return ("", []) if with_tags else ""
 
-    # Extract tags before cleaning (patterns rely on '-' and '.')
+    # Extract bracketed tags and structured hints before cleaning. The specific
+    # ``extract_*`` helpers operate on the raw subject, so run them before we
+    # strip punctuation.
+    generic_tags = extract_tags(subject)
     tag_dict: Dict[str, str] = {}
     for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
         tag_dict.update(extractor(subject))
@@ -171,7 +174,12 @@ def normalize_subject(
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
 
-    tags = sorted({value.lower() for value in tag_dict.values() if value})
+    tags = sorted(
+        {
+            *generic_tags,
+            *[value.lower() for value in tag_dict.values() if value],
+        }
+    )
     if with_tags:
         return cleaned, tags
     return cleaned
