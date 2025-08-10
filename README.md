@@ -96,7 +96,7 @@ The API exposes a handful of default category IDs:
     Movies: 2000
     TV: 5000
     Audio/Music: 3000
-    Books/eBooks: 7000
+    EBook: 7020
     XXX/Adult: 6000
 
 Set the following environment variables to override these defaults:
@@ -110,6 +110,55 @@ Set the following environment variables to override these defaults:
 Example:
 
     export MOVIES_CAT_ID=1234
+
+### Predefined Category IDs
+
+| ID   | Category Name       |
+| ---- | ------------------- |
+| 0000 | Reserved            |
+| 1000 | Console             |
+| 1010 | Console/NDS         |
+| 1020 | Console/PSP         |
+| 1030 | Console/Wii         |
+| 1040 | Console/XBox        |
+| 1050 | Console/XBox 360    |
+| 1060 | Console/Wiiware     |
+| 1070 | Console/XBox 360 DLC|
+| 2000 | Movies              |
+| 2010 | Movies/Foreign      |
+| 2020 | Movies/Other        |
+| 2030 | Movies/SD           |
+| 2040 | Movies/HD           |
+| 2050 | Movies/BluRay       |
+| 2060 | Movies/3D           |
+| 3000 | Audio               |
+| 3010 | Audio/MP3           |
+| 3020 | Audio/Video         |
+| 3030 | Audio/Audiobook     |
+| 3040 | Audio/Lossless      |
+| 4000 | PC                  |
+| 4010 | PC/0day             |
+| 4020 | PC/ISO              |
+| 4030 | PC/Mac              |
+| 4040 | PC/Mobile-Other     |
+| 4050 | PC/Games            |
+| 4060 | PC/Mobile-iOS       |
+| 4070 | PC/Mobile-Android   |
+| 5000 | TV                  |
+| 5020 | TV/Foreign          |
+| 5030 | TV/SD               |
+| 5040 | TV/HD               |
+| 5050 | TV/Other            |
+| 5060 | TV/Sport            |
+| 6000 | XXX                 |
+| 6010 | XXX/DVD             |
+| 6020 | XXX/WMV             |
+| 6030 | XXX/XviD            |
+| 6040 | XXX/x264            |
+| 7000 | Other               |
+| 7010 | Misc                |
+| 7020 | EBook               |
+| 7030 | Comics              |
 
 ### SafeSearch and XXX Control
 
