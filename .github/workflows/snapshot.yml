@@ -10,7 +10,7 @@ env:
 
 jobs:
   snapshot:
-    if: env.SNAPSHOT_SCHEDULE == 'true'
+    if: vars.SNAPSHOT_SCHEDULE == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
