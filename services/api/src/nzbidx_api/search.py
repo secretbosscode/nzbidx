@@ -25,14 +25,36 @@ def search_releases(
     *,
     limit: int,
     offset: int = 0,
+    sort: str | None = None,
 ) -> List[Dict[str, str]]:
-    """Execute ``query`` against ``client`` and return RSS-style items."""
-    body = {
+    """Execute ``query`` against ``client`` and return RSS-style items.
+
+    Parameters
+    ----------
+    client:
+        OpenSearch client instance.
+    query:
+        A boolean query dict to execute.
+    limit / offset:
+        Pagination controls.
+    sort:
+        Optional sort key. Accepted values are ``date`` (``posted_at``),
+        ``size`` (``size_bytes``) or any raw field name. Sorting is in
+        descending order.
+    """
+    body: Dict[str, Any] = {
         "query": {"bool": query},
         "size": limit,
         "from": offset,
         "track_total_hits": False,
     }
+    if sort:
+        field_map = {
+            "date": "posted_at",
+            "size": "size_bytes",
+            "title": "norm_title.keyword",
+        }
+        body["sort"] = [{field_map.get(sort, sort): {"order": "desc"}}]
     try:
         with start_span("opensearch.search"):
             result = call_with_retry(

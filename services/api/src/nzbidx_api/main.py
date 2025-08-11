@@ -108,6 +108,7 @@ from .newznab import (
     adult_disabled_xml,
     caps_xml,
     get_nzb,
+    NzbFetchError,
     is_adult_category,
     rss_xml,
     MOVIES_CAT,
@@ -124,7 +125,7 @@ from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError
 from .otel import current_trace_id, setup_tracing
-from .errors import invalid_params, breaker_open
+from .errors import invalid_params, breaker_open, nzb_unavailable
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
 from .config import (
@@ -375,6 +376,27 @@ async def health(request: Request) -> JSONResponse:
     return JSONResponse(payload)
 
 
+async def admin_takedown(request: Request) -> JSONResponse:
+    """Remove a release from the search index."""
+    if opensearch is None:
+        return JSONResponse({"status": "unavailable"}, status_code=503)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    release_id = data.get("id") or request.query_params.get("id")
+    if not release_id:
+        return invalid_params("missing id")
+    try:
+        opensearch.delete(  # type: ignore[union-attr]
+            index=OS_RELEASES_ALIAS, id=release_id, refresh="wait_for"
+        )
+    except Exception as exc:
+        logger.warning("takedown_failed", extra={"id": release_id, "error": str(exc)})
+        return JSONResponse({"status": "error"}, status_code=500)
+    return JSONResponse({"status": "ok"})
+
+
 def _os_search(
     q: Optional[str],
     *,
@@ -383,22 +405,36 @@ def _os_search(
     extra: Optional[dict[str, object]] = None,
     limit: int = 50,
     offset: int = 0,
+    sort: Optional[str] = None,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
     if opensearch and q:
         try:
-            must: list[dict[str, object]] = [{"match": {"norm_title": q}}]
+            must: list[dict[str, object]] = [
+                {"match": {"norm_title": {"query": q, "fuzziness": "AUTO"}}}
+            ]
+            should: list[dict[str, object]] = [
+                {"match": {"tags": {"query": q, "boost": 2}}}
+            ]
             filters: list[dict[str, object]] = []
+
+            tag_fields = {
+                "artist",
+                "album",
+                "author",
+                "title",
+                "format",
+                "bitrate",
+                "isbn",
+                "studio",
+                "site",
+                "resolution",
+            }
 
             if extra:
                 for field, value in extra.items():
-                    if field == "tags":
-                        values = value if isinstance(value, list) else [value]
-                        for v in values:
-                            if v:
-                                must.append({"match": {"tags": v}})
-                    elif field == "year" and value:
+                    if field == "year" and value:
                         try:
                             year_int = int(value)  # type: ignore[arg-type]
                             filters.append(
@@ -413,11 +449,16 @@ def _os_search(
                             )
                         except (ValueError, TypeError):
                             pass
-                    else:
-                        values = value if isinstance(value, list) else [value]
-                        for v in values:
-                            if v:
-                                must.append({"match": {field: v}})
+                        continue
+
+                    values = value if isinstance(value, list) else [value]
+                    for v in values:
+                        if not v:
+                            continue
+                        if field == "tags" or field in tag_fields:
+                            must.append({"term": {"tags": str(v).lower()}})
+                        else:
+                            must.append({"match": {field: v}})
 
             if category:
                 filters.append({"term": {"category": category}})
@@ -436,8 +477,12 @@ def _os_search(
                 query["filter"] = filters
             if must_not:
                 query["must_not"] = must_not
-
-            items = search_releases(opensearch, query, limit=limit, offset=offset)
+            if should:
+                query["should"] = should
+                query["minimum_should_match"] = 0
+            items = search_releases(
+                opensearch, query, limit=limit, offset=offset, sort=sort
+            )
         except Exception:
             items = []
     return items
@@ -494,6 +539,7 @@ async def api(request: Request) -> Response:
         offset = int(params.get("offset", "0"))
     except ValueError:
         offset = 0
+    sort = params.get("sort")
 
     # Adult category gating
     if (
@@ -515,7 +561,9 @@ async def api(request: Request) -> Response:
         if q and len(q) > 256:
             return invalid_params("query too long")
         tag = params.get("tag")
-        items = _os_search(q, category=cat, tag=tag, limit=limit, offset=offset)
+        items = _os_search(
+            q, category=cat, tag=tag, limit=limit, offset=offset, sort=sort
+        )
         xml = rss_xml(items)
         if not no_cache:
             cache_rss(cache_key, xml)
@@ -539,6 +587,7 @@ async def api(request: Request) -> Response:
             extra={"season": season, "episode": episode},
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -559,9 +608,10 @@ async def api(request: Request) -> Response:
             q,
             category=MOVIES_CAT,
             tag=tag,
-            extra={"imdbid": imdbid},
+            extra={"imdbid": imdbid, "resolution": params.get("resolution")},
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -589,6 +639,7 @@ async def api(request: Request) -> Response:
             extra=extra,
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -616,6 +667,7 @@ async def api(request: Request) -> Response:
             extra=extra,
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -630,6 +682,8 @@ async def api(request: Request) -> Response:
             xml = get_nzb(release_id, cache)
         except CircuitOpenError:
             return breaker_open()
+        except NzbFetchError:
+            return nzb_unavailable()
         return Response(xml, media_type="application/x-nzb")
 
     return invalid_params("unsupported request")
@@ -637,6 +691,7 @@ async def api(request: Request) -> Response:
 
 routes = [
     Route("/health", health),
+    Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
     Route("/openapi.json", openapi_json),
 ]

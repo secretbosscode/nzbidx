@@ -27,3 +27,18 @@ class TestClient:
                     resp = asyncio.run(resp)
                 return resp
         return SimpleNamespace(status_code=404, body=b"", headers={})
+
+    def post(self, path: str, json: dict | None = None, headers: dict | None = None):
+        async def _json():
+            return json or {}
+
+        request = SimpleNamespace(
+            query_params={}, headers=headers or {}, json=_json, url=None
+        )
+        for route in getattr(self.app, "routes", []):
+            if getattr(route, "path", None) == path:
+                resp = route.endpoint(request)
+                if inspect.iscoroutine(resp):
+                    resp = asyncio.run(resp)
+                return resp
+        return SimpleNamespace(status_code=404, body=b"", headers={})

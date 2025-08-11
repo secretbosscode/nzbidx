@@ -27,5 +27,9 @@ def breaker_open(message: str = "service unavailable") -> JSONResponse:
     return error_response("breaker_open", message, 503)
 
 
+def nzb_unavailable(message: str = "nzb temporarily unavailable") -> JSONResponse:
+    return error_response("nzb_unavailable", message, 503)
+
+
 def invalid_params(message: str = "invalid parameters") -> JSONResponse:
     return error_response("invalid_params", message, 400)
