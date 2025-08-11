@@ -31,6 +31,14 @@ jobs:
         run: |
           pr="${PR_NUMBER}"
           if [ -z "$pr" ]; then
-            pr=$(gh pr list --head "$HEAD_BRANCH" --json number -q '.[0].number' --repo "$REPO")
+            branch="$HEAD_BRANCH"
+            if [[ "$branch" == */* ]]; then
+              branch="${branch#*/}"
+            fi
+            pr=$(gh pr list --head "$branch" --json number -q '.[0].number' --repo "$REPO")
+          fi
+          if [ -z "$pr" ]; then
+            echo "No pull request found for $HEAD_BRANCH" >&2
+            exit 1
           fi
           gh pr merge "$pr" --merge --delete-branch --repo "$REPO"
