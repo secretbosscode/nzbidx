@@ -32,8 +32,8 @@ jobs:
           pr="${PR_NUMBER}"
           if [ -z "$pr" ]; then
             branch="$HEAD_BRANCH"
-            if [[ "$branch" == */* ]]; then
-              branch="${branch#*/}"
+            if [[ "$branch" == *:* ]]; then
+              branch="${branch#*:}"
             fi
             pr=$(gh pr list --head "$branch" --json number -q '.[0].number' --repo "$REPO")
           fi
