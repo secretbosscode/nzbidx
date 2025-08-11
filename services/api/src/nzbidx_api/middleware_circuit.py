@@ -42,6 +42,10 @@ class CircuitBreaker(Generic[T]):
             return "half-open"
         return "open"
 
+    def state(self) -> str:
+        """Public accessor for the current breaker state."""
+        return self._state()
+
     def is_open(self) -> bool:
         return self._state() == "open"
 

@@ -14,7 +14,8 @@ Only release metadata is stored; binaries are discarded during ingest.
 ## Quickstart
 
     docker compose up -d
-    curl localhost:8080/health
+    curl localhost:8080/api/health
+    curl localhost:8080/api/status
 
 The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
 
@@ -110,7 +111,8 @@ retries. After repeated failures the breaker opens and search endpoints
 return empty responses while NZB retrieval returns HTTP 503. The circuit
 half-opens after `CB_RESET_SECONDS` allowing a probe to close it on
 success. Retry behaviour is tunable via `RETRY_MAX`, `RETRY_BASE_MS` and
-`RETRY_JITTER_MS`.
+`RETRY_JITTER_MS`. Current breaker states are exposed via
+`/api/status`.
 
 ### ILM & rollover
 

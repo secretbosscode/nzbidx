@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import sys
@@ -20,8 +21,18 @@ app = main.app
 def test_health_endpoint() -> None:
     """Basic smoke test for CI to ensure app responds."""
     with TestClient(app) as client:
-        response = client.get("/health")
+        response = client.get("/api/health")
         assert response.status_code == 200
+
+
+def test_status_endpoint() -> None:
+    """Status endpoint exposes dependency and breaker states."""
+    with TestClient(app) as client:
+        response = client.get("/api/status")
+        assert response.status_code == 200
+        data = json.loads(response.body)
+        assert data["breaker"]["os"] == "closed"
+        assert data["breaker"]["redis"] == "closed"
 
 
 def test_takedown_deletes_release(monkeypatch) -> None:
