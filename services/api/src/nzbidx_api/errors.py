@@ -5,7 +5,6 @@ from __future__ import annotations
 from starlette.responses import JSONResponse
 
 
-
 def error_response(code: str, message: str, status_code: int) -> JSONResponse:
     return JSONResponse(
         {"error": {"code": code, "message": message}}, status_code=status_code
