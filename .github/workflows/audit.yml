@@ -23,7 +23,7 @@ jobs:
       matrix:
         service: [api, ingest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -37,7 +37,7 @@ jobs:
       matrix:
         service: [api, ingest]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
