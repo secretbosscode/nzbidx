@@ -67,7 +67,7 @@ jobs:
         run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push to TrueNAS registry
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
