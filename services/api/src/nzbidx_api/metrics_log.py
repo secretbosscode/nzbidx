@@ -84,5 +84,13 @@ def inc_api_5xx() -> None:
     inc("api_5xx_total")
 
 
+def inc_nzb_cache_hit() -> None:
+    inc("nzb_cache_hit_total")
+
+
+def inc_nzb_cache_miss() -> None:
+    inc("nzb_cache_miss_total")
+
+
 def set_ingest_lag(val: int) -> None:
     set_gauge("ingest_lag_articles", val)
