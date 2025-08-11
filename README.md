@@ -99,17 +99,20 @@ The API exposes a handful of default category IDs:
     EBook: 7020
     XXX/Adult: 6000
 
-Set the following environment variables to override these defaults:
+Categories can be customized without redeploying by providing a JSON
+configuration file via the ``CATEGORY_CONFIG`` environment variable. The file
+should contain an array of objects with ``id`` and ``name`` keys, for example:
 
-    MOVIES_CAT_ID
-    TV_CAT_ID
-    AUDIO_CAT_ID
-    BOOKS_CAT_ID
-    ADULT_CAT_ID
+```json
+[
+  {"id": 2000, "name": "Movies"},
+  {"id": 5000, "name": "TV"}
+]
+```
 
-Example:
-
-    export MOVIES_CAT_ID=1234
+When ``CATEGORY_CONFIG`` is not set or cannot be read, the defaults above are
+used. The individual ``*_CAT_ID`` environment variables remain supported as
+fallbacks for overriding the built-in defaults.
 
 ### Predefined Category IDs
 
