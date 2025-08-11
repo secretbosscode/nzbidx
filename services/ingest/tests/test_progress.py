@@ -42,7 +42,9 @@ def test_ingest_progress_logging(monkeypatch, caplog) -> None:
     # In-memory cursor storage
     state: dict[str, int] = {}
     monkeypatch.setattr(cursors, "get_cursor", lambda group: state.get(group))
-    monkeypatch.setattr(cursors, "set_cursor", lambda group, last: state.__setitem__(group, last))
+    monkeypatch.setattr(
+        cursors, "set_cursor", lambda group, last: state.__setitem__(group, last)
+    )
 
     # Deterministic timing so ETA calculation is stable
     t = [0.0]
@@ -59,4 +61,3 @@ def test_ingest_progress_logging(monkeypatch, caplog) -> None:
     assert record.high_water == 10
     assert record.remaining == 8
     assert record.eta_s > 0
-
