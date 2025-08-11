@@ -11,6 +11,12 @@ Python services:
 
 Only release metadata is stored; binaries are discarded during ingest.
 
+## Database Performance
+
+Postgres runs with the `pgvector` extension and a set of indexes to keep queries
+fast as the dataset grows. The schema enables the extension and creates the
+indexes during initialization; see `db/init/schema.sql` for details.
+
 ## Quickstart
 
     docker compose up -d
