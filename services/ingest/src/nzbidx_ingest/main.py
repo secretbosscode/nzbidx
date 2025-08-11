@@ -16,7 +16,13 @@ except ImportError:  # pragma: no cover - optional dependency
         return None
 
 
-from nzbidx_common.os import OS_RELEASES_ALIAS
+try:
+    from nzbidx_common.os import OS_RELEASES_ALIAS  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    # ``nzbidx_common`` is an optional sibling package providing shared
+    # constants.  The tests run the ingest package in isolation, so fall back
+    # to the default alias if the package is not available on ``sys.path``.
+    OS_RELEASES_ALIAS = "nzbidx-releases"
 
 from .logging import setup_logging
 from .nntp_client import NNTPClient
