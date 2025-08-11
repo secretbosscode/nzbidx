@@ -8,7 +8,9 @@ from nzbidx_ingest.main import _infer_category, CATEGORY_MAP
 
 def test_infer_movies():
     assert _infer_category("Awesome Film [movies]") == CATEGORY_MAP["movies"]
-    assert _infer_category("Some.Movie.2024.1080p.BluRay") == CATEGORY_MAP["movies_bluray"]
+    assert (
+        _infer_category("Some.Movie.2024.1080p.BluRay") == CATEGORY_MAP["movies_bluray"]
+    )
 
 
 def test_infer_tv():
