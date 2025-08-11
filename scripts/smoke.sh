@@ -2,12 +2,12 @@
 set -euo pipefail
 URL=${1:-http://localhost:8080}
 for i in {1..60}; do
-  if curl -fs "$URL/health" >/dev/null; then
+  if curl -fs "$URL/api/health" >/dev/null; then
     break
   fi
   sleep 2
 done
-curl -fs "$URL/health" >/dev/null || {
+curl -fs "$URL/api/health" >/dev/null || {
   echo "health check failed" >&2
   exit 1
 }
@@ -21,7 +21,8 @@ check_rid() {
     exit 1
   }
 }
-check_rid "/health"
+check_rid "/api/health"
+check_rid "/api/status"
 check_rid "/api?t=caps"
 curl -fs "$URL/api?t=search&q=test" >/dev/null
 echo "smoke ok"

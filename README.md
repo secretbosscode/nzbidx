@@ -14,9 +14,15 @@ Only release metadata is stored; binaries are discarded during ingest.
 ## Quickstart
 
     docker compose up -d
-    curl localhost:8080/health
+    curl localhost:8080/api/health
+    curl localhost:8080/api/status
 
 The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
+
+Health endpoints provide basic observability:
+
+- `GET /api/health` checks connectivity to OpenSearch and Redis.
+- `GET /api/status` reports circuit breaker states for dependencies.
 
 > **Note**: OpenSearch requires `vm.max_map_count` to be at least 262144:
 

@@ -16,3 +16,17 @@ def test_health_endpoint() -> None:
     with TestClient(app) as client:
         response = client.get("/health")
         assert response.status_code == 200
+
+
+def test_api_health_endpoint() -> None:
+    """Ensure namespaced health endpoint responds."""
+    with TestClient(app) as client:
+        response = client.get("/api/health")
+        assert response.status_code == 200
+
+
+def test_status_endpoint() -> None:
+    """Ensure status endpoint responds."""
+    with TestClient(app) as client:
+        response = client.get("/api/status")
+        assert response.status_code == 200

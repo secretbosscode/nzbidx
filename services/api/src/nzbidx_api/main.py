@@ -122,7 +122,7 @@ from .search_cache import cache_rss, get_cached_rss
 from .search import search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
-from .middleware_circuit import CircuitOpenError
+from .middleware_circuit import CircuitOpenError, os_breaker, redis_breaker
 from .otel import current_trace_id, setup_tracing
 from .errors import invalid_params, breaker_open
 from .log_sanitize import LogSanitizerFilter
@@ -372,6 +372,18 @@ async def health(request: Request) -> JSONResponse:
     payload["version"] = VERSION or "dev"
     payload["uptime_ms"] = int((time.monotonic() - _START_TIME) * 1000)
     payload["build"] = BUILD
+    return JSONResponse(payload)
+
+
+async def status(request: Request) -> JSONResponse:
+    """Return circuit breaker status for dependencies."""
+    req_id = getattr(getattr(request, "state", object()), "request_id", "")
+    payload = {
+        "status": "ok",
+        "os_breaker": os_breaker._state(),
+        "redis_breaker": redis_breaker._state(),
+        "request_id": req_id,
+    }
     return JSONResponse(payload)
 
 
@@ -637,6 +649,8 @@ async def api(request: Request) -> Response:
 
 routes = [
     Route("/health", health),
+    Route("/api/health", health),
+    Route("/api/status", status),
     Route("/api", api),
     Route("/openapi.json", openapi_json),
 ]
