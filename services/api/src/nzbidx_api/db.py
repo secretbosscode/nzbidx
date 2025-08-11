@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 # Optional SQLAlchemy dependency
 try:  # pragma: no cover - import guard
@@ -36,3 +36,24 @@ async def ping() -> bool:
         return True
     except Exception:  # pragma: no cover - network errors
         return False
+
+
+async def similar_releases(
+    embedding: Sequence[float], *, limit: int = 10
+) -> List[Dict[str, Any]]:
+    """Return releases ordered by vector distance.
+
+    Utilises the ``pgvector`` ivfflat index to efficiently search for
+    nearest neighbours based on the supplied ``embedding``.
+    """
+    if not engine or not text:
+        return []
+    stmt = text(
+        "SELECT id, title, category, language FROM release "
+        "ORDER BY embedding <-> :embedding LIMIT :limit"
+    )
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            stmt, {"embedding": list(embedding), "limit": limit}
+        )
+        return [dict(row) for row in result]
