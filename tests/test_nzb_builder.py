@@ -9,15 +9,13 @@ from nzbidx_api import nzb_builder  # noqa: E402
 
 
 class DummyNNTP:
-    def __init__(
-        self, host, port, user=None, password=None, readermode=True, timeout=10
-    ):
+    def __init__(self, *_args, **_kwargs):
         pass
 
     def __enter__(self):  # pragma: no cover - trivial
         return self
 
-    def __exit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
+    def __exit__(self, _exc_type, _exc, _tb):  # pragma: no cover - trivial
         pass
 
     def group(self, group):

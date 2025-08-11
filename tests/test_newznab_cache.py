@@ -10,7 +10,7 @@ class DummyCache:
     def get(self, key: str) -> bytes | None:  # type: ignore[override]
         return self.store.get(key)
 
-    def setex(self, key: str, ttl: int, value: bytes | str) -> None:  # type: ignore[override]
+    def setex(self, key: str, _ttl: int, value: bytes | str) -> None:  # type: ignore[override]
         if isinstance(value, str):
             value = value.encode("utf-8")
         self.store[key] = value
