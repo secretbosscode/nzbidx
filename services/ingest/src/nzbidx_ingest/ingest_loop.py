@@ -48,6 +48,7 @@ def run_once() -> None:
         last = cursors.get_cursor(group) or 0
         start = last + 1
         end = start + INGEST_BATCH - 1
+        high = client.high_water_mark(group)
         headers = client.xover(group, start, end)
         if not headers:
             continue
@@ -96,8 +97,16 @@ def run_once() -> None:
             current = idx
         cursors.set_cursor(group, current)
         metrics["deduped"] = metrics["processed"] - metrics["inserted"]
-        metrics["duration_ms"] = int((time.monotonic() - batch_start) * 1000)
+        duration_s = time.monotonic() - batch_start
+        metrics["duration_ms"] = int(duration_s * 1000)
         metrics["os_latency_ms"] = int(last_os_latency * 1000)
+        metrics["cursor"] = current
+        metrics["high_water"] = high
+        remaining = max(high - current, 0)
+        metrics["remaining"] = remaining
+        if duration_s > 0 and metrics["processed"] > 0 and remaining > 0:
+            rate = metrics["processed"] / duration_s
+            metrics["eta_s"] = int(remaining / rate)
         logger.info("ingest_batch", extra=metrics)
 
 

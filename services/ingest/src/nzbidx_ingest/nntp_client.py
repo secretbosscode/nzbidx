@@ -54,6 +54,50 @@ class NNTPClient:
         data = sock.recv(1024)
         return data.decode(errors="ignore").strip()
 
+    # The real client would issue commands like ``GROUP`` to discover the high
+    # water mark for a group.  The simplified test environment has no NNTP
+    # server, so this method returns ``0`` when no provider is configured.  When
+    # connection details are present it performs a minimal ``GROUP`` command to
+    # obtain the highest article number.
+    def high_water_mark(self, group: str) -> int:
+        host = os.getenv("NNTP_HOST_1")
+        if not host:
+            return 0
+
+        port = int(os.getenv("NNTP_PORT_1", "119"))
+        use_ssl = os.getenv("NNTP_SSL_1") == "1"
+
+        try:
+            if use_ssl:
+                context = ssl.create_default_context()
+                with socket.create_connection((host, port), timeout=10) as sock:
+                    with context.wrap_socket(sock, server_hostname=host) as ssock:
+                        return self._group_high(ssock, group)
+            else:
+                with socket.create_connection((host, port), timeout=10) as sock:
+                    return self._group_high(sock, group)
+        except Exception:  # pragma: no cover - network failure
+            return 0
+
+    def _group_high(self, sock: socket.socket, group: str) -> int:
+        # Read greeting line
+        try:
+            self._recv_line(sock)
+            sock.sendall(b"MODE READER\r\n")
+            self._recv_line(sock)
+            sock.sendall(f"GROUP {group}\r\n".encode())
+            response = self._recv_line(sock)
+        except Exception:  # pragma: no cover - network issues
+            return 0
+
+        parts = response.split()
+        if len(parts) >= 4:
+            try:
+                return int(parts[3])
+            except ValueError:  # pragma: no cover - malformed response
+                return 0
+        return 0
+
     # The real client would issue ``XOVER`` or ``HDR`` commands.  For the
     # minimal test environment this method simply returns an empty list and is
     # monkeypatched in tests.
