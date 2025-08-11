@@ -55,7 +55,7 @@ jobs:
         run: mkdir -p ~/.cache/buildx
 
       - name: Restore Docker layer cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/buildx
           key: ${{ runner.os }}-buildx-${{ github.sha }}
