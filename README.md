@@ -230,6 +230,9 @@ Automated snapshots can be enabled by setting `SNAPSHOT_SCHEDULE=true` and
 running `scripts/snapshot.sh` from `cron` or by enabling the scheduled workflow
 in `.github/workflows/snapshot.yml`.
 
+Set `OS_SNAP_KEEP` to the number of snapshots to retain. Older snapshots will
+be removed after each run to keep the repository size in check.
+
 ### Restore
 
 1. Register the repository if needed.

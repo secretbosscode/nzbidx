@@ -81,6 +81,7 @@ Quick reference for common operational issues.
     annotations: {summary: "No snapshot in 24h"}
   ```
 - **Manual run:** `bash scripts/snapshot.sh`
+- **Retention:** set `OS_SNAP_KEEP` to limit repository size; `snapshot.sh` prunes older snapshots.
 
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`
