@@ -13,6 +13,9 @@ concurrency:
 jobs:
   test:
     runs-on: ${{ github.event_name == 'schedule' && 'ubuntu-latest' || 'self-hosted' }}
+    strategy:
+      matrix:
+        service: [api, ingest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -22,9 +25,9 @@ jobs:
           python-version: "3.12"
       - name: Install test dependencies
         run: |
-          pip install -e services/api pytest
+          pip install -e services/${{ matrix.service }} pytest
       - name: Run tests
-        run: pytest tests/test_smoke.py -q
+        run: pytest -q services/${{ matrix.service }}/tests
 
   build-and-push:
     needs: test
@@ -34,12 +37,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - context: services/api
+          - dockerfile: services/api/Dockerfile
             image: nzbidx-api
-          - context: services/ingest
+          - dockerfile: services/ingest/Dockerfile
             image: nzbidx-ingest
-          - context: db
-            image: nzbidx-db
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -68,8 +69,8 @@ jobs:
       - name: Build and push to TrueNAS registry
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.context }}/Dockerfile
+          context: .
+          file: ${{ matrix.dockerfile }}
           outputs: |
             type=registry,registry.insecure=true,name=truenas:5000/${{ matrix.image }}:${{ steps.vars.outputs.tag }},push=true
             type=registry,registry.insecure=true,name=truenas:5000/${{ matrix.image }}:latest,push=true
