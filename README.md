@@ -17,6 +17,10 @@ Postgres runs with the `pgvector` extension and a set of indexes to keep queries
 fast as the dataset grows. The schema enables the extension and creates the
 indexes during initialization; see `db/init/schema.sql` for details.
 
+The API exposes a helper that leverages an `ivfflat` index for efficient
+nearest-neighbour searches against release embeddings using the `pgvector`
+extension.
+
 ## Quickstart
 
     docker compose up -d
