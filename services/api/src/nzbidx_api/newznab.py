@@ -1,6 +1,8 @@
 """Helpers for the Newznab API."""
 
+import json
 import os
+from pathlib import Path
 from typing import Optional
 
 from .middleware_circuit import CircuitOpenError, call_with_retry, redis_breaker
@@ -42,29 +44,51 @@ def is_adult_category(cat: Optional[str]) -> bool:
     return ADULT_CATEGORY <= value < ADULT_CATEGORY + 1000
 
 
-# Customizable category IDs via env vars
-MOVIES_CAT = os.getenv("MOVIES_CAT_ID", "2000")
-TV_CAT = os.getenv("TV_CAT_ID", "5000")
-AUDIO_CAT = os.getenv("AUDIO_CAT_ID", "3000")
-BOOKS_CAT = os.getenv("BOOKS_CAT_ID", "7020")
-ADULT_CAT = os.getenv("ADULT_CAT_ID", "6000")
+def _default_categories() -> list[dict[str, str]]:
+    """Return built-in categories with IDs from environment defaults."""
+    return [
+        {"id": os.getenv("MOVIES_CAT_ID", "2000"), "name": "Movies"},
+        {"id": os.getenv("TV_CAT_ID", "5000"), "name": "TV"},
+        {"id": os.getenv("AUDIO_CAT_ID", "3000"), "name": "Audio/Music"},
+        {"id": os.getenv("BOOKS_CAT_ID", "7020"), "name": "EBook"},
+        {"id": os.getenv("ADULT_CAT_ID", "6000"), "name": "XXX/Adult"},
+    ]
+
+
+def _load_categories() -> list[dict[str, str]]:
+    """Load categories from config file referenced by ``CATEGORY_CONFIG``.
+
+    The configuration file should contain a JSON array of objects with ``id``
+    and ``name`` keys.  When the file cannot be read or is missing, built-in
+    defaults are used.
+    """
+
+    cfg_path = os.getenv("CATEGORY_CONFIG")
+    if cfg_path:
+        try:
+            data = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
+            return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
+        except Exception:
+            pass
+    return _default_categories()
+
+
+CATEGORIES = _load_categories()
+_CATEGORY_MAP = {c["name"]: c["id"] for c in CATEGORIES}
+MOVIES_CAT = _CATEGORY_MAP.get("Movies", "2000")
+TV_CAT = _CATEGORY_MAP.get("TV", "5000")
+AUDIO_CAT = _CATEGORY_MAP.get("Audio/Music", "3000")
+BOOKS_CAT = _CATEGORY_MAP.get("EBook", "7020")
+ADULT_CAT = _CATEGORY_MAP.get("XXX/Adult", "6000")
 
 
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
-    movies = os.getenv("MOVIES_CAT_ID", MOVIES_CAT)
-    tv = os.getenv("TV_CAT_ID", TV_CAT)
-    audio = os.getenv("AUDIO_CAT_ID", AUDIO_CAT)
-    books = os.getenv("BOOKS_CAT_ID", BOOKS_CAT)
-    adult = os.getenv("ADULT_CAT_ID", ADULT_CAT)
     categories = [
-        f'<category id="{movies}" name="Movies"/>',
-        f'<category id="{tv}" name="TV"/>',
-        f'<category id="{audio}" name="Audio/Music"/>',
-        f'<category id="{books}" name="EBook"/>',
+        f'<category id="{c["id"]}" name="{c["name"]}"/>'
+        for c in CATEGORIES
+        if adult_content_allowed() or not is_adult_category(c["id"])
     ]
-    if adult_content_allowed():
-        categories.append(f'<category id="{adult}" name="XXX/Adult"/>')
     cats_xml = f"<categories>{''.join(categories)}</categories>"
     return (
         '<caps><server version="0.1" title="nzbidx"/>'
