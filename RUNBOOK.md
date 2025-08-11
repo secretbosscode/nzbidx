@@ -49,9 +49,9 @@ Quick reference for common operational issues.
 - **Symptoms:** ingest cursor behind the NNTP high-water mark.
 - **Checks:**
   - Cursor: `sqlite3 services/ingest/cursors.sqlite 'select * from cursor'`
-  - High-water mark: `docker compose exec ingest nntpstat <group>`
+  - High-water mark: `docker compose exec api nntpstat <group>`
 - **Actions:** ensure NNTP connectivity, lower `INGEST_BATCH` or raise
-  `INGEST_POLL_SECONDS` to increase backpressure, restart ingest, or scale
+  `INGEST_POLL_SECONDS` to increase backpressure, restart the service, or scale
   workers.
 - **Threshold hint:** alert if lag >10k articles or >30m.
 - **PromQL:** `nzbidx_ingest_lag_articles > 10000 or nzbidx_ingest_lag_seconds > 1800`
@@ -86,6 +86,6 @@ Quick reference for common operational issues.
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`
 - Health check: `curl -fsS localhost:8080/health`
-- Logs: `docker compose logs -f api ingest`
+- Logs: `docker compose logs -f api`
 - OpenSearch slow logs:
   `docker compose exec opensearch tail -f /usr/share/opensearch/logs/opensearch_index_search_slowlog.log`

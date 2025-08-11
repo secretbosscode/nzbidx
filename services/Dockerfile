@@ -20,8 +20,10 @@ RUN pip install --no-cache-dir \
 COPY services/api/src/ ./
 COPY services/ingest/src/ ./
 COPY nzbidx_common/ ./nzbidx_common
+COPY services/start.sh ./start.sh
+RUN chmod +x start.sh
 
 USER nzbidx
 VOLUME /tmp
 
-CMD ["uvicorn", "nzbidx_api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["./start.sh"]

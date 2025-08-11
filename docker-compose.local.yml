@@ -1,6 +1,6 @@
 services:
   api:
-    image: nzbidx-api:local
+    image: nzbidx:local
     env_file:
       - .env.example
     ports:
@@ -33,23 +33,6 @@ services:
       SEARCH_TTL_SECONDS: 60
       RATE_LIMIT: 60
       RATE_WINDOW: 60
-  ingest:
-    image: nzbidx-ingest:local
-    env_file:
-      - .env.example
-    depends_on:
-      opensearch:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    command: python -m nzbidx_ingest
   opensearch:
     image: opensearchproject/opensearch:2
     environment:
