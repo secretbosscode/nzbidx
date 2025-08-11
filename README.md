@@ -211,7 +211,8 @@ Use the production override file to run the stack with persistent data stores an
 - `ALLOW_XXX` controls whether adult content is searchable. It is disabled by
   default and must be explicitly set to `true` to opt in.
 - Only metadata is indexed; binaries are stripped during ingest. An admin
-  takedown endpoint is planned for future releases.
+  takedown endpoint (`POST /api/admin/takedown`) accepts a release ID and removes
+  it from the search index. The endpoint requires a valid `X-Api-Key`.
 
 ## Development
 

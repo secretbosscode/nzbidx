@@ -375,6 +375,27 @@ async def health(request: Request) -> JSONResponse:
     return JSONResponse(payload)
 
 
+async def admin_takedown(request: Request) -> JSONResponse:
+    """Remove a release from the search index."""
+    if opensearch is None:
+        return JSONResponse({"status": "unavailable"}, status_code=503)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    release_id = data.get("id") or request.query_params.get("id")
+    if not release_id:
+        return invalid_params("missing id")
+    try:
+        opensearch.delete(  # type: ignore[union-attr]
+            index=OS_RELEASES_ALIAS, id=release_id, refresh="wait_for"
+        )
+    except Exception as exc:
+        logger.warning("takedown_failed", extra={"id": release_id, "error": str(exc)})
+        return JSONResponse({"status": "error"}, status_code=500)
+    return JSONResponse({"status": "ok"})
+
+
 def _os_search(
     q: Optional[str],
     *,
@@ -637,6 +658,7 @@ async def api(request: Request) -> Response:
 
 routes = [
     Route("/health", health),
+    Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
     Route("/openapi.json", openapi_json),
 ]
