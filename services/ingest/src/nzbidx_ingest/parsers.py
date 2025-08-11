@@ -221,6 +221,8 @@ def parse(
 
     for header in headers:
         subject = str(header.get("subject", ""))
+        if not subject:
+            continue
 
         # Normalised title and extracted tags
         norm_title, tags = normalize_subject(subject, with_tags=True)

@@ -3,13 +3,15 @@ set -euo pipefail
 
 POLICY="${POLICY:-PREFER_BASE}"  # PREFER_BASE or PREFER_PR
 BASE_DEFAULT=$(git rev-parse --abbrev-ref HEAD)
+REPO="${GITHUB_REPOSITORY:-$(git remote get-url origin 2>/dev/null | sed -E 's#.*[:/]([^/]+/[^/]+)(\.git)?$#\1#')}"
 
 echo "Policy: $POLICY"
 echo "Base default: $BASE_DEFAULT"
+echo "Repository: $REPO"
 
 # List open PRs with conflicts (mergeable_state = "dirty")
 prs_json=$(gh api -H "Accept: application/vnd.github+json" \
-  /repos/{owner}/{repo}/pulls --paginate -q '.[] | select(.state=="open") | {number,head:.head.ref,base:.base.ref}')
+  "/repos/$REPO/pulls" --paginate -q '.[] | select(.state=="open") | {number,head:.head.ref,base:.base.ref}')
 mapfile -t prs < <(jq -c '.number as $n | .head as $h | .base as $b | [$n,$h,$b] | @tsv' <<<"$prs_json")
 
 if [ ${#prs[@]} -eq 0 ]; then
@@ -19,7 +21,7 @@ fi
 
 for row in "${prs[@]}"; do
   IFS=$'\t' read -r pr head_ref base_ref <<<"$row" || continue
-  mergeable_state=$(gh api /repos/{owner}/{repo}/pulls/$pr -q .mergeable_state || echo "unknown")
+  mergeable_state=$(gh api "/repos/$REPO/pulls/$pr" -q .mergeable_state || echo "unknown")
   if [ "$mergeable_state" != "dirty" ]; then
     echo "PR #$pr is not dirty (state: $mergeable_state). Skipping."
     continue
@@ -56,7 +58,7 @@ for row in "${prs[@]}"; do
   git push -u origin "auto-resolve/$pr":"$head_ref"
 
   # Re-check mergeability and comment
-  new_state=$(gh api /repos/{owner}/{repo}/pulls/$pr -q .mergeable_state || echo "unknown")
+  new_state=$(gh api "/repos/$REPO/pulls/$pr" -q .mergeable_state || echo "unknown")
   gh pr comment "$pr" --body "Auto-conflict-resolver applied **$POLICY**. New mergeable_state: `$new_state`. Branch updated."
   echo "::endgroup::"
 done
