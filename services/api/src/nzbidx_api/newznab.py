@@ -79,7 +79,6 @@ MOVIES_CAT = _CATEGORY_MAP.get("Movies", "2000")
 TV_CAT = _CATEGORY_MAP.get("TV", "5000")
 AUDIO_CAT = _CATEGORY_MAP.get("Audio/Music", "3000")
 BOOKS_CAT = _CATEGORY_MAP.get("EBook", "7020")
-ADULT_CAT = _CATEGORY_MAP.get("XXX/Adult", "6000")
 
 
 def caps_xml() -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from starlette.responses import JSONResponse
 
 
+
 def error_response(code: str, message: str, status_code: int) -> JSONResponse:
     return JSONResponse(
         {"error": {"code": code, "message": message}}, status_code=status_code
@@ -13,10 +14,6 @@ def error_response(code: str, message: str, status_code: int) -> JSONResponse:
 
 def unauthorized(message: str = "unauthorized") -> JSONResponse:
     return error_response("unauthorized", message, 401)
-
-
-def forbidden(message: str = "forbidden") -> JSONResponse:
-    return error_response("forbidden", message, 403)
 
 
 def rate_limited(message: str = "rate limit exceeded") -> JSONResponse:
