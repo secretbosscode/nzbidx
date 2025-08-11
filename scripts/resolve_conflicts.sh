@@ -12,7 +12,7 @@ echo "Repository: $REPO"
 # List open PRs with conflicts (mergeable_state = "dirty")
 prs_json=$(gh api -H "Accept: application/vnd.github+json" \
   "/repos/$REPO/pulls" --paginate -q '.[] | select(.state=="open") | {number,head:.head.ref,base:.base.ref}')
-mapfile -t prs < <(jq -c '.number as $n | .head as $h | .base as $b | [$n,$h,$b] | @tsv' <<<"$prs_json")
+ mapfile -t prs < <(jq -r '.number as $n | .head as $h | .base as $b | [$n,$h,$b] | @tsv' <<<"$prs_json")
 
 if [ ${#prs[@]} -eq 0 ]; then
   echo "No open PRs found."
