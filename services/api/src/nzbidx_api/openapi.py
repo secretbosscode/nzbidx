@@ -24,7 +24,23 @@ OPENAPI = {
                     },
                 ]
             }
-        }
+        },
+        "/api/admin/takedown": {
+            "post": {
+                "parameters": [
+                    {
+                        "name": "X-Request-ID",
+                        "in": "header",
+                        "schema": {"type": "string"},
+                    },
+                    {
+                        "name": "X-Api-Key",
+                        "in": "header",
+                        "schema": {"type": "string"},
+                    },
+                ]
+            }
+        },
     },
 }
 
