@@ -59,9 +59,17 @@ def build_nzb_for_release(release_id: str) -> str:
                     if release_id not in subject:
                         continue
                     message_id = str(ov.get("message-id", ""))
-                    size = int(ov.get("bytes") or 0)
                     seg_num = _extract_segment_number(subject)
                     filename = _extract_filename(subject) or release_id
+                    size = 0
+                    if message_id:
+                        try:
+                            _resp, _num, _mid, lines = server.body(
+                                message_id, decode=False
+                            )
+                            size = sum(len(line) for line in lines)
+                        except Exception:
+                            size = int(ov.get("bytes") or 0)
                     files.setdefault(filename, []).append((seg_num, size, message_id))
             if not files:
                 from .newznab import nzb_xml_stub

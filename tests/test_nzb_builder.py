@@ -31,15 +31,20 @@ class DummyNNTP:
                 {
                     "subject": 'MyRelease "testfile.bin" (1/2)',
                     "message-id": "msg1@example.com",
-                    "bytes": "123",
                 },
                 {
                     "subject": 'MyRelease "testfile.bin" (2/2)',
                     "message-id": "msg2@example.com",
-                    "bytes": "456",
                 },
             ],
         )
+
+    def body(self, message_id, decode=False):  # pragma: no cover - simple
+        if message_id == "msg1@example.com":
+            lines = [b"a" * 123]
+        else:
+            lines = [b"b" * 456]
+        return "", 0, message_id, lines
 
 
 def test_builds_nzb(monkeypatch):
