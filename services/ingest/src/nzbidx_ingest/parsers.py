@@ -185,6 +185,66 @@ def normalize_subject(
     return cleaned
 
 
-def parse() -> None:
-    """Parse data stub."""
-    pass
+def parse(
+    headers: List[Dict[str, object]],
+    *,
+    db: Optional[object] = None,
+    os_client: Optional[object] = None,
+) -> None:
+    """Parse NNTP ``headers`` and index the results into OpenSearch.
+
+    Parameters
+    ----------
+    headers:
+        Iterable of article headers as returned by :meth:`NNTPClient.xover`.
+    db, os_client:
+        Optional database and OpenSearch client instances.  When omitted the
+        function will create its own connections via ``connect_db`` and
+        ``connect_opensearch`` from :mod:`nzbidx_ingest.main`.
+    """
+
+    from email.utils import parsedate_to_datetime
+
+    # Lazy imports to avoid expensive setup when the helper is used in isolation
+    from .main import (
+        connect_db,
+        connect_opensearch,
+        insert_release,
+        index_release,
+        _infer_category,
+    )
+
+    if db is None:
+        db = connect_db()
+    if os_client is None:
+        os_client = connect_opensearch()
+
+    for header in headers:
+        subject = str(header.get("subject", ""))
+
+        # Normalised title and extracted tags
+        norm_title, tags = normalize_subject(subject, with_tags=True)
+        norm_title = norm_title.lower()
+
+        # Build a dedupe key incorporating the posting day when available
+        posted = header.get("date")
+        day_bucket = ""
+        if posted:
+            try:
+                day_bucket = parsedate_to_datetime(str(posted)).strftime("%Y-%m-%d")
+            except Exception:
+                day_bucket = ""
+        dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
+
+        language = detect_language(subject)
+        category = _infer_category(subject)
+
+        inserted = insert_release(db, dedupe_key, category, language, tags)
+        if inserted:
+            index_release(
+                os_client,
+                dedupe_key,
+                category=category,
+                language=language,
+                tags=tags,
+            )
