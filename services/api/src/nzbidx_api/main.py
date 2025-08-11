@@ -405,22 +405,36 @@ def _os_search(
     extra: Optional[dict[str, object]] = None,
     limit: int = 50,
     offset: int = 0,
+    sort: Optional[str] = None,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
     if opensearch and q:
         try:
-            must: list[dict[str, object]] = [{"match": {"norm_title": q}}]
+            must: list[dict[str, object]] = [
+                {"match": {"norm_title": {"query": q, "fuzziness": "AUTO"}}}
+            ]
+            should: list[dict[str, object]] = [
+                {"match": {"tags": {"query": q, "boost": 2}}}
+            ]
             filters: list[dict[str, object]] = []
+
+            tag_fields = {
+                "artist",
+                "album",
+                "author",
+                "title",
+                "format",
+                "bitrate",
+                "isbn",
+                "studio",
+                "site",
+                "resolution",
+            }
 
             if extra:
                 for field, value in extra.items():
-                    if field == "tags":
-                        values = value if isinstance(value, list) else [value]
-                        for v in values:
-                            if v:
-                                must.append({"match": {"tags": v}})
-                    elif field == "year" and value:
+                    if field == "year" and value:
                         try:
                             year_int = int(value)  # type: ignore[arg-type]
                             filters.append(
@@ -435,11 +449,16 @@ def _os_search(
                             )
                         except (ValueError, TypeError):
                             pass
-                    else:
-                        values = value if isinstance(value, list) else [value]
-                        for v in values:
-                            if v:
-                                must.append({"match": {field: v}})
+                        continue
+
+                    values = value if isinstance(value, list) else [value]
+                    for v in values:
+                        if not v:
+                            continue
+                        if field == "tags" or field in tag_fields:
+                            must.append({"term": {"tags": str(v).lower()}})
+                        else:
+                            must.append({"match": {field: v}})
 
             if category:
                 filters.append({"term": {"category": category}})
@@ -458,8 +477,12 @@ def _os_search(
                 query["filter"] = filters
             if must_not:
                 query["must_not"] = must_not
-
-            items = search_releases(opensearch, query, limit=limit, offset=offset)
+            if should:
+                query["should"] = should
+                query["minimum_should_match"] = 0
+            items = search_releases(
+                opensearch, query, limit=limit, offset=offset, sort=sort
+            )
         except Exception:
             items = []
     return items
@@ -516,6 +539,7 @@ async def api(request: Request) -> Response:
         offset = int(params.get("offset", "0"))
     except ValueError:
         offset = 0
+    sort = params.get("sort")
 
     # Adult category gating
     if (
@@ -537,7 +561,9 @@ async def api(request: Request) -> Response:
         if q and len(q) > 256:
             return invalid_params("query too long")
         tag = params.get("tag")
-        items = _os_search(q, category=cat, tag=tag, limit=limit, offset=offset)
+        items = _os_search(
+            q, category=cat, tag=tag, limit=limit, offset=offset, sort=sort
+        )
         xml = rss_xml(items)
         if not no_cache:
             cache_rss(cache_key, xml)
@@ -561,6 +587,7 @@ async def api(request: Request) -> Response:
             extra={"season": season, "episode": episode},
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -581,9 +608,10 @@ async def api(request: Request) -> Response:
             q,
             category=MOVIES_CAT,
             tag=tag,
-            extra={"imdbid": imdbid},
+            extra={"imdbid": imdbid, "resolution": params.get("resolution")},
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -611,6 +639,7 @@ async def api(request: Request) -> Response:
             extra=extra,
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -638,6 +667,7 @@ async def api(request: Request) -> Response:
             extra=extra,
             limit=limit,
             offset=offset,
+            sort=sort,
         )
         xml = rss_xml(items)
         if not no_cache:
