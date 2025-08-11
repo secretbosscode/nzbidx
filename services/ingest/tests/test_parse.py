@@ -12,7 +12,9 @@ class DummyOS:
     def __init__(self) -> None:
         self.calls: List[Dict[str, object]] = []
 
-    def index(self, index: str, id: str, body: Dict[str, object], refresh: bool = False) -> None:
+    def index(
+        self, index: str, id: str, body: Dict[str, object], refresh: bool = False
+    ) -> None:
         self.calls.append({"index": index, "id": id, "body": body, "refresh": refresh})
 
 
