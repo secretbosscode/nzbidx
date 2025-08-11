@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ${{ github.event_name == 'schedule' && 'ubuntu-latest' || 'self-hosted' }}
+    runs-on: self-hosted
     strategy:
       matrix:
         service: [api, ingest]
@@ -31,7 +31,7 @@ jobs:
 
   build-and-push:
     needs: test
-    runs-on: ${{ github.event_name == 'schedule' && 'ubuntu-latest' || 'self-hosted' }}
+    runs-on: self-hosted
     env:
       DOCKER_BUILDKIT: '1'
     strategy:
