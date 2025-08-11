@@ -246,6 +246,8 @@ DATABASE_URL=postgres://nzbidx:nzbidx@postgres:5432/nzbidx
 
 Schema creation is idempotent; running with a new database is sufficient.
 
+Vector similarity features use the [`pgvector`](https://github.com/pgvector/pgvector) extension. The schema enables the extension and creates an `ivfflat` index on the `release.title_embedding` column for efficient nearest neighbour queries. Ensure `pgvector` is installed in the target Postgres instance before initialising the database.
+
 ## Backups
 
 OpenSearch snapshots can be stored in S3 or GCS. Configure the repository via
