@@ -1,8 +1,6 @@
 services:
   api:
     image: nzbidx-api:local
-    env_file:
-      - .env.example
     ports:
       - "8080:8080"
     read_only: true
@@ -29,14 +27,25 @@ services:
       redis:
         condition: service_healthy
     environment:
+      PGDATABASE: nzbidx
+      PGUSER: nzbidx
+      PGPASSWORD: nzbidx
+      POSTGRES_PORT: 15432
+      OPENSEARCH_URL: http://opensearch:9200
+      REDIS_URL: redis://redis:6379/0
       API_KEYS: dev
-      SEARCH_TTL_SECONDS: 60
+      SAFESEARCH: "on"
+      ALLOW_XXX: "false"
       RATE_LIMIT: 60
       RATE_WINDOW: 60
+      NNTP_HOST: ""
+      NNTP_PORT: 119
+      NNTP_USER: ""
+      NNTP_PASS: ""
+      NNTP_GROUPS: ""
+      SEARCH_TTL_SECONDS: 60
   ingest:
     image: nzbidx-ingest:local
-    env_file:
-      - .env.example
     depends_on:
       opensearch:
         condition: service_healthy
@@ -49,6 +58,23 @@ services:
       - /tmp
     cap_drop:
       - ALL
+    environment:
+      PGDATABASE: nzbidx
+      PGUSER: nzbidx
+      PGPASSWORD: nzbidx
+      POSTGRES_PORT: 15432
+      OPENSEARCH_URL: http://opensearch:9200
+      REDIS_URL: redis://redis:6379/0
+      API_KEYS: dev
+      SAFESEARCH: "on"
+      ALLOW_XXX: "false"
+      RATE_LIMIT: 60
+      RATE_WINDOW: 60
+      NNTP_HOST: ""
+      NNTP_PORT: 119
+      NNTP_USER: ""
+      NNTP_PASS: ""
+      NNTP_GROUPS: ""
     command: python -m nzbidx_ingest
   opensearch:
     image: opensearchproject/opensearch:2
@@ -62,8 +88,10 @@ services:
       retries: 5
   postgres:
     image: pgvector/pgvector:pg17
-    env_file:
-      - .env.example
+    environment:
+      POSTGRES_DB: nzbidx
+      POSTGRES_USER: nzbidx
+      POSTGRES_PASSWORD: nzbidx
     volumes:
       - ./db/init/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:

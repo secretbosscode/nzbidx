@@ -35,8 +35,9 @@ The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and adjust values as needed. Only a small set of
-variables are required to run the stack:
+Environment variables are defined directly in the compose files. Adjust values
+there or set them via the environment before running the stack. Only a small set
+of variables are required to run the stack:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
