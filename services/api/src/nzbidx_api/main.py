@@ -108,6 +108,7 @@ from .newznab import (
     adult_disabled_xml,
     caps_xml,
     get_nzb,
+    NzbFetchError,
     is_adult_category,
     rss_xml,
     MOVIES_CAT,
@@ -124,7 +125,7 @@ from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError
 from .otel import current_trace_id, setup_tracing
-from .errors import invalid_params, breaker_open
+from .errors import invalid_params, breaker_open, nzb_unavailable
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
 from .config import (
@@ -630,6 +631,8 @@ async def api(request: Request) -> Response:
             xml = get_nzb(release_id, cache)
         except CircuitOpenError:
             return breaker_open()
+        except NzbFetchError:
+            return nzb_unavailable()
         return Response(xml, media_type="application/x-nzb")
 
     return invalid_params("unsupported request")
