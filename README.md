@@ -22,6 +22,34 @@ The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
 
     sudo sysctl -w vm.max_map_count=262144
 
+## Environment Variables
+
+Copy `.env.example` to `.env` and adjust values as needed. Only a small set of
+variables are required to run the stack:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
+| `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
+| `OPENSEARCH_URL` | OpenSearch endpoint | `http://opensearch:9200` |
+| `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
+| `API_KEYS` | Comma separated API keys | _(empty)_ |
+| `SAFESEARCH` | `on` hides adult categories | `on` |
+| `ALLOW_XXX` | `true` enables the XXX category | `false` |
+| `RATE_LIMIT` | Requests per window | `60` |
+| `RATE_WINDOW` | Rate limit window in seconds | `60` |
+| `NNTP_HOST` | NNTP provider host | _(required for ingest)_ |
+| `NNTP_PORT` | NNTP port | `119` |
+| `NNTP_USER` | NNTP username | _(required for ingest)_ |
+| `NNTP_PASS` | NNTP password | _(required for ingest)_ |
+| `NNTP_GROUPS` | Groups to ingest (comma separated) | _(required for ingest)_ |
+
+Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
+`CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category
+IDs such as `MOVIES_CAT_ID`). Review the configuration modules in
+`services/api` and `services/ingest` for the full list. Consider whether extra
+variables are necessary before adding them—defaults cover most cases.
+
 ## Seed OpenSearch
 
     docker compose exec api python scripts/seed_os.py
@@ -36,6 +64,8 @@ the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
 The ingest worker polls configured NNTP groups and stores release metadata. Set the required NNTP environment variables and run:
 
     export NNTP_HOST=news.example.net
+    export NNTP_USER=username
+    export NNTP_PASS=secret
     export NNTP_GROUPS=alt.binaries.example
     docker compose exec ingest python -m nzbidx_ingest
 
