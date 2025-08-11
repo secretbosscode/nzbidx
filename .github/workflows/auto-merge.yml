@@ -38,7 +38,7 @@ jobs:
             pr=$(gh pr list --head "$branch" --json number -q '.[0].number' --repo "$REPO")
           fi
           if [ -z "$pr" ]; then
-            echo "No pull request found for $HEAD_BRANCH" >&2
-            exit 1
+            echo "No pull request found for $HEAD_BRANCH. Skipping auto-merge."
+            exit 0
           fi
           gh pr merge "$pr" --merge --delete-branch --repo "$REPO"
