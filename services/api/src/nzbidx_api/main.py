@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Optional, Callable
 
 from nzbidx_common.os import OS_RELEASES_ALIAS
+import threading
+
+try:  # pragma: no cover - optional dependency
+    from nzbidx_ingest.ingest_loop import run_forever
+except Exception:  # pragma: no cover - ingest optional
+    run_forever = None  # type: ignore
 
 # Optional third party dependencies
 try:  # pragma: no cover - import guard
@@ -141,6 +147,8 @@ from .config import (
 from .metrics_log import start as start_metrics, inc_api_5xx
 
 _stop_metrics: Callable[[], None] | None = None
+_ingest_stop: threading.Event | None = None
+_ingest_thread: threading.Thread | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +184,24 @@ setup_logging()
 setup_tracing()
 
 _START_TIME = time.monotonic()
+
+
+def start_ingest() -> None:
+    if run_forever is None:
+        return
+    global _ingest_stop, _ingest_thread
+    _ingest_stop = threading.Event()
+    _ingest_thread = threading.Thread(
+        target=run_forever, args=(_ingest_stop,), daemon=True
+    )
+    _ingest_thread.start()
+
+
+def stop_ingest() -> None:
+    if _ingest_stop:
+        _ingest_stop.set()
+    if _ingest_thread:
+        _ingest_thread.join(timeout=5)
 
 
 def _find_version_file() -> Path:
@@ -771,9 +797,14 @@ app = Starlette(
         apply_schema,
         init_opensearch,
         init_cache,
+        start_ingest,
         lambda: _set_stop(start_metrics()),
     ],
-    on_shutdown=[shutdown, lambda: _stop_metrics() if _stop_metrics else None],
+    on_shutdown=[
+        stop_ingest,
+        shutdown,
+        lambda: _stop_metrics() if _stop_metrics else None,
+    ],
     middleware=middleware,
 )
 

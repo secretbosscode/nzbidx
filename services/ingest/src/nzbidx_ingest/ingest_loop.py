@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from threading import Event
 
 from .config import (
     NNTP_GROUPS,
@@ -110,8 +111,12 @@ def run_once() -> None:
         logger.info("ingest_batch", extra=metrics)
 
 
-def run_forever() -> None:
-    """Continuously poll groups according to ``INGEST_POLL_SECONDS``."""
-    while True:
+def run_forever(stop_event: Event | None = None) -> None:
+    """Continuously poll groups until ``stop_event`` is set."""
+    while not (stop_event and stop_event.is_set()):
         run_once()
-        time.sleep(INGEST_POLL_SECONDS)
+        if stop_event:
+            if stop_event.wait(INGEST_POLL_SECONDS):
+                break
+        else:
+            time.sleep(INGEST_POLL_SECONDS)

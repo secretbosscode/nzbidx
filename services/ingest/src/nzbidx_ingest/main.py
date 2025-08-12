@@ -27,8 +27,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     OS_RELEASES_ALIAS = "nzbidx-releases"
 
 from .logging import setup_logging
-from .nntp_client import NNTPClient
-from .parsers import detect_language, normalize_subject, extract_tags
+from .parsers import extract_tags
 
 logger = logging.getLogger(__name__)
 
@@ -391,39 +390,9 @@ def main() -> int:
     """Run the ingest service."""
     load_dotenv()
     setup_logging()
+    from .ingest_loop import run_forever
 
-    # Connect to NNTP (dry-run safe)
-    client = NNTPClient()
-    client.connect()
-
-    db = connect_db()
-    os_client = connect_opensearch()
-
-    # Simulated subjects batch (idempotent insert/OS index)
-    subjects = [
-        "Test Release One [music]",
-        "Another Release [books]",
-        "Test Release One [music]",  # duplicate on purpose
-    ]
-
-    for subject in subjects:
-        # Normalized title and extracted tags (from parsers)
-        norm_title, tags = normalize_subject(subject, with_tags=True)
-        norm_title = norm_title.lower()
-
-        # Language & category heuristics
-        language = detect_language(subject) or "en"
-        category = _infer_category(subject)
-
-        if insert_release(db, norm_title, category, language, tags):
-            index_release(
-                os_client,
-                norm_title,
-                category=category,
-                language=language,
-                tags=tags,
-            )
-
+    run_forever()
     return 0
 
 
