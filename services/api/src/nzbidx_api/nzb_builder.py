@@ -9,10 +9,24 @@ from __future__ import annotations
 
 import os
 import re
+import sys
+from importlib import util
+from pathlib import Path
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Tuple
 
-import nntplib
+# Prefer the bundled ``nntplib`` implementation over the deprecated
+# standard library version.  Insert the local ``services/api/src`` path at
+# the start of ``sys.path`` so resolving the module picks up our copy.
+_local_path = Path(__file__).resolve().parents[1]
+if str(_local_path) not in sys.path:
+    sys.path.insert(0, str(_local_path))
+
+_nntplib_file = _local_path / "nntplib.py"
+spec = util.spec_from_file_location("nntplib_local", _nntplib_file)
+assert spec and spec.loader  # narrow types for mypy-like checks
+nntplib = util.module_from_spec(spec)
+spec.loader.exec_module(nntplib)
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
