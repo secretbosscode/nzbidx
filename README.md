@@ -387,3 +387,11 @@ docker compose up -d && scripts/smoke.sh
 Manifests under ``k8s/`` provide a minimal ``Deployment`` and ``Service`` for the
 API (which also runs the ingest worker) with readiness and liveness probes. See
 [`docs/k8s.md`](docs/k8s.md) for usage notes and persistence considerations.
+
+## Donate
+
+If you find this project useful, consider supporting its development by donating
+to the following Bitcoin address:
+
+`bitcoin:BC1QT3CSUJELEDXRXTRNQHQCY93DW0D07SYHT5V9XF`
+
