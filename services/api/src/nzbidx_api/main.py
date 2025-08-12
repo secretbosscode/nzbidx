@@ -225,14 +225,18 @@ def build_ilm_policy() -> dict[str, object]:
     return policy
 
 
-def build_index_template() -> dict[str, object]:
+def build_index_template(*, ilm: bool = True) -> dict[str, object]:
     path = Path(__file__).resolve().parents[4] / "opensearch" / "index-template.json"
     with path.open("r", encoding="utf-8") as f:
         template = json.load(f)
     settings = template.setdefault("template", {}).setdefault("settings", {})
     settings.setdefault("refresh_interval", "5s")
-    settings["index.lifecycle.name"] = "nzbidx-releases-policy"
-    settings["index.lifecycle.rollover_alias"] = OS_RELEASES_ALIAS
+    if ilm:
+        settings["index.lifecycle.name"] = "nzbidx-releases-policy"
+        settings["index.lifecycle.rollover_alias"] = OS_RELEASES_ALIAS
+    else:
+        settings.pop("index.lifecycle.name", None)
+        settings.pop("index.lifecycle.rollover_alias", None)
     settings["number_of_shards"] = os_primary_shards()
     settings["number_of_replicas"] = os_replicas()
     return template
@@ -273,9 +277,16 @@ def init_opensearch() -> None:
     url = os.getenv("OPENSEARCH_URL", "http://opensearch:9200")
     try:
         client = OpenSearch(url, timeout=2)
-        client.ilm.put_lifecycle(name="nzbidx-releases-policy", body=build_ilm_policy())
+        supports_ilm = hasattr(client, "ilm")
+        if supports_ilm:
+            client.ilm.put_lifecycle(
+                name="nzbidx-releases-policy", body=build_ilm_policy()
+            )
+        else:
+            logger.info("OpenSearch client lacks ILM; skipping lifecycle setup")
         client.indices.put_index_template(
-            name="nzbidx-releases-template", body=build_index_template()
+            name="nzbidx-releases-template",
+            body=build_index_template(ilm=supports_ilm),
         )
         try:
             alias_info = client.indices.get_alias(name=OS_RELEASES_ALIAS)
