@@ -64,7 +64,7 @@ variables are necessary before adding them—defaults cover most cases.
 
 ## Seed OpenSearch
 
-    docker compose exec api python scripts/seed_os.py
+    docker compose exec nzbidx python scripts/seed_os.py
 
 OpenSearch uses an index template and ILM policy. Monthly indices are created
 under the `nzbidx-releases` alias and rollover automatically. Indices move to
@@ -81,6 +81,7 @@ automatically. To invoke a one-off ingest loop manually:
     export NNTP_HOST=news.example.net
     export NNTP_USER=username
     export NNTP_PASS=secret
+    export NNTP_GROUPS=alt.binaries.example  # optional; auto-discovered if unset
     docker compose exec api python -m nzbidx_ingest
 
 ## Auth & Rate Limit

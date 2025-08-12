@@ -1,6 +1,7 @@
 version: '3.9'
 services:
-  api:
+  nzbidx:
+    image: nzbidx:latest
     depends_on:
       opensearch:
         condition: service_healthy
@@ -31,7 +32,6 @@ services:
     image: pgvector/pgvector:pg17
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./db/init/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
