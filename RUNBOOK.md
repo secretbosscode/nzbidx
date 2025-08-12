@@ -12,7 +12,7 @@ Quick reference for common operational issues.
 - **Symptoms:** search endpoints return empty arrays or `503` for NZB retrieval.
 - **Checks:** `curl -fsS localhost:8080/health | jq .breaker` shows `open`.
 - **Actions:** verify OpenSearch and Redis are reachable. Reset with
-  `docker compose restart api` once dependencies are healthy.
+  `docker compose restart nzbidx` once dependencies are healthy.
 - **Threshold hint:** alert if the breaker stays open >5m.
 - **PromQL:** `nzbidx_breaker_state == 1`
 - **Alert rule:**
@@ -23,12 +23,12 @@ Quick reference for common operational issues.
     labels: {severity: page}
     annotations: {summary: "Circuit breaker open"}
   ```
-- **Reset:** `docker compose restart api`
+- **Reset:** `docker compose restart nzbidx`
 
 ## 5xx spike
 - **Symptoms:** sudden increase in `5xx` responses or alerts.
 - **Checks:**
-  - Logs: `docker compose logs api`
+  - Logs: `docker compose logs nzbidx`
   - Dependencies: `curl -fsS localhost:8080/health`,
     `docker compose exec opensearch curl -fsS localhost:9200/_cluster/health`,
     `docker compose exec redis redis-cli PING`
@@ -49,7 +49,7 @@ Quick reference for common operational issues.
 - **Symptoms:** ingest cursor behind the NNTP high-water mark.
 - **Checks:**
   - Cursor: `sqlite3 services/ingest/cursors.sqlite 'select * from cursor'`
-  - High-water mark: `docker compose exec api nntpstat <group>`
+  - High-water mark: `docker compose exec nzbidx nntpstat <group>`
 - **Actions:** ensure NNTP connectivity, lower `INGEST_BATCH` or raise
   `INGEST_POLL_SECONDS` to increase backpressure, restart ingest, or scale
   workers.
@@ -66,7 +66,7 @@ Quick reference for common operational issues.
 
 ## Snapshot failures
 - **Symptoms:** backup jobs error or snapshots missing.
-- **Checks:** `docker compose logs api | grep snapshot`,
+- **Checks:** `docker compose logs nzbidx | grep snapshot`,
   `curl -fsS localhost:9200/_snapshot/_all`, `make snapshot-repo`.
 - **Actions:** ensure repository registered and credentials valid; rerun
   `make snapshot-repo` and inspect OpenSearch logs.
@@ -86,6 +86,6 @@ Quick reference for common operational issues.
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`
 - Health check: `curl -fsS localhost:8080/health`
-- Logs: `docker compose logs -f api`
+- Logs: `docker compose logs -f nzbidx`
 - OpenSearch slow logs:
   `docker compose exec opensearch tail -f /usr/share/opensearch/logs/opensearch_index_search_slowlog.log`
