@@ -31,14 +31,13 @@ async def apply_schema() -> None:
     """Create database schema if it does not already exist."""
     if not engine or not text:
         return
-    schema_path = (
-        Path(__file__).resolve().parent.parent / "db" / "init" / "schema.sql"
-    )
+    schema_path = Path(__file__).resolve().parent.parent / "db" / "init" / "schema.sql"
     sql = schema_path.read_text(encoding="utf-8")
     statements = [s.strip() for s in sql.split(";") if s.strip()]
     async with engine.begin() as conn:
         for stmt in statements:
             await conn.execute(text(stmt))
+
 
 async def ping() -> bool:
     """Check database connectivity."""
