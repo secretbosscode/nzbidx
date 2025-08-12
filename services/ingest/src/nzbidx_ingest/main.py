@@ -181,7 +181,10 @@ def connect_db() -> Any:
             engine.dispose()
             return _connect(url)
 
-    if url != ":memory:":
+    # Treat remaining URLs as SQLite database files.  Only attempt to create
+    # directories for plain file paths; URLs with a scheme (``foo://``) should
+    # be handled by their respective drivers instead.
+    if url != ":memory:" and "://" not in url:
         path = Path(url)
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(url)
