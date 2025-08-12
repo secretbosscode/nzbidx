@@ -1,5 +1,6 @@
 # nzbidx
-[![Security Audit](https://github.com/nzbidx/nzbidx/actions/workflows/audit.yml/badge.svg)](https://github.com/nzbidx/nzbidx/actions/workflows/audit.yml)
+
+If you find this project useful, donations are welcome at `BC1QT3CSUJELEDXRXTRNQHQCY93DW0D07SYHT5V9XF`.
 
 NZBIdx is a lightweight, Newznab-compatible indexer built around two
 Python services:
@@ -334,10 +335,7 @@ Close indices if required; restoring over an existing alias may need
 
 ## Security
 
-The [security audit workflow](https://github.com/nzbidx/nzbidx/actions/workflows/audit.yml)
-runs `pip-audit` and generates a CycloneDX SBOM for the project. The audit
-fails if vulnerabilities are found.
-
+Run `pip-audit` and generate a CycloneDX SBOM to identify vulnerabilities.
 Local audit and SBOM generation:
 
 ```bash
@@ -388,10 +386,4 @@ Manifests under ``k8s/`` provide a minimal ``Deployment`` and ``Service`` for th
 API (which also runs the ingest worker) with readiness and liveness probes. See
 [`docs/k8s.md`](docs/k8s.md) for usage notes and persistence considerations.
 
-## Donate
-
-If you find this project useful, consider supporting its development by donating
-to the following Bitcoin address:
-
-`BC1QT3CSUJELEDXRXTRNQHQCY93DW0D07SYHT5V9XF`
 
