@@ -1,8 +1,3 @@
-CREATE TABLE IF NOT EXISTS usenet_group (
-    id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS poster (
     id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL
@@ -10,7 +5,6 @@ CREATE TABLE IF NOT EXISTS poster (
 
 CREATE TABLE IF NOT EXISTS release (
     id SERIAL PRIMARY KEY,
-    group_id INTEGER REFERENCES usenet_group(id),
     poster_id INTEGER REFERENCES poster(id),
     title TEXT NOT NULL,
     category TEXT,
@@ -19,7 +13,6 @@ CREATE TABLE IF NOT EXISTS release (
 );
 
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS title TEXT;
-ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES usenet_group(id);
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS poster_id INTEGER REFERENCES poster(id);
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT;
@@ -34,6 +27,10 @@ ALTER TABLE IF EXISTS release
     );
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(1536);
 
+DROP INDEX IF EXISTS release_group_id_idx;
+ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS group_id;
+DROP TABLE IF EXISTS usenet_group;
+
 CREATE TABLE IF NOT EXISTS release_file (
     id SERIAL PRIMARY KEY,
     release_id INTEGER REFERENCES release(id),
@@ -47,7 +44,6 @@ CREATE TABLE IF NOT EXISTS file_segments (
     size INTEGER
 );
 
-CREATE INDEX IF NOT EXISTS release_group_id_idx ON release (group_id);
 CREATE INDEX IF NOT EXISTS release_poster_id_idx ON release (poster_id);
 CREATE INDEX IF NOT EXISTS release_category_idx ON release (category);
 CREATE INDEX IF NOT EXISTS release_language_idx ON release (language);
