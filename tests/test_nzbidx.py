@@ -18,6 +18,7 @@ sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 sys.path.append(str(REPO_ROOT / "services" / "ingest" / "src"))
 
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
+import nzbidx_ingest.main as main  # type: ignore
 from nzbidx_ingest.main import CATEGORY_MAP, _infer_category, connect_db  # type: ignore
 
 
@@ -199,3 +200,51 @@ def test_connect_db_creates_parent(tmp_path, monkeypatch) -> None:
     conn.execute("SELECT 1")
     conn.close()
     assert db_file.exists()
+
+
+def test_connect_db_postgres(monkeypatch) -> None:
+    calls: dict[str, str] = {}
+
+    class DummyConn:
+        def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
+            calls["stmt"] = stmt
+
+    class DummyCtx:
+        def __enter__(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - trivial
+            return None
+
+    class DummyEngine:
+        def begin(self) -> DummyCtx:  # pragma: no cover - trivial
+            return DummyCtx()
+
+        def raw_connection(self):  # pragma: no cover - trivial
+            class Raw:
+                def cursor(self):  # pragma: no cover - trivial
+                    class C:
+                        rowcount = 0
+
+                        def execute(self, *a, **k) -> None:
+                            return None
+
+                    return C()
+
+                def commit(self) -> None:  # pragma: no cover - trivial
+                    return None
+
+            return Raw()
+
+    def fake_create_engine(
+        url: str, echo: bool = False, future: bool = True
+    ) -> DummyEngine:
+        calls["url"] = url
+        return DummyEngine()
+
+    monkeypatch.setenv("DATABASE_URL", "postgres://user@host/db")
+    monkeypatch.setattr(main, "create_engine", fake_create_engine)
+    monkeypatch.setattr(main, "text", lambda s: s)
+    conn = connect_db()
+    assert calls["url"] == "postgresql+psycopg://user@host/db"
+    assert hasattr(conn, "cursor")
