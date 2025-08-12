@@ -44,6 +44,7 @@ def run_once() -> None:
         logger.info("ingest_no_groups")
         return
     config.NNTP_GROUPS = groups
+    logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
     client = NNTPClient()
     client.connect()
