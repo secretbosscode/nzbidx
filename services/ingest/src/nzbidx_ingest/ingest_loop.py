@@ -70,7 +70,7 @@ def run_once() -> None:
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject)
-            category = _infer_category(subject)
+            category = _infer_category(subject, group)
             start_idx = time.monotonic()
             inserted = insert_release(db, dedupe_key, category, language, tags)
             os_latency = 0.0

@@ -56,3 +56,19 @@ def test_builds_nzb(monkeypatch):
     assert "msg2@example.com" in xml
     assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
     assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
+
+
+class AutoNNTP(DummyNNTP):
+    def list(self):
+        return "", [("alt.binaries.example", "0", "0", "0")]
+
+
+def test_builds_nzb_auto_groups(monkeypatch):
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setattr(
+        nzb_builder, "nntplib", SimpleNamespace(NNTP=AutoNNTP, NNTP_SSL=AutoNNTP)
+    )
+    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert "msg1@example.com" in xml
+    assert "msg2@example.com" in xml

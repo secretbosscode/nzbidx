@@ -31,8 +31,7 @@ def build_nzb_for_release(release_id: str) -> str:
     """
 
     host = os.getenv("NNTP_HOST")
-    groups = [g.strip() for g in os.getenv("NNTP_GROUPS", "").split(",") if g.strip()]
-    if not host or not groups:
+    if not host:
         from .newznab import nzb_xml_stub
 
         return nzb_xml_stub(release_id)
@@ -47,6 +46,17 @@ def build_nzb_for_release(release_id: str) -> str:
         with conn_cls(
             host, port, user=user, password=password, readermode=True, timeout=10
         ) as server:
+            groups = [g.strip() for g in os.getenv("NNTP_GROUPS", "").split(",") if g.strip()]
+            if not groups:
+                try:
+                    _resp, listing = server.list()
+                    groups = [g[0] if isinstance(g, (tuple, list)) else str(g).split()[0] for g in listing]
+                except Exception:
+                    groups = []
+            if not groups:
+                from .newznab import nzb_xml_stub
+
+                return nzb_xml_stub(release_id)
             files: Dict[str, List[Tuple[int, int, str]]] = {}
             for group in groups:
                 try:

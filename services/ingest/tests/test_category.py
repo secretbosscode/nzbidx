@@ -31,3 +31,11 @@ def test_infer_books():
 def test_infer_xxx():
     assert _infer_category("Saucy.Movie.xxx.xvid") == CATEGORY_MAP["xxx_xvid"]
     assert _infer_category("Adult Flick [xxx]") == CATEGORY_MAP["xxx"]
+
+
+def test_group_based_inference():
+    assert _infer_category("Random", group="alt.binaries.movies") == CATEGORY_MAP["movies"]
+    assert _infer_category("Random", group="alt.binaries.tv") == CATEGORY_MAP["tv"]
+    assert _infer_category("Random", group="alt.binaries.music") == CATEGORY_MAP["audio"]
+    assert _infer_category("Random", group="alt.binaries.ebooks") == CATEGORY_MAP["ebook"]
+    assert _infer_category("Random", group="alt.binaries.xxx") == CATEGORY_MAP["xxx"]

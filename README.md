@@ -54,7 +54,7 @@ of variables are required to run the stack:
 | `NNTP_PORT` | NNTP port | `119` |
 | `NNTP_USER` | NNTP username | _(required for ingest)_ |
 | `NNTP_PASS` | NNTP password | _(required for ingest)_ |
-| `NNTP_GROUPS` | Groups to ingest (comma separated) | _(required for ingest)_ |
+| `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category
@@ -73,15 +73,16 @@ the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
 
 ## Ingest
 
-The API container also runs an ingest worker which polls configured NNTP groups
-and stores release metadata. Set the required NNTP environment variables and
-start the stack. To invoke a one-off ingest loop manually:
+The API container also runs an ingest worker which polls NNTP groups and stores
+release metadata. Set the required NNTP environment variables and start the
+stack. When `NNTP_GROUPS` is omitted all available groups are discovered
+automatically. To invoke a one-off ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username
     export NNTP_PASS=secret
-    export NNTP_GROUPS=alt.binaries.example
-    docker compose exec nzbidx python -m nzbidx_ingest
+    export NNTP_GROUPS=alt.binaries.example  # optional; auto-discovered if unset
+    docker compose exec api python -m nzbidx_ingest
 
 ## Auth & Rate Limit
 
