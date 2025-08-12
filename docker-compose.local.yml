@@ -1,6 +1,8 @@
 services:
   api:
-    image: nzbidx-api:local
+    build:
+      context: .
+      dockerfile: services/Dockerfile
     ports:
       - "8080:8080"
     read_only: true
@@ -44,38 +46,6 @@ services:
       NNTP_PASS: ""
       NNTP_GROUPS: ""
       SEARCH_TTL_SECONDS: 60
-  ingest:
-    image: nzbidx-ingest:local
-    depends_on:
-      opensearch:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    environment:
-      PGDATABASE: nzbidx
-      PGUSER: nzbidx
-      PGPASSWORD: nzbidx
-      POSTGRES_PORT: 15432
-      OPENSEARCH_URL: http://opensearch:9200
-      REDIS_URL: redis://redis:6379/0
-      API_KEYS: dev
-      SAFESEARCH: "on"
-      ALLOW_XXX: "false"
-      RATE_LIMIT: 60
-      RATE_WINDOW: 60
-      NNTP_HOST: ""
-      NNTP_PORT: 119
-      NNTP_USER: ""
-      NNTP_PASS: ""
-      NNTP_GROUPS: ""
-    command: python -m nzbidx_ingest
   opensearch:
     image: opensearchproject/opensearch:2
     environment:

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: nzbidx-api:latest
+        image: nzbidx:latest
         env:
         - name: OPENSEARCH_URL
           value: http://opensearch:9200

@@ -24,4 +24,4 @@ COPY nzbidx_common/ ./nzbidx_common
 USER nzbidx
 VOLUME /tmp
 
-CMD ["uvicorn", "nzbidx_api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "python -m nzbidx_ingest & exec uvicorn nzbidx_api.main:app --host 0.0.0.0 --port 8080"]
