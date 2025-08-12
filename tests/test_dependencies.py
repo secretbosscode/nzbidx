@@ -1,4 +1,4 @@
-"""Smoke tests for the nzbidx service."""
+"""Integration tests exercising nzbidx's external dependencies."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ try:  # pragma: no cover - prefer real TestClient when available
     from starlette.testclient import TestClient  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover
     class TestClient:
-        """Very small subset of Starlette's TestClient for smoke tests."""
+        """Very small subset of Starlette's TestClient for dependency tests."""
 
         def __init__(self, app: object) -> None:
             self.app = app
