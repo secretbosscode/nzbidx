@@ -21,7 +21,7 @@ def test_init_opensearch_without_ilm(monkeypatch):
         def exists(self, index):
             return False
 
-        def create(self, *, index, aliases):
+        def create(self, *, index, body):
             pass
 
         def put_alias(self, **kwargs):
