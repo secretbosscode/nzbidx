@@ -87,6 +87,7 @@ class NNTPClient:
             self._recv_line(sock)
             sock.sendall(b"MODE READER\r\n")
             self._recv_line(sock)
+            self._auth_if_needed(sock)
             sock.sendall(b"LIST\r\n")
             groups: list[str] = []
             while True:
@@ -97,6 +98,19 @@ class NNTPClient:
             return groups
         except Exception:  # pragma: no cover - network issues
             return []
+
+    def _auth_if_needed(self, sock: socket.socket) -> None:
+        user = os.getenv("NNTP_USER")
+        password = os.getenv("NNTP_PASS")
+        if not user or not password:
+            return
+        try:
+            sock.sendall(f"AUTHINFO USER {user}\r\n".encode())
+            self._recv_line(sock)
+            sock.sendall(f"AUTHINFO PASS {password}\r\n".encode())
+            self._recv_line(sock)
+        except Exception:
+            pass
 
     # The real client would issue commands like ``GROUP`` to discover the high
     # water mark for a group.  The simplified test environment has no NNTP
@@ -130,6 +144,7 @@ class NNTPClient:
             self._recv_line(sock)
             sock.sendall(b"MODE READER\r\n")
             self._recv_line(sock)
+            self._auth_if_needed(sock)
             sock.sendall(f"GROUP {group}\r\n".encode())
             response = self._recv_line(sock)
         except Exception:  # pragma: no cover - network issues
