@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir \
 COPY services/api/src/ ./
 COPY services/ingest/src/ ./
 COPY nzbidx_common/ ./nzbidx_common
+COPY db/init/schema.sql ./db/init/schema.sql
 
 USER nzbidx
 VOLUME /tmp

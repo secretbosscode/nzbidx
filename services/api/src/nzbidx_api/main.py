@@ -102,7 +102,7 @@ except Exception:  # pragma: no cover - optional dependency
             self.middleware = middleware or []
 
 
-from .db import ping
+from .db import ping, apply_schema
 from .newznab import (
     adult_content_allowed,
     adult_disabled_xml,
@@ -737,6 +737,7 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[
+        apply_schema,
         init_opensearch,
         init_cache,
         lambda: _set_stop(start_metrics()),
