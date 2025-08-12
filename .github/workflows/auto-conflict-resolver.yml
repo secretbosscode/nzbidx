@@ -5,7 +5,11 @@ on:
       policy:
         description: 'Resolution policy: PREFER_BASE or PREFER_PR'
         required: false
-        default: 'PREFER_BASE'
+        default: 'PREFER_PR'
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main]
   schedule:
     - cron: '17 5 * * *'  # daily
 permissions:
@@ -31,5 +35,5 @@ jobs:
       - name: Resolve conflicts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          POLICY: ${{ github.event.inputs.policy || 'PREFER_BASE' }}
+          POLICY: ${{ github.event.inputs.policy || 'PREFER_PR' }}
         run: bash scripts/resolve_conflicts.sh
