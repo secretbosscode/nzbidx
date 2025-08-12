@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -15,6 +16,8 @@ except Exception:  # pragma: no cover - optional dependency
     text = None  # type: ignore
     AsyncEngine = None  # type: ignore
     create_async_engine = None  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost:5432/postgres")
 DATABASE_URL = os.path.expandvars(DATABASE_URL)
@@ -36,7 +39,18 @@ async def apply_schema() -> None:
     statements = [s.strip() for s in sql.split(";") if s.strip()]
     async with engine.begin() as conn:
         for stmt in statements:
-            await conn.execute(text(stmt))
+            try:
+                await conn.execute(text(stmt))
+            except Exception as exc:
+                # Creating extensions requires superuser privileges.  If the
+                # current role lacks permission, log the failure but continue
+                # applying the remaining schema.
+                if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
+                    logger.info(
+                        "extension_unavailable", extra={"stmt": stmt, "error": str(exc)}
+                    )
+                else:
+                    raise
 
 
 async def ping() -> bool:
