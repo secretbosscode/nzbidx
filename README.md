@@ -90,7 +90,7 @@ of variables are required to run the stack:
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
 | `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
-| `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup | `1` |
+| `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup | `0` |
 | `API_KEYS` | Comma separated API keys | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `on` |
 | `ALLOW_XXX` | `true` enables the XXX category | `false` |
@@ -103,9 +103,9 @@ of variables are required to run the stack:
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 
-Redis persistence is disabled on startup with `CONFIG SET save ""` and
-`appendonly no` to avoid permission errors. Set
-`REDIS_DISABLE_PERSISTENCE=0` to keep the server configuration unchanged.
+Redis persistence remains unchanged unless `REDIS_DISABLE_PERSISTENCE` is set
+to a truthy value. When enabled, the app issues `CONFIG SET save ""` and
+`appendonly no` to avoid permission errors.
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category

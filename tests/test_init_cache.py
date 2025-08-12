@@ -32,3 +32,14 @@ def test_init_cache_disables_persistence(monkeypatch) -> None:
     assert ("save", "") in _FakeRedis.calls
     assert ("appendonly", "no") in _FakeRedis.calls
     main.cache = None
+
+
+def test_init_cache_leaves_persistence_by_default(monkeypatch) -> None:
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.delenv("REDIS_DISABLE_PERSISTENCE", raising=False)
+    monkeypatch.setattr(main, "Redis", _FakeRedis)
+    _FakeRedis.calls = []
+    main.cache = None
+    main.init_cache()
+    assert _FakeRedis.calls == []
+    main.cache = None
