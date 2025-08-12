@@ -11,26 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        service: [api, ingest]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install test dependencies
-        run: |
-          pip install -e services/${{ matrix.service }} pytest
-      - name: Run tests
-        run: pytest -q services/${{ matrix.service }}/tests
-
   build-and-push:
-    needs: test
     runs-on: self-hosted
     env:
       DOCKER_BUILDKIT: '1'

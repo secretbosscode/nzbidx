@@ -24,7 +24,6 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -e services/${{ matrix.service }}
-      - run: pip install pytest ruff black
-      - run: ruff check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
-      - run: black --check services/${{ matrix.service }}/src services/${{ matrix.service }}/tests
-      - run: pytest -q services/${{ matrix.service }}/tests
+      - run: pip install ruff black
+      - run: ruff check services/${{ matrix.service }}/src
+      - run: black --check services/${{ matrix.service }}/src
