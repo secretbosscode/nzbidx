@@ -134,7 +134,10 @@ except Exception:  # pragma: no cover - optional dependency
 
 def connect_db() -> Any:
     """Connect to the database and ensure the release table exists."""
-    url = os.getenv("DATABASE_URL") or ":memory:"
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        url = ":memory:"
+        logger.info("sqlite_default", extra={"url": url})
     parsed = urlparse(url)
 
     if parsed.scheme.startswith("postgres"):
@@ -146,6 +149,7 @@ def connect_db() -> Any:
         elif url.startswith("postgresql+asyncpg://"):
             url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
         if not create_engine or not text:
+            logger.warning("sqlalchemy_unavailable")
             raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
         parsed = urlparse(url)
 
@@ -169,6 +173,9 @@ def connect_db() -> Any:
 
         try:
             return _connect(url)
+        except ModuleNotFoundError as exc:  # pragma: no cover - missing driver
+            logger.warning("psycopg_unavailable", extra={"error": str(exc)})
+            raise RuntimeError("psycopg is required for PostgreSQL URLs") from exc
         except Exception as exc:  # pragma: no cover - network errors
             msg = str(getattr(exc, "orig", exc)).lower()
             if "does not exist" not in msg and "invalid catalog name" not in msg:

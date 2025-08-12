@@ -83,6 +83,15 @@ Quick reference for common operational issues.
 - **Manual run:** `bash scripts/snapshot.sh`
 - **Retention:** set `OS_SNAP_KEEP` to limit repository size; `snapshot.sh` prunes older snapshots.
 
+## Missing database extensions
+- **Symptoms:** warnings about `extension_unavailable` during API startup or errors
+  referencing `pg_trgm` or `vector`.
+- **Checks:** `docker compose logs postgres`, `psql -c '\dx'` to list installed
+  extensions.
+- **Actions:** ensure `db/init/schema.sql` ran under a superuser (via
+  `POSTGRES_USER`).  If using an external database, run the script manually or
+  ask an administrator to install `pg_trgm` and `vector`.
+
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`
 - Health check: `curl -fsS localhost:8080/health`

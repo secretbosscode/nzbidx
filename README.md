@@ -81,7 +81,9 @@ of variables are required to run the stack:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
+| `DATABASE_URL` | Connection string for the API and ingest services | `postgres://nzbidx:nzbidx@postgres:5432/nzbidx` |
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD` | Superuser applied to `schema.sql` during init | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
 | `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
@@ -291,6 +293,10 @@ DATABASE_URL=postgres://nzbidx:nzbidx@postgres:5432/nzbidx
 ```
 
 Schema creation is idempotent; running with a new database is sufficient.
+The required `vector` and `pg_trgm` extensions must be installed by a
+superuser.  The compose files mount `db/init/schema.sql` which runs on database
+startup as `POSTGRES_USER`.  When pointing at an external Postgres instance,
+execute that script manually or have an administrator install the extensions.
 
 ## Backups
 

@@ -46,7 +46,7 @@ async def apply_schema() -> None:
                 # current role lacks permission, log the failure but continue
                 # applying the remaining schema.
                 if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
-                    logger.info(
+                    logger.warning(
                         "extension_unavailable", extra={"stmt": stmt, "error": str(exc)}
                     )
                 else:
