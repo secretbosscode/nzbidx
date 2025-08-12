@@ -44,7 +44,12 @@ def build_nzb_for_release(release_id: str) -> str:
 
     try:
         with conn_cls(
-            host, port, user=user, password=password, readermode=True, timeout=10
+            host,
+            port,
+            user=user,
+            password=password,
+            readermode=True,
+            timeout=10,
         ) as server:
             groups = [g.strip() for g in os.getenv("NNTP_GROUPS", "").split(",") if g.strip()]
             if not groups:
