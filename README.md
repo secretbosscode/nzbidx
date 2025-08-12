@@ -42,7 +42,7 @@ of variables are required to run the stack:
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
-| `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
+| `POSTGRES_PORT` | Host port exposing Postgres | `5432` |
 | `OPENSEARCH_URL` | OpenSearch endpoint | `http://opensearch:9200` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
 | `API_KEYS` | Comma separated API keys | _(empty)_ |
