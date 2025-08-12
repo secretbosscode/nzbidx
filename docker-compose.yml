@@ -3,11 +3,6 @@ services:
     image: nzbidx:latest
     ports:
       - "8080:8080"
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
     healthcheck:
       test:
         [
