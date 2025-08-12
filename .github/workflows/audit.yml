@@ -19,15 +19,12 @@ env:
 jobs:
   pip-audit:
     runs-on: self-hosted
-    strategy:
-      matrix:
-        service: [api, ingest]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -e services/${{ matrix.service }}
+      - run: pip install -e services/api -e services/ingest
       - run: pip install "pip-audit>=2.9.0"
       - run: pip-audit --skip-editable
 
