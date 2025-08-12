@@ -397,3 +397,48 @@ def test_connect_db_falls_back_to_sqlite(monkeypatch) -> None:
     # The fallback connection should be a functioning SQLite database.
     conn.execute("SELECT 1")
     assert conn.__class__.__module__.startswith("sqlite3")
+
+
+def test_nntp_client_uses_single_host_env(monkeypatch) -> None:
+    monkeypatch.delenv("NNTP_HOST_1", raising=False)
+    monkeypatch.setenv("NNTP_HOST", "example.org")
+
+    import nzbidx_ingest.nntp_client as nntp_client
+
+    calls: dict[str, tuple[str, int]] = {}
+
+    class DummySock:
+        def __enter__(self):  # pragma: no cover - trivial
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
+            pass
+
+        def recv(self, _n: int) -> bytes:
+            return b"200 ready"
+
+        def sendall(self, _data: bytes) -> None:  # pragma: no cover - trivial
+            pass
+
+    def fake_create_connection(addr, timeout=10):  # pragma: no cover - simple
+        calls["addr"] = addr
+        return DummySock()
+
+    monkeypatch.setattr(nntp_client.socket, "create_connection", fake_create_connection)
+
+    captured: dict[str, object] = {}
+
+    def fake_talk(
+        self, _sock, host: str, port: int
+    ) -> None:  # pragma: no cover - simple
+        captured["host"] = host
+        captured["port"] = port
+
+    monkeypatch.setattr(nntp_client.NNTPClient, "_talk", fake_talk)
+
+    client = nntp_client.NNTPClient()
+    client.connect()
+
+    assert calls["addr"] == ("example.org", 119)
+    assert captured["host"] == "example.org"
+    assert captured["port"] == 119
