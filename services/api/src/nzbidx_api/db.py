@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from importlib import resources
+from urllib.parse import urlparse, urlunparse
 
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -38,7 +39,8 @@ async def apply_schema() -> None:
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
     )
     statements = [s.strip() for s in sql.split(";") if s.strip()]
-    async with engine.connect() as conn:
+
+    async def _apply(conn: Any) -> None:
         for stmt in statements:
             try:
                 await conn.execute(text(stmt))
@@ -55,6 +57,34 @@ async def apply_schema() -> None:
                     )
                 else:
                     raise
+
+    try:
+        async with engine.connect() as conn:
+            await _apply(conn)
+    except Exception as exc:
+        msg = str(getattr(exc, "orig", exc)).lower()
+        if "does not exist" not in msg and "invalid catalog name" not in msg:
+            raise
+        await _create_database(DATABASE_URL)
+        async with engine.connect() as conn:
+            await _apply(conn)
+
+
+async def _create_database(url: str) -> None:
+    """Create the PostgreSQL database referenced by ``url`` if missing."""
+    if not create_async_engine or not text:
+        return
+    parsed = urlparse(url)
+    if not parsed.scheme.startswith("postgres"):
+        return
+    dbname = parsed.path.lstrip("/")
+    admin_url = urlunparse(parsed._replace(path="/postgres"))
+    admin_engine = create_async_engine(admin_url, echo=False)
+    try:
+        async with admin_engine.begin() as conn:
+            await conn.execute(text(f'CREATE DATABASE "{dbname}"'))
+    finally:
+        await admin_engine.dispose()
 
 
 async def ping() -> bool:
