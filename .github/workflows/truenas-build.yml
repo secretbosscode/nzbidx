@@ -1,4 +1,4 @@
-name: Build and Push Docker Images
+name: Build and Push Docker Image
 
 on:
   push:
@@ -15,13 +15,6 @@ jobs:
     runs-on: self-hosted
     env:
       DOCKER_BUILDKIT: '1'
-    strategy:
-      matrix:
-        include:
-          - dockerfile: services/api/Dockerfile
-            image: nzbidx-api
-          - dockerfile: services/ingest/Dockerfile
-            image: nzbidx-ingest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -51,10 +44,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: services/Dockerfile
           outputs: |
-            type=registry,registry.insecure=true,name=truenas:5000/${{ matrix.image }}:${{ steps.vars.outputs.tag }},push=true
-            type=registry,registry.insecure=true,name=truenas:5000/${{ matrix.image }}:latest,push=true
+            type=registry,registry.insecure=true,name=truenas:5000/nzbidx:${{ steps.vars.outputs.tag }},push=true
+            type=registry,registry.insecure=true,name=truenas:5000/nzbidx:latest,push=true
           sbom: true
           provenance: true
           cache-from: type=local,src=~/.cache/buildx
