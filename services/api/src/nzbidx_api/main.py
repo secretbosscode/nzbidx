@@ -371,6 +371,12 @@ def init_cache() -> None:
     try:
         client = Redis.from_url(url)
         client.ping()
+        if os.getenv("REDIS_DISABLE_PERSISTENCE", "1") in {"1", "true", "TRUE", "True"}:
+            try:
+                client.config_set("save", "")
+                client.config_set("appendonly", "no")
+            except Exception as exc:
+                logger.warning("Failed to disable Redis persistence: %s", exc)
         cache = client
         logger.info("Redis ready")
     except Exception as exc:  # pragma: no cover - optional dependency
