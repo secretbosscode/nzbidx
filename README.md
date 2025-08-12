@@ -393,5 +393,5 @@ API (which also runs the ingest worker) with readiness and liveness probes. See
 If you find this project useful, consider supporting its development by donating
 to the following Bitcoin address:
 
-`bitcoin:BC1QT3CSUJELEDXRXTRNQHQCY93DW0D07SYHT5V9XF`
+`BC1QT3CSUJELEDXRXTRNQHQCY93DW0D07SYHT5V9XF`
 
