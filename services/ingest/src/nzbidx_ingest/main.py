@@ -133,7 +133,14 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 def connect_db() -> Any:
-    """Connect to the database and ensure the release table exists."""
+    """Connect to the database and ensure the release table exists.
+
+    If ``DATABASE_URL`` points at PostgreSQL the connection will use the
+    ``psycopg`` driver.  When that driver is missing or unavailable, the
+    function falls back to an in-memory SQLite database so the ingest service
+    can still run in a degraded mode.
+    """
+
     url = os.getenv("DATABASE_URL")
     if not url:
         url = ":memory:"
@@ -156,8 +163,10 @@ def connect_db() -> Any:
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
             with engine.begin() as conn:  # type: ignore[call-arg]
-                conn.execute(
-                    text(
+                for stmt in (
+                    "CREATE EXTENSION IF NOT EXISTS vector",
+                    "CREATE EXTENSION IF NOT EXISTS pg_trgm",
+                    (
                         """
                         CREATE TABLE IF NOT EXISTS release (
                             id SERIAL PRIMARY KEY,
@@ -167,15 +176,26 @@ def connect_db() -> Any:
                             tags TEXT
                         )
                         """
-                    )
-                )
+                    ),
+                ):
+                    try:
+                        conn.execute(text(stmt))
+                    except Exception as exc:
+                        if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
+                            logger.warning(
+                                "extension_unavailable",
+                                extra={"stmt": stmt, "error": str(exc)},
+                            )
+                        else:
+                            raise
             return engine.raw_connection()
 
         try:
             return _connect(url)
         except ModuleNotFoundError as exc:  # pragma: no cover - missing driver
             logger.warning("psycopg_unavailable", extra={"error": str(exc)})
-            raise RuntimeError("psycopg is required for PostgreSQL URLs") from exc
+            logger.info("sqlite_fallback", extra={"url": ":memory:"})
+            return sqlite3.connect(":memory:")
         except Exception as exc:  # pragma: no cover - network errors
             msg = str(getattr(exc, "orig", exc)).lower()
             if "does not exist" not in msg and "invalid catalog name" not in msg:

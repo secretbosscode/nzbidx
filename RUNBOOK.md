@@ -92,6 +92,13 @@ Quick reference for common operational issues.
   `POSTGRES_USER`).  If using an external database, run the script manually or
   ask an administrator to install `pg_trgm` and `vector`.
 
+## Missing database driver
+- **Symptoms:** startup logs show `ModuleNotFoundError: No module named 'psycopg'`
+  or `psycopg_unavailable` and ingest falls back to SQLite.
+- **Checks:** `pip show psycopg` or rebuild the service image.
+- **Actions:** install the driver with `pip install psycopg[binary]>=3.1` or
+  rebuild the Docker image so it installs dependencies from `pyproject.toml`.
+
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`
 - Health check: `curl -fsS localhost:8080/health`
