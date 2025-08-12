@@ -1,0 +1,32 @@
+name: Branch Cleanup
+
+on:
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete merged branches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin --prune
+          default_branch=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+          branches=$(git branch -r --merged origin/$default_branch | sed 's|^ *origin/||')
+          branches=$(echo "$branches" | grep -vE "^($default_branch|HEAD)$" || true)
+          for branch in $branches; do
+            echo "Deleting $branch"
+            git push origin --delete "$branch" || echo "Failed to delete $branch"
+          done
