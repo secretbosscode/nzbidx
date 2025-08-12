@@ -168,14 +168,7 @@ after `ILM_DELETE_DAYS`.
 
 ## Newznab Categories and Adult Content
 
-The API exposes a handful of default category IDs:
-
-    Movies: 2000
-    TV: 5000
-    Audio/Music: 3000
-    EBook: 7020
-    XXX/Adult: 6000
-
+The API exposes the full predefined set of category IDs by default.
 Categories can be customized without redeploying by providing a JSON
 configuration file via the ``CATEGORY_CONFIG`` environment variable. The file
 should contain an array of objects with ``id`` and ``name`` keys, for example:
@@ -187,9 +180,9 @@ should contain an array of objects with ``id`` and ``name`` keys, for example:
 ]
 ```
 
-When ``CATEGORY_CONFIG`` is not set or cannot be read, the defaults above are
-used. The individual ``*_CAT_ID`` environment variables remain supported as
-fallbacks for overriding the built-in defaults.
+When ``CATEGORY_CONFIG`` is not set or cannot be read, the predefined categories
+listed below are used. The individual ``*_CAT_ID`` environment variables remain
+supported as fallbacks for overriding the built-in defaults.
 
 ### Predefined Category IDs
 
