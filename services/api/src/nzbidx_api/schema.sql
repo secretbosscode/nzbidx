@@ -28,7 +28,7 @@ ALTER TABLE IF EXISTS release
     ALTER COLUMN tags TYPE TEXT[]
     USING (
         CASE
-            WHEN pg_typeof(tags) = 'text'::regtype THEN string_to_array(tags, ',')
+            WHEN pg_typeof(tags) = 'text'::regtype THEN string_to_array(tags::text, ',')
             ELSE tags::TEXT[]
         END
     );
