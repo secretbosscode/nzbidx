@@ -7,13 +7,12 @@ import time
 from threading import Event
 
 from .config import (
-    NNTP_GROUPS,
     INGEST_BATCH,
     INGEST_POLL_SECONDS,
     INGEST_OS_LATENCY_MS,
     CB_RESET_SECONDS,
 )
-from . import cursors
+from . import config, cursors
 from .nntp_client import NNTPClient
 from .parsers import normalize_subject, detect_language
 from .main import (
@@ -40,18 +39,28 @@ logger = logging.getLogger(__name__)
 
 def run_once() -> None:
     """Process a single batch for each configured NNTP group."""
+    groups = config.NNTP_GROUPS or config._load_groups()
+    if not groups:
+        logger.info("ingest_no_groups")
+        return
+    config.NNTP_GROUPS = groups
+
     client = NNTPClient()
     client.connect()
     db = connect_db()
     os_client = connect_opensearch()
 
-    for group in NNTP_GROUPS:
+    for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
         end = start + INGEST_BATCH - 1
         high = client.high_water_mark(group)
         headers = client.xover(group, start, end)
         if not headers:
+            logger.info(
+                "ingest_idle",
+                extra={"group": group, "cursor": last, "high_water": high},
+            )
             continue
         metrics = {"processed": 0, "inserted": 0, "indexed": 0}
         last_os_latency = 0.0
