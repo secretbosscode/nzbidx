@@ -45,13 +45,57 @@ def is_adult_category(cat: Optional[str]) -> bool:
 
 
 def _default_categories() -> list[dict[str, str]]:
-    """Return built-in categories with IDs from environment defaults."""
+    """Return the full set of built-in Newznab categories.
+
+    ``*_CAT_ID`` environment variables continue to allow overriding the
+    primary category IDs.
+    """
+
     return [
+        {"id": "0000", "name": "Reserved"},
+        {"id": "1000", "name": "Console"},
+        {"id": "1010", "name": "Console/NDS"},
+        {"id": "1020", "name": "Console/PSP"},
+        {"id": "1030", "name": "Console/Wii"},
+        {"id": "1040", "name": "Console/XBox"},
+        {"id": "1050", "name": "Console/XBox 360"},
+        {"id": "1060", "name": "Console/Wiiware"},
+        {"id": "1070", "name": "Console/XBox 360 DLC"},
         {"id": os.getenv("MOVIES_CAT_ID", "2000"), "name": "Movies"},
+        {"id": "2010", "name": "Movies/Foreign"},
+        {"id": "2020", "name": "Movies/Other"},
+        {"id": "2030", "name": "Movies/SD"},
+        {"id": "2040", "name": "Movies/HD"},
+        {"id": "2050", "name": "Movies/BluRay"},
+        {"id": "2060", "name": "Movies/3D"},
+        {"id": os.getenv("AUDIO_CAT_ID", "3000"), "name": "Audio"},
+        {"id": "3010", "name": "Audio/MP3"},
+        {"id": "3020", "name": "Audio/Video"},
+        {"id": "3030", "name": "Audio/Audiobook"},
+        {"id": "3040", "name": "Audio/Lossless"},
+        {"id": "4000", "name": "PC"},
+        {"id": "4010", "name": "PC/0day"},
+        {"id": "4020", "name": "PC/ISO"},
+        {"id": "4030", "name": "PC/Mac"},
+        {"id": "4040", "name": "PC/Mobile-Other"},
+        {"id": "4050", "name": "PC/Games"},
+        {"id": "4060", "name": "PC/Mobile-iOS"},
+        {"id": "4070", "name": "PC/Mobile-Android"},
         {"id": os.getenv("TV_CAT_ID", "5000"), "name": "TV"},
-        {"id": os.getenv("AUDIO_CAT_ID", "3000"), "name": "Audio/Music"},
+        {"id": "5020", "name": "TV/Foreign"},
+        {"id": "5030", "name": "TV/SD"},
+        {"id": "5040", "name": "TV/HD"},
+        {"id": "5050", "name": "TV/Other"},
+        {"id": "5060", "name": "TV/Sport"},
+        {"id": os.getenv("ADULT_CAT_ID", "6000"), "name": "XXX"},
+        {"id": "6010", "name": "XXX/DVD"},
+        {"id": "6020", "name": "XXX/WMV"},
+        {"id": "6030", "name": "XXX/XviD"},
+        {"id": "6040", "name": "XXX/x264"},
+        {"id": "7000", "name": "Other"},
+        {"id": "7010", "name": "Misc"},
         {"id": os.getenv("BOOKS_CAT_ID", "7020"), "name": "EBook"},
-        {"id": os.getenv("ADULT_CAT_ID", "6000"), "name": "XXX/Adult"},
+        {"id": "7030", "name": "Comics"},
     ]
 
 
@@ -77,7 +121,7 @@ CATEGORIES = _load_categories()
 _CATEGORY_MAP = {c["name"]: c["id"] for c in CATEGORIES}
 MOVIES_CAT = _CATEGORY_MAP.get("Movies", "2000")
 TV_CAT = _CATEGORY_MAP.get("TV", "5000")
-AUDIO_CAT = _CATEGORY_MAP.get("Audio/Music", "3000")
+AUDIO_CAT = _CATEGORY_MAP.get("Audio", _CATEGORY_MAP.get("Audio/Music", "3000"))
 BOOKS_CAT = _CATEGORY_MAP.get("EBook", "7020")
 
 

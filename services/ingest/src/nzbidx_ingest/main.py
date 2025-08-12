@@ -81,6 +81,48 @@ CATEGORY_MAP = {
 }
 
 
+# Keyword hints used to map NNTP groups to categories
+GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
+    ("xbox360", "console_xbox360"),
+    ("xbox", "console_xbox"),
+    ("wiiware", "console_wiiware"),
+    ("wii", "console_wii"),
+    ("psp", "console_psp"),
+    ("playstation", "console_psp"),
+    ("nds", "console_nds"),
+    ("console", "console"),
+    ("0day", "pc_0day"),
+    ("iso", "pc_iso"),
+    ("mac", "pc_mac"),
+    ("ios", "pc_mobile_ios"),
+    ("android", "pc_mobile_android"),
+    ("games", "pc_games"),
+    ("pc", "pc"),
+    ("movies", "movies"),
+    ("movie", "movies"),
+    ("video", "movies"),
+    ("tv", "tv"),
+    ("series", "tv"),
+    ("sport", "tv_sport"),
+    ("music", "audio"),
+    ("audio", "audio"),
+    ("mp3", "audio_mp3"),
+    ("flac", "audio_lossless"),
+    ("audiobook", "audio_audiobook"),
+    ("ebooks", "ebook"),
+    ("ebook", "ebook"),
+    ("book", "ebook"),
+    ("books", "ebook"),
+    ("xxx", "xxx"),
+    ("sex", "xxx"),
+    ("adult", "xxx"),
+    ("comics", "comics"),
+    ("comic", "comics"),
+    ("misc", "misc"),
+    ("other", "other"),
+]
+
+
 def connect_db() -> sqlite3.Connection:
     """Connect to the database and ensure the release table exists."""
     url = os.getenv("DATABASE_URL") or ":memory:"
@@ -169,16 +211,9 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
 
     if group:
         g = group.lower()
-        if "movie" in g or "movies" in g or "video" in g:
-            return CATEGORY_MAP["movies"]
-        if "tv" in g or "series" in g:
-            return CATEGORY_MAP["tv"]
-        if any(k in g for k in ("music", "audio", "mp3", "flac")):
-            return CATEGORY_MAP["audio"]
-        if any(k in g for k in ("book", "ebook", "ebooks")):
-            return CATEGORY_MAP["ebook"]
-        if any(k in g for k in ("xxx", "sex", "adult")):
-            return CATEGORY_MAP["xxx"]
+        for key, cat in GROUP_CATEGORY_HINTS:
+            if key in g:
+                return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
     for tag in extract_tags(subject):

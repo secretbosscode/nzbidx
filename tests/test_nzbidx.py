@@ -9,8 +9,11 @@ from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
+# ruff: noqa: E402 - path manipulation before imports
+
 # Ensure local packages are importable
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 sys.path.append(str(REPO_ROOT / "services" / "ingest" / "src"))
 
@@ -98,6 +101,12 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
     assert body_holder["body"]["sort"] == [{"posted_at": {"order": "desc"}}]
 
 
+def test_infer_category_from_group() -> None:
+    """Group names should hint at the correct category."""
+    assert _infer_category("Test", group="alt.binaries.psp") == CATEGORY_MAP["console_psp"]
+    assert _infer_category("Test", group="alt.binaries.pc.games") == CATEGORY_MAP["pc_games"]
+
+
 def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
     """caps.xml should reflect configured categories."""
     cfg = tmp_path / "cats.json"
@@ -115,6 +124,15 @@ def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
     xml = reloaded.caps_xml()
     assert '<category id="123" name="Foo"/>' in xml
     assert '<category id="6000"' in xml
+
+
+def test_caps_xml_defaults(monkeypatch) -> None:
+    """caps.xml should include all predefined categories by default."""
+    monkeypatch.delenv("CATEGORY_CONFIG", raising=False)
+    reloaded = importlib.reload(newznab)
+    xml = reloaded.caps_xml()
+    assert '<category id="1000" name="Console"/>' in xml
+    assert '<category id="7030" name="Comics"/>' in xml
 
 
 def test_failed_fetch_cached(monkeypatch) -> None:
