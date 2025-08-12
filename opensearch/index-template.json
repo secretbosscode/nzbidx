@@ -3,7 +3,9 @@
   "template": {
     "settings": {
       "index.lifecycle.name": "nzbidx-releases-policy",
-      "index.lifecycle.rollover_alias": "nzbidx-releases"
+      "index.lifecycle.rollover_alias": "nzbidx-releases",
+      "index.refresh_interval": "30s",
+      "index.number_of_replicas": 0
     },
     "mappings": {
       "properties": {

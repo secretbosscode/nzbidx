@@ -22,6 +22,15 @@ The API exposes a helper that leverages an `ivfflat` index for efficient
 nearest-neighbour searches against release embeddings using the `pgvector`
 extension.
 
+## Performance Tuning
+
+The default compose files apply a few settings aimed at keeping searches fast:
+
+* **OpenSearch** runs with a fixed 512 MB heap via `OPENSEARCH_JAVA_OPTS` and uses
+  a slower `30s` refresh interval with replicas disabled for better write throughput.
+* **Redis** limits memory to 256 MB and evicts keys with a `volatile-lru` policy to
+  keep frequently accessed results in RAM.
+
 ## Quickstart
 
     docker compose up -d
