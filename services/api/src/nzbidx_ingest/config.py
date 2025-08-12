@@ -2,18 +2,30 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import List
 
 from .nntp_client import NNTPClient
 
+logger = logging.getLogger(__name__)
+
 
 def _load_groups() -> List[str]:
     env = os.getenv("NNTP_GROUPS", "")
     if env:
-        return [g.strip() for g in env.split(",") if g.strip()]
+        groups = [g.strip() for g in env.split(",") if g.strip()]
+        logger.info("ingest_groups_config", extra={"groups": groups})
+        return groups
+
     client = NNTPClient()
-    return client.list_groups()
+    groups = client.list_groups()
+    if groups:
+        logger.info("ingest_groups_discovered", extra={"groups": groups})
+    else:
+        host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
+        logger.warning("ingest_groups_missing", extra={"host": host})
+    return groups
 
 
 NNTP_GROUPS: List[str] = _load_groups()
