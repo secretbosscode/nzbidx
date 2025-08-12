@@ -15,13 +15,13 @@ class NNTPClient:
 
     def connect(self) -> None:
         """Connect to the NNTP provider specified via environment variables."""
-        host = os.getenv("NNTP_HOST_1")
+        host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
         if not host:
             logger.info("dry-run: no NNTP providers configured")
             return
 
-        port = int(os.getenv("NNTP_PORT_1", "119"))
-        use_ssl = os.getenv("NNTP_SSL_1") == "1"
+        port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
+        use_ssl = (os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL") or "0") == "1"
 
         try:
             if use_ssl:
@@ -56,12 +56,12 @@ class NNTPClient:
 
     def list_groups(self) -> list[str]:
         """Return a list of available NNTP groups."""
-        host = os.getenv("NNTP_HOST_1")
+        host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
         if not host:
             return []
 
-        port = int(os.getenv("NNTP_PORT_1", "119"))
-        use_ssl = os.getenv("NNTP_SSL_1") == "1"
+        port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
+        use_ssl = (os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL") or "0") == "1"
 
         try:
             if use_ssl:
@@ -97,12 +97,12 @@ class NNTPClient:
     # connection details are present it performs a minimal ``GROUP`` command to
     # obtain the highest article number.
     def high_water_mark(self, group: str) -> int:
-        host = os.getenv("NNTP_HOST_1")
+        host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
         if not host:
             return 0
 
-        port = int(os.getenv("NNTP_PORT_1", "119"))
-        use_ssl = os.getenv("NNTP_SSL_1") == "1"
+        port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
+        use_ssl = (os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL") or "0") == "1"
 
         try:
             if use_ssl:
