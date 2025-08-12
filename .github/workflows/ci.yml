@@ -24,8 +24,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install ruff black pytest
-      - run: ruff check services/api/src services/ingest/src
-      - run: black --check services/api/src services/ingest/src
+      - run: ruff check services/api/src
+      - run: black --check services/api/src
       - run: pytest
 
   pip-audit:
@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -e services/api -e services/ingest
+      - run: pip install -e services/api
       - run: pip install "pip-audit>=2.9.0"
       - run: pip-audit --skip-editable
 
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -e services/api -e services/ingest
+      - run: pip install -e services/api
       - run: pip install cyclonedx-bom
       - run: cyclonedx-py environment -o sbom.json
       - uses: actions/upload-artifact@v4
