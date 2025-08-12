@@ -2,13 +2,10 @@
 
 If you find this project useful, donations are welcome at `BC1QT3CSUJELEDXRXTRNQHQCY93DW0D07SYHT5V9XF`.
 
-NZBIdx is a lightweight, Newznab-compatible indexer built around two
-Python services:
-
-* **API** – a FastAPI/Starlette application exposing search and NZB
-  retrieval endpoints backed by OpenSearch and Redis.
-* **Ingest** – a small worker that parses NNTP headers, normalises
-  subjects and indexes metadata into OpenSearch.
+NZBIdx is a lightweight, Newznab-compatible indexer implemented as a single
+Python application. It exposes FastAPI endpoints backed by OpenSearch and
+Redis and runs a background worker that parses NNTP headers, normalises
+subjects and indexes metadata into OpenSearch.
 
 Only release metadata is stored; binaries are discarded during ingest.
 
@@ -19,7 +16,7 @@ fast as the dataset grows. The schema enables the extension and creates the
 indexes during initialization; see `db/init/schema.sql` for details.
 
 Connections to PostgreSQL require the [`psycopg` driver](https://www.psycopg.org/).
-The container images install `psycopg[binary] >= 3.1` from each service's
+The container images install `psycopg[binary] >= 3.1` from the application's
 `pyproject.toml`. The `pg_trgm` and `vector` extensions must be installed by a
 superuser—`docker-compose` mounts `db/init/schema.sql` so the database is
 provisioned with the required extensions during initialisation.
@@ -87,7 +84,7 @@ of variables are required to run the stack:
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `DATABASE_URL` | Connection string for the API and ingest services | `postgres://nzbidx:nzbidx@postgres:5432/nzbidx` |
+| `DATABASE_URL` | Connection string for the application | `postgres://nzbidx:nzbidx@postgres:5432/nzbidx` |
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Superuser applied to `schema.sql` during init | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
@@ -98,18 +95,18 @@ of variables are required to run the stack:
 | `ALLOW_XXX` | `true` enables the XXX category | `false` |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
-| `NNTP_HOST` | NNTP provider host | _(required for ingest)_ |
+| `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
 | `NNTP_PORT` | NNTP port | `119` |
 | `NNTP_SSL` | `1` enables SSL, `0` forces plaintext; auto when unset (SSL if port 563) | _(auto)_ |
-| `NNTP_USER` | NNTP username | _(required for ingest)_ |
-| `NNTP_PASS` | NNTP password | _(required for ingest)_ |
+| `NNTP_USER` | NNTP username | _(required for ingest worker)_ |
+| `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category
 IDs such as `MOVIES_CAT_ID`). Review the configuration modules in
-`services/api` and `services/ingest` for the full list. Consider whether extra
-variables are necessary before adding them—defaults cover most cases.
+`services/api` for the full list. Consider whether extra variables are
+necessary before adding them—defaults cover most cases.
 
 ## Seed OpenSearch
 
@@ -276,18 +273,13 @@ Use the production override file to run the stack with persistent data stores an
 
 ## Development
 
-Run linters and tests for each service:
+Run linters and tests:
 
 ```
 cd services/api
 pip install -e .
 ruff check src tests
 pytest
-
-    cd ../ingest
-    pip install -e .
-    ruff check src tests
-    pytest
 ```
 
 ## Database
@@ -309,9 +301,9 @@ and apply the schema as described in [docs/db.md](docs/db.md). Once the
 extensions are installed the `nzbidx` role only needs ownership of the
 database—no additional privileges are required.
 
-Both services use the `psycopg` driver for PostgreSQL connections.  The Docker
+The application uses the `psycopg` driver for PostgreSQL connections. The Docker
 images install it from `pyproject.toml`, but local environments may need to run
-`pip install psycopg[binary]>=3.1`.  Without the driver the ingest service will
+`pip install psycopg[binary]>=3.1`. Without the driver the ingest worker will
 log `psycopg_unavailable` and fall back to SQLite.
 
 ## Backups
@@ -364,7 +356,7 @@ Local audit and SBOM generation:
 
 ```bash
 pip install pip-audit cyclonedx-py
-pip install -e services/api -e services/ingest
+pip install -e services/api
 pip-audit
 cyclonedx-py environment -o sbom.json
 ```

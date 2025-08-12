@@ -1,4 +1,4 @@
-"""Parsers for ingest service."""
+"""Parsers for the ingest worker."""
 
 from __future__ import annotations
 

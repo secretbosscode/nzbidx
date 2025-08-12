@@ -1,4 +1,4 @@
-"""Minimal NNTP client used by the ingest service."""
+"""Minimal NNTP client used by the ingest worker."""
 
 from __future__ import annotations
 

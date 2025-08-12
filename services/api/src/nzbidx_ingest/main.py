@@ -1,4 +1,4 @@
-"""Entry point for the ingest service."""
+"""Entry point for the ingest worker."""
 
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ def connect_db() -> Any:
 
     If ``DATABASE_URL`` points at PostgreSQL the connection will use the
     ``psycopg`` driver.  When that driver is missing or unavailable, the
-    function falls back to an in-memory SQLite database so the ingest service
+    function falls back to an in-memory SQLite database so the ingest worker
     can still run in a degraded mode.
     """
 
@@ -387,7 +387,7 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
 
 
 def main() -> int:
-    """Run the ingest service."""
+    """Run the ingest worker."""
     load_dotenv()
     setup_logging()
     from .ingest_loop import run_forever

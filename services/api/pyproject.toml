@@ -15,6 +15,7 @@ dependencies = [
     "asyncpg",
     "psycopg[binary]>=3.1",
     "redis",
+    "python-dotenv",
     "setuptools>=78.1.1",
 ]
 
