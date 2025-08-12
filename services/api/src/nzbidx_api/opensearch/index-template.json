@@ -1,0 +1,27 @@
+{
+  "index_patterns": ["nzbidx-releases-*"],
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "nzbidx-releases-policy",
+      "index.lifecycle.rollover_alias": "nzbidx-releases",
+      "index.refresh_interval": "30s",
+      "index.number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "norm_title": {
+          "type": "text",
+          "fields": {
+            "keyword": { "type": "keyword" }
+          }
+        },
+        "category": { "type": "keyword" },
+        "subcat": { "type": "keyword" },
+        "language": { "type": "keyword" },
+        "tags": { "type": "keyword" },
+        "posted_at": { "type": "date" },
+        "size_bytes": { "type": "long" }
+      }
+    }
+  }
+}

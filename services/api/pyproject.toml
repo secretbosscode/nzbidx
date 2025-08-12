@@ -26,4 +26,5 @@ py-modules = ["nntplib"]
 
 [tool.setuptools.package-data]
 "nzbidx_api" = ["schema.sql"]
+"nzbidx_api.opensearch" = ["*.json"]
 
