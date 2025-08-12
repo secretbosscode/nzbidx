@@ -46,8 +46,8 @@ of variables are required to run the stack:
 | `OPENSEARCH_URL` | OpenSearch endpoint | `http://opensearch:9200` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
 | `API_KEYS` | Comma separated API keys | _(empty)_ |
-| `SAFESEARCH` | `on` hides adult categories | `on` |
-| `ALLOW_XXX` | `true` enables the XXX category | `false` |
+| `SAFESEARCH` | `on` hides adult categories | `off` |
+| `ALLOW_XXX` | `true` enables the XXX category | `true` |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest)_ |
@@ -211,13 +211,12 @@ fallbacks for overriding the built-in defaults.
 
 ### SafeSearch and XXX Control
 
-* `SAFESEARCH` (default `on`): when enabled, adult categories are removed from
-  all responses and from the `caps` category listing. Set to `off` to allow
-  adult categories to be returned.
-* `ALLOW_XXX` (default `false`): when `false`, the XXX category (id `6000`) is
+* `SAFESEARCH` (default `off`): when enabled (`on`), adult categories are
+  removed from all responses and from the `caps` category listing.
+* `ALLOW_XXX` (default `true`): when `false`, the XXX category (id `6000`) is
   entirely disabled. Requests that explicitly target this category receive an
-  empty RSS feed with a comment noting that adult content is disabled. Enable
-  this flag **and** set `SAFESEARCH=off` to expose XXX results.
+  empty RSS feed with a comment noting that adult content is disabled. Leave
+  this flag enabled and ensure `SAFESEARCH=off` to expose XXX results.
 
 ## Production Deployment
 
@@ -227,8 +226,8 @@ Use the production override file to run the stack with persistent data stores an
 
 ## Configuration
 
-- `ALLOW_XXX` controls whether adult content is searchable. It is disabled by
-  default and must be explicitly set to `true` to opt in.
+- `ALLOW_XXX` controls whether adult content is searchable. It is enabled by
+  default and can be set to `false` to disable it.
 - Only metadata is indexed; binaries are stripped during ingest. An admin
   takedown endpoint (`POST /api/admin/takedown`) accepts a release ID and removes
   it from the search index. The endpoint requires a valid `X-Api-Key`.

@@ -30,8 +30,8 @@ class NzbFetchError(Exception):
 
 def adult_content_allowed() -> bool:
     """Return ``True`` if XXX content may be shown."""
-    allow_xxx = os.getenv("ALLOW_XXX", "false").lower() == "true"
-    safesearch_on = os.getenv("SAFESEARCH", "on").lower() != "off"
+    allow_xxx = os.getenv("ALLOW_XXX", "true").lower() != "false"
+    safesearch_on = os.getenv("SAFESEARCH", "off").lower() == "on"
     return allow_xxx and not safesearch_on
 
 
