@@ -34,8 +34,8 @@ services:
       OPENSEARCH_URL: http://opensearch:9200
       REDIS_URL: redis://redis:6379/0
       API_KEYS: dev
-      SAFESEARCH: "on"
-      ALLOW_XXX: "false"
+      SAFESEARCH: "off"
+      ALLOW_XXX: "true"
       RATE_LIMIT: 60
       RATE_WINDOW: 60
       NNTP_HOST: ""
