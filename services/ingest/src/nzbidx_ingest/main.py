@@ -8,7 +8,7 @@ import re
 import sqlite3
 from pathlib import Path
 from typing import Optional, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 try:
     from dotenv import load_dotenv
@@ -147,22 +147,39 @@ def connect_db() -> Any:
             url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
         if not create_engine or not text:
             raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
-        engine = create_engine(url, echo=False, future=True)
-        with engine.begin() as conn:  # type: ignore[call-arg]
-            conn.execute(
-                text(
-                    """
-                    CREATE TABLE IF NOT EXISTS release (
-                        id SERIAL PRIMARY KEY,
-                        norm_title TEXT UNIQUE,
-                        category TEXT,
-                        language TEXT,
-                        tags TEXT
+        parsed = urlparse(url)
+
+        def _connect(u: str) -> Any:
+            engine = create_engine(u, echo=False, future=True)
+            with engine.begin() as conn:  # type: ignore[call-arg]
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS release (
+                            id SERIAL PRIMARY KEY,
+                            norm_title TEXT UNIQUE,
+                            category TEXT,
+                            language TEXT,
+                            tags TEXT
+                        )
+                        """
                     )
-                    """
                 )
-            )
-        return engine.raw_connection()
+            return engine.raw_connection()
+
+        try:
+            return _connect(url)
+        except Exception as exc:  # pragma: no cover - network errors
+            msg = str(getattr(exc, "orig", exc)).lower()
+            if "does not exist" not in msg and "invalid catalog name" not in msg:
+                raise
+            dbname = parsed.path.lstrip("/")
+            admin_url = urlunparse(parsed._replace(path="/postgres"))
+            engine = create_engine(admin_url, echo=False, future=True)
+            with engine.begin() as conn:  # type: ignore[call-arg]
+                conn.execute(text(f'CREATE DATABASE "{dbname}"'))
+            engine.dispose()
+            return _connect(url)
 
     # Treat remaining URLs as SQLite database files.  Only attempt to create
     # directories for plain file paths; URLs with a scheme (``foo://``) should

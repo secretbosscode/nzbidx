@@ -296,3 +296,65 @@ def test_connect_db_postgres_single_slash(monkeypatch) -> None:
     conn = connect_db()
     assert calls["url"] == "postgresql+psycopg://user@host/db"
     assert hasattr(conn, "cursor")
+
+
+def test_connect_db_creates_database(monkeypatch) -> None:
+    calls: list[str] = []
+    executed: list[str] = []
+
+    class DummyConn:
+        def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
+            executed.append(stmt)
+
+    class DummyCtx:
+        def __enter__(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - trivial
+            return None
+
+    class Raw:
+        def cursor(self):  # pragma: no cover - trivial
+            class C:
+                rowcount = 0
+
+                def execute(self, *a, **k) -> None:
+                    return None
+
+            return C()
+
+        def commit(self) -> None:  # pragma: no cover - trivial
+            return None
+
+    class DummyEngine:
+        def begin(self) -> DummyCtx:  # pragma: no cover - trivial
+            return DummyCtx()
+
+        def raw_connection(self):  # pragma: no cover - trivial
+            return Raw()
+
+        def dispose(self) -> None:  # pragma: no cover - trivial
+            return None
+
+    state = {"fail": True}
+
+    def fake_create_engine(url: str, echo: bool = False, future: bool = True):
+        calls.append(url)
+        if state["fail"]:
+            state["fail"] = False
+            err = Exception("database does not exist")
+            err.orig = Exception("database does not exist")
+            raise err
+        return DummyEngine()
+
+    monkeypatch.setenv("DATABASE_URL", "postgres://user@host/db")
+    monkeypatch.setattr(main, "create_engine", fake_create_engine)
+    monkeypatch.setattr(main, "text", lambda s: s)
+    conn = connect_db()
+    assert calls == [
+        "postgresql+psycopg://user@host/db",
+        "postgresql+psycopg://user@host/postgres",
+        "postgresql+psycopg://user@host/db",
+    ]
+    assert any(stmt.startswith("CREATE DATABASE") for stmt in executed)
+    assert hasattr(conn, "cursor")
