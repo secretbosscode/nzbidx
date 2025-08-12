@@ -26,6 +26,14 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS poster_id INTEGER REFEREN
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS tags TEXT[];
+ALTER TABLE IF EXISTS release
+    ALTER COLUMN tags TYPE TEXT[]
+    USING (
+        CASE
+            WHEN pg_typeof(tags) = 'text'::regtype THEN string_to_array(tags, ',')
+            ELSE tags
+        END
+    );
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(1536);
 
 CREATE TABLE IF NOT EXISTS release_file (
