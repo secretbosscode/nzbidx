@@ -33,6 +33,36 @@ The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
 
     sudo sysctl -w vm.max_map_count=262144
 
+### Use existing services
+
+Already running Postgres, Redis, or an OpenSearch/ElasticSearch instance?
+Create an override file and point `nzbidx` at your own services:
+
+```yaml
+services:
+  nzbidx:
+    environment:
+      DATABASE_URL: postgresql+asyncpg://nzbidx:nzbidx@host.docker.internal:5432/nzbidx
+      OPENSEARCH_URL: http://host.docker.internal:30003
+      REDIS_URL: redis://host.docker.internal:6379/0
+    depends_on: []
+```
+
+Start only the `nzbidx` service:
+
+```bash
+docker compose -f docker-compose.local.yml -f docker-compose.override.yml up -d nzbidx
+```
+
+Adjust hosts, ports, and credentials to match your environment.
+
+If your OpenSearch or ElasticSearch instance requires authentication, embed
+credentials in the URL:
+
+```yaml
+OPENSEARCH_URL: http://user:password@host.docker.internal:30003
+```
+
 ## Environment Variables
 
 Environment variables are defined directly in the compose files. Adjust values
@@ -43,7 +73,7 @@ of variables are required to run the stack:
 | --- | --- | --- |
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
-| `OPENSEARCH_URL` | OpenSearch endpoint | `http://opensearch:9200` |
+| `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
 | `API_KEYS` | Comma separated API keys | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `on` |
