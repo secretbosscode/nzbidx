@@ -30,18 +30,15 @@ jobs:
 
   sbom:
     runs-on: self-hosted
-    strategy:
-      matrix:
-        service: [api, ingest]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -e services/${{ matrix.service }}
+      - run: pip install -e services/api -e services/ingest
       - run: pip install cyclonedx-bom
-      - run: cyclonedx-py environment -o sbom-${{ matrix.service }}.json
+      - run: cyclonedx-py environment -o sbom.json
       - uses: actions/upload-artifact@v4
         with:
-          name: sbom-${{ matrix.service }}
-          path: sbom-${{ matrix.service }}.json
+          name: sbom
+          path: sbom.json

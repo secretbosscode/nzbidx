@@ -335,16 +335,16 @@ Close indices if required; restoring over an existing alias may need
 ## Security
 
 The [security audit workflow](https://github.com/nzbidx/nzbidx/actions/workflows/audit.yml)
-runs `pip-audit` and generates CycloneDX SBOMs for both services. The audit
+runs `pip-audit` and generates a CycloneDX SBOM for the project. The audit
 fails if vulnerabilities are found.
 
 Local audit and SBOM generation:
 
 ```bash
 pip install pip-audit cyclonedx-py
-pip install -e services/api
+pip install -e services/api -e services/ingest
 pip-audit
-cyclonedx-py environment -o sbom-api.json
+cyclonedx-py environment -o sbom.json
 ```
 
 See [docs/sbom.md](docs/sbom.md) for details.
