@@ -15,7 +15,7 @@ from nzbidx_api import db
 
 def test_apply_schema_creates_database(monkeypatch):
     executed: list[str] = []
-    admin_urls: list[str] = []
+    admin_urls: list[tuple[str, str | None]] = []
     admin_exec: list[str] = []
 
     class DummyConn:
@@ -58,14 +58,14 @@ def test_apply_schema_creates_database(monkeypatch):
             admin_exec.append(stmt)
 
     class AdminEngine:
-        def begin(self):
+        def connect(self):
             return AdminConn()
 
         async def dispose(self):
             return None
 
-    def fake_create_async_engine(url, echo=False):
-        admin_urls.append(url)
+    def fake_create_async_engine(url, echo=False, isolation_level=None):
+        admin_urls.append((url, isolation_level))
         return AdminEngine()
 
     monkeypatch.setattr(db, "engine", DummyEngine())
@@ -75,6 +75,6 @@ def test_apply_schema_creates_database(monkeypatch):
 
     asyncio.run(db.apply_schema())
 
-    assert admin_urls == ["postgresql+asyncpg://u@h/postgres"]
+    assert admin_urls == [("postgresql+asyncpg://u@h/postgres", "AUTOCOMMIT")]
     assert any(stmt.startswith("CREATE DATABASE") for stmt in admin_exec)
     assert executed  # schema statements executed after creation

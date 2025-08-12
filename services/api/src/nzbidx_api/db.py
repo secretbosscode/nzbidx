@@ -79,9 +79,11 @@ async def _create_database(url: str) -> None:
         return
     dbname = parsed.path.lstrip("/")
     admin_url = urlunparse(parsed._replace(path="/postgres"))
-    admin_engine = create_async_engine(admin_url, echo=False)
+    admin_engine = create_async_engine(
+        admin_url, echo=False, isolation_level="AUTOCOMMIT"
+    )
     try:
-        async with admin_engine.begin() as conn:
+        async with admin_engine.connect() as conn:
             await conn.execute(text(f'CREATE DATABASE "{dbname}"'))
     finally:
         await admin_engine.dispose()
