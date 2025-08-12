@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import time
+from importlib import resources
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -215,8 +216,11 @@ cache: Optional[Redis] = None
 
 
 def build_ilm_policy() -> dict[str, object]:
-    path = Path(__file__).resolve().parents[4] / "opensearch" / "ilm-policy.json"
-    with path.open("r", encoding="utf-8") as f:
+    with (
+        resources.files("nzbidx_api.opensearch")
+        .joinpath("ilm-policy.json")
+        .open("r", encoding="utf-8")
+    ) as f:
         policy = json.load(f)
     from .config import ilm_delete_days, ilm_warm_days
 
@@ -226,8 +230,11 @@ def build_ilm_policy() -> dict[str, object]:
 
 
 def build_index_template(*, ilm: bool = True) -> dict[str, object]:
-    path = Path(__file__).resolve().parents[4] / "opensearch" / "index-template.json"
-    with path.open("r", encoding="utf-8") as f:
+    with (
+        resources.files("nzbidx_api.opensearch")
+        .joinpath("index-template.json")
+        .open("r", encoding="utf-8")
+    ) as f:
         template = json.load(f)
     settings = template.setdefault("template", {}).setdefault("settings", {})
     settings.setdefault("refresh_interval", "5s")
