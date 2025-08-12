@@ -310,7 +310,9 @@ def init_opensearch() -> None:
             if not client.indices.exists(index=initial_index):
                 client.indices.create(
                     index=initial_index,
-                    aliases={OS_RELEASES_ALIAS: {"is_write_index": True}},
+                    body={
+                        "aliases": {OS_RELEASES_ALIAS: {"is_write_index": True}},
+                    },
                 )
             else:
                 client.indices.put_alias(
