@@ -143,8 +143,9 @@ def connect_db() -> Any:
 
     url = os.getenv("DATABASE_URL")
     if not url:
+        logger.warning("database_url_missing")
         url = ":memory:"
-        logger.info("sqlite_default", extra={"url": url})
+        logger.warning("sqlite_fallback", extra={"url": url})
     parsed = urlparse(url)
 
     if parsed.scheme.startswith("postgres"):
@@ -199,7 +200,7 @@ def connect_db() -> Any:
             return _connect(url)
         except ModuleNotFoundError as exc:  # pragma: no cover - missing driver
             logger.warning("psycopg_unavailable", extra={"error": str(exc)})
-            logger.info("sqlite_fallback", extra={"url": ":memory:"})
+            logger.warning("sqlite_fallback", extra={"url": ":memory:"})
             return sqlite3.connect(":memory:")
         except Exception as exc:  # pragma: no cover - network errors
             msg = str(getattr(exc, "orig", exc)).lower()

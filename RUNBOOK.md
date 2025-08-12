@@ -8,6 +8,12 @@ Quick reference for common operational issues.
 - **Ingest freshness:** lag <10k articles or <30m
 - **Snapshots:** at least one successful snapshot every 24h
 
+## PostgreSQL requirements
+Connections to PostgreSQL require the `psycopg` driver. The Docker images
+install `psycopg[binary] >= 3.1` from the service `pyproject.toml` files. The
+`pg_trgm` and `vector` extensions must be installed by a superuser; the init
+script at `db/init/schema.sql` handles this during database provisioning.
+
 ## Breaker stuck open
 - **Symptoms:** search endpoints return empty arrays or `503` for NZB retrieval.
 - **Checks:** `curl -fsS localhost:8080/health | jq .breaker` shows `open`.

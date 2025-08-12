@@ -12,7 +12,7 @@ COPY db/init/schema.sql services/api/src/db/init/schema.sql
 
 # Install service dependencies from their pyproject.toml files so the
 # PostgreSQL driver is included in the final image.
-RUN pip install --no-cache-dir services/api services/ingest
+RUN pip install --no-cache-dir -e services/api -e services/ingest
 
 COPY nzbidx_common/ nzbidx_common
 

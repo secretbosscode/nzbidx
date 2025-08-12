@@ -31,7 +31,7 @@ ALTER TABLE IF EXISTS release
     USING (
         CASE
             WHEN pg_typeof(tags) = 'text'::regtype THEN string_to_array(tags, ',')
-            ELSE tags
+            ELSE tags::TEXT[]
         END
     );
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(1536);
