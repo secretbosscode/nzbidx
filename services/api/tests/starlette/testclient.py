@@ -7,6 +7,8 @@ from typing import Any
 class TestClient:
     """Very small subset of Starlette's TestClient for smoke tests."""
 
+    __test__ = False  # prevent pytest from treating this as a test class
+
     def __init__(self, app: Any) -> None:
         self.app = app
 

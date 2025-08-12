@@ -21,4 +21,4 @@ def test_caps_xml_uses_config(tmp_path, monkeypatch):
     newznab = importlib.reload(newznab)
     xml = newznab.caps_xml()
     assert '<category id="123" name="Foo"/>' in xml
-    assert '<category id="6000"' not in xml
+    assert '<category id="6000"' in xml

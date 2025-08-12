@@ -51,11 +51,16 @@ def build_nzb_for_release(release_id: str) -> str:
             readermode=True,
             timeout=10,
         ) as server:
-            groups = [g.strip() for g in os.getenv("NNTP_GROUPS", "").split(",") if g.strip()]
+            groups = [
+                g.strip() for g in os.getenv("NNTP_GROUPS", "").split(",") if g.strip()
+            ]
             if not groups:
                 try:
                     _resp, listing = server.list()
-                    groups = [g[0] if isinstance(g, (tuple, list)) else str(g).split()[0] for g in listing]
+                    groups = [
+                        g[0] if isinstance(g, (tuple, list)) else str(g).split()[0]
+                        for g in listing
+                    ]
                 except Exception:
                     groups = []
             if not groups:
