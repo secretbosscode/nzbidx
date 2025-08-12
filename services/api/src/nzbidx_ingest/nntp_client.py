@@ -7,6 +7,11 @@ import os
 import socket
 import ssl
 
+try:  # pragma: no cover - nntplib is standard library but allow overriding
+    import nntplib  # type: ignore
+except Exception:  # pragma: no cover - extremely unlikely
+    nntplib = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 
@@ -138,9 +143,31 @@ class NNTPClient:
                 return 0
         return 0
 
-    # The real client would issue ``XOVER`` or ``HDR`` commands.  For the
-    # minimal test environment this method simply returns an empty list and is
-    # monkeypatched in tests.
+    # The previous implementation returned an empty list which meant the ingest
+    # worker never received any headers to process when running against a real
+    # NNTP server.  Implement a minimal ``XOVER`` helper so that the worker can
+    # pull overview information and persist releases to the database.
     def xover(self, group: str, start: int, end: int) -> list[dict[str, object]]:
         """Return header dicts for articles in ``group`` between ``start`` and ``end``."""
-        return []
+
+        host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
+        if not host:
+            return []
+
+        port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
+        ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
+        use_ssl = (ssl_env == "1") if ssl_env is not None else port == 563
+
+        try:
+            cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
+            with cls(
+                host,
+                port=port,
+                user=os.getenv("NNTP_USER"),
+                password=os.getenv("NNTP_PASS"),
+            ) as server:
+                server.group(group)
+                _resp, overviews = server.xover(start, end)
+                return list(overviews)
+        except Exception:  # pragma: no cover - network failure
+            return []
