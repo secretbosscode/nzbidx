@@ -1,4 +1,4 @@
-.PHONY: build up down smoke logs test fmt lint seed-os snapshot-repo release
+.PHONY: build up down smoke logs prune test fmt lint seed-os snapshot-repo release
 
 build:
 	docker compose build
@@ -15,6 +15,9 @@ smoke:
 logs:
 	docker compose logs -f
 
+prune:
+	scripts/prune_branches.sh
+
 test:
 	PYTHONPATH=. pytest
 
@@ -28,7 +31,7 @@ seed-os:
 	python scripts/seed_os.py
 
 snapshot-repo:
-        docker compose exec nzbidx python scripts/os_snapshot_repo.py
+	docker compose exec nzbidx python scripts/os_snapshot_repo.py
 
 release:
 	@[ -n "$(VERSION)" ] || (echo "VERSION required" && exit 1)
