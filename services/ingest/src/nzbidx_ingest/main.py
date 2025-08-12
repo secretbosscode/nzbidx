@@ -7,7 +7,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 try:
     from dotenv import load_dotenv
@@ -124,9 +124,42 @@ GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
 ]
 
 
-def connect_db() -> sqlite3.Connection:
+try:  # pragma: no cover - optional dependency
+    from sqlalchemy import create_engine, text
+except Exception:  # pragma: no cover - optional dependency
+    create_engine = None  # type: ignore
+    text = None  # type: ignore
+
+
+def connect_db() -> Any:
     """Connect to the database and ensure the release table exists."""
     url = os.getenv("DATABASE_URL") or ":memory:"
+
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    if url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+
+    if url.startswith("postgresql"):
+        if not create_engine or not text:
+            raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
+        engine = create_engine(url, echo=False, future=True)
+        with engine.begin() as conn:  # type: ignore[call-arg]
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS release (
+                        id SERIAL PRIMARY KEY,
+                        norm_title TEXT UNIQUE,
+                        category TEXT,
+                        language TEXT,
+                        tags TEXT
+                    )
+                    """
+                )
+            )
+        return engine.raw_connection()
+
     if url != ":memory:":
         path = Path(url)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -158,7 +191,7 @@ def connect_opensearch() -> Optional[object]:
 
 
 def insert_release(
-    conn: sqlite3.Connection,
+    conn: Any,
     norm_title: str,
     category: Optional[str],
     language: Optional[str],
@@ -166,10 +199,17 @@ def insert_release(
 ) -> bool:
     """Insert a release into the database if new. Returns True if inserted."""
     cur = conn.cursor()
-    cur.execute(
-        "INSERT OR IGNORE INTO release (norm_title, category, language, tags) VALUES (?, ?, ?, ?)",
-        (norm_title, category, language, ",".join(tags) if tags else None),
-    )
+    params = (norm_title, category, language, ",".join(tags) if tags else None)
+    if conn.__class__.__module__.startswith("sqlite3"):
+        cur.execute(
+            "INSERT OR IGNORE INTO release (norm_title, category, language, tags) VALUES (?, ?, ?, ?)",
+            params,
+        )
+    else:
+        cur.execute(
+            "INSERT INTO release (norm_title, category, language, tags) VALUES (%s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
+            params,
+        )
     conn.commit()
     return cur.rowcount > 0
 
