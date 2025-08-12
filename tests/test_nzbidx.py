@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib
 import json
+import threading
+import time
 import sys
 from contextlib import nullcontext
 from pathlib import Path
@@ -442,3 +444,23 @@ def test_nntp_client_uses_single_host_env(monkeypatch) -> None:
     assert calls["addr"] == ("example.org", 119)
     assert captured["host"] == "example.org"
     assert captured["port"] == 119
+
+
+def test_run_forever_respects_stop(monkeypatch) -> None:
+    """run_forever should exit when the stop event is set."""
+    import nzbidx_ingest.ingest_loop as loop
+
+    calls = []
+
+    def fake_run_once():
+        calls.append(True)
+
+    monkeypatch.setattr(loop, "run_once", fake_run_once)
+
+    stop = threading.Event()
+    t = threading.Thread(target=loop.run_forever, args=(stop,))
+    t.start()
+    time.sleep(0.1)
+    stop.set()
+    t.join(1)
+    assert calls
