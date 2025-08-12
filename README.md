@@ -73,13 +73,15 @@ the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
 
 ## Ingest
 
-The ingest worker polls configured NNTP groups and stores release metadata. Set the required NNTP environment variables and run:
+The API container also runs an ingest worker which polls configured NNTP groups
+and stores release metadata. Set the required NNTP environment variables and
+start the stack. To invoke a one-off ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username
     export NNTP_PASS=secret
     export NNTP_GROUPS=alt.binaries.example
-    docker compose exec ingest python -m nzbidx_ingest
+    docker compose exec api python -m nzbidx_ingest
 
 ## Auth & Rate Limit
 
@@ -352,6 +354,6 @@ docker compose up -d && scripts/smoke.sh
 
 ## Kubernetes (examples only)
 
-Manifests under ``k8s/`` provide minimal ``Deployment`` and ``Service`` examples
-for API and ingest with readiness and liveness probes. See
+Manifests under ``k8s/`` provide a minimal ``Deployment`` and ``Service`` for the
+API (which also runs the ingest worker) with readiness and liveness probes. See
 [`docs/k8s.md`](docs/k8s.md) for usage notes and persistence considerations.
