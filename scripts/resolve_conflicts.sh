@@ -59,7 +59,7 @@ for row in "${prs[@]}"; do
 
   # Re-check mergeability and comment
   new_state=$(gh api "/repos/$REPO/pulls/$pr" -q .mergeable_state || echo "unknown")
-  gh pr comment "$pr" --body "Auto-conflict-resolver applied **$POLICY**. New mergeable_state: `$new_state`. Branch updated."
+  gh pr comment "$pr" --body "Auto-conflict-resolver applied **$POLICY**. New mergeable_state: \`$new_state\`. Branch updated."
   echo "::endgroup::"
 done
 
