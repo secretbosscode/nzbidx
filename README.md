@@ -298,6 +298,11 @@ superuser.  The compose files mount `db/init/schema.sql` which runs on database
 startup as `POSTGRES_USER`.  When pointing at an external Postgres instance,
 execute that script manually or have an administrator install the extensions.
 
+Both services use the `psycopg` driver for PostgreSQL connections.  The Docker
+images install it from `pyproject.toml`, but local environments may need to run
+`pip install psycopg[binary]>=3.1`.  Without the driver the ingest service will
+log `psycopg_unavailable` and fall back to SQLite.
+
 ## Backups
 
 OpenSearch snapshots can be stored in S3 or GCS. Configure the repository via

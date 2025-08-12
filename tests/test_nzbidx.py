@@ -358,3 +358,18 @@ def test_connect_db_creates_database(monkeypatch) -> None:
     ]
     assert any(stmt.startswith("CREATE DATABASE") for stmt in executed)
     assert hasattr(conn, "cursor")
+
+
+def test_connect_db_falls_back_to_sqlite(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgres://user@host/db")
+
+    def fake_create_engine(url: str, echo: bool = False, future: bool = True):
+        raise ModuleNotFoundError("No module named 'psycopg'")
+
+    monkeypatch.setattr(main, "create_engine", fake_create_engine)
+    monkeypatch.setattr(main, "text", lambda s: s)
+
+    conn = connect_db()
+    # The fallback connection should be a functioning SQLite database.
+    conn.execute("SELECT 1")
+    assert conn.__class__.__module__.startswith("sqlite3")
