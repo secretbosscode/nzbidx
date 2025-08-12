@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Dict
+from typing import Any, Dict
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -27,7 +27,7 @@ class RateLimiter:
         self.window = window
         url = os.getenv("REDIS_URL")
         if Redis and url:
-            self.client = Redis.from_url(url)
+            self.client: Any = Redis.from_url(url)
             self.use_redis = True
         else:
             self.client: Dict[int, Dict[str, int]] = {}
@@ -39,10 +39,16 @@ class RateLimiter:
         bucket = now // self.window
         if self.use_redis:  # pragma: no cover - requires redis server
             redis_key = f"rl:{bucket}:{key}"
-            current = self.client.incr(redis_key)
-            if current == 1:
-                self.client.expire(redis_key, self.window)
-            return int(current)
+            try:
+                current = self.client.incr(redis_key)
+            except Exception:  # pragma: no cover - network failure
+                # Fall back to in-memory tracking on Redis errors
+                self.use_redis = False
+                self.client = {}
+            else:
+                if current == 1:
+                    self.client.expire(redis_key, self.window)
+                return int(current)
         counts = self.client.setdefault(bucket, {})
         counts[key] = counts.get(key, 0) + 1
         for old in list(self.client.keys()):
