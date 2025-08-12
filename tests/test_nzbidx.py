@@ -175,7 +175,9 @@ def test_builds_nzb(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
     monkeypatch.setattr(
-        nzb_builder, "nntplib", SimpleNamespace(NNTP=DummyNNTP, NNTP_SSL=DummyNNTP)
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=DummyNNTP, NNTP_SSL=DummyNNTP, NNTP_SSL_PORT=563),
     )
     xml = nzb_builder.build_nzb_for_release("MyRelease")
     assert "msg1@example.com" in xml
@@ -188,11 +190,40 @@ def test_builds_nzb_auto_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
     monkeypatch.setattr(
-        nzb_builder, "nntplib", SimpleNamespace(NNTP=AutoNNTP, NNTP_SSL=AutoNNTP)
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=AutoNNTP, NNTP_SSL=AutoNNTP, NNTP_SSL_PORT=563),
     )
     xml = nzb_builder.build_nzb_for_release("MyRelease")
     assert "msg1@example.com" in xml
     assert "msg2@example.com" in xml
+
+
+def test_builds_nzb_auto_ssl(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_PORT", "563")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+    monkeypatch.delenv("NNTP_SSL", raising=False)
+
+    used: dict[str, str] = {}
+
+    class Plain(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            used["cls"] = "plain"
+            super().__init__(*_args, **_kwargs)
+
+    class Secure(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            used["cls"] = "ssl"
+            super().__init__(*_args, **_kwargs)
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=Plain, NNTP_SSL=Secure, NNTP_SSL_PORT=563),
+    )
+    nzb_builder.build_nzb_for_release("MyRelease")
+    assert used["cls"] == "ssl"
 
 
 def test_connect_db_creates_parent(tmp_path, monkeypatch) -> None:
