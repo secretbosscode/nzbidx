@@ -294,9 +294,13 @@ DATABASE_URL=postgres://nzbidx:nzbidx@postgres:5432/nzbidx
 
 Schema creation is idempotent; running with a new database is sufficient.
 The required `vector` and `pg_trgm` extensions must be installed by a
-superuser.  The compose files mount `db/init/schema.sql` which runs on database
-startup as `POSTGRES_USER`.  When pointing at an external Postgres instance,
-execute that script manually or have an administrator install the extensions.
+superuser before the application starts. The compose files mount
+`db/init/schema.sql`, which installs the extensions and creates tables during
+startup as `POSTGRES_USER`. When using an external Postgres instance or setting
+up the database manually, create the role and database, install the extensions
+and apply the schema as described in [docs/db.md](docs/db.md). Once the
+extensions are installed the `nzbidx` role only needs ownership of the
+database—no additional privileges are required.
 
 Both services use the `psycopg` driver for PostgreSQL connections.  The Docker
 images install it from `pyproject.toml`, but local environments may need to run
