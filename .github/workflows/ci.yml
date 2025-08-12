@@ -18,18 +18,15 @@ jobs:
     runs-on: self-hosted
     env:
       PYTHONPATH: .
-    strategy:
-      matrix:
-        service: [api, ingest]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -e services/${{ matrix.service }}
-      - run: pip install ruff black
-      - run: ruff check services/${{ matrix.service }}/src
-      - run: black --check services/${{ matrix.service }}/src
+      - run: pip install ruff black pytest
+      - run: ruff check services/api/src services/ingest/src
+      - run: black --check services/api/src services/ingest/src
+      - run: pytest
 
   pip-audit:
     runs-on: self-hosted
