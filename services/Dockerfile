@@ -5,22 +5,14 @@ RUN addgroup --system --gid 1000 nzbidx && \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn[standard] \
-    orjson \
-    opensearch-py \
-    sqlalchemy>=2 \
-    asyncpg \
-    redis \
-    httpx \
-    fakeredis \
-    python-dotenv
+COPY services/api/ services/api/
+COPY services/ingest/ services/ingest/
+# Schema file required by the API when applying migrations
+COPY db/init/schema.sql services/api/src/db/init/schema.sql
 
-COPY services/api/src/ ./
-COPY services/ingest/src/ ./
-COPY nzbidx_common/ ./nzbidx_common
-COPY db/init/schema.sql ./db/init/schema.sql
+RUN pip install --no-cache-dir -e services/api -e services/ingest
+
+COPY nzbidx_common/ nzbidx_common
 
 USER nzbidx
 VOLUME /tmp
