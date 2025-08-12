@@ -38,14 +38,17 @@ async def apply_schema() -> None:
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
     )
     statements = [s.strip() for s in sql.split(";") if s.strip()]
-    async with engine.begin() as conn:
+    async with engine.connect() as conn:
         for stmt in statements:
             try:
                 await conn.execute(text(stmt))
+                await conn.commit()
             except Exception as exc:
                 # Creating extensions requires superuser privileges.  If the
                 # current role lacks permission, log the failure but continue
-                # applying the remaining schema.
+                # applying the remaining schema.  Roll back the failed
+                # statement so subsequent statements can proceed.
+                await conn.rollback()
                 if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
                     logger.warning(
                         "extension_unavailable", extra={"stmt": stmt, "error": str(exc)}

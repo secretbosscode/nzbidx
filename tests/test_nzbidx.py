@@ -209,16 +209,24 @@ def test_connect_db_postgres(monkeypatch) -> None:
         def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
             calls["stmt"] = stmt
 
-    class DummyCtx:
-        def __enter__(self) -> DummyConn:  # pragma: no cover - trivial
-            return DummyConn()
+        def commit(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def rollback(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def __enter__(self) -> "DummyConn":  # pragma: no cover - trivial
+            return self
 
         def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - trivial
             return None
 
     class DummyEngine:
-        def begin(self) -> DummyCtx:  # pragma: no cover - trivial
-            return DummyCtx()
+        def connect(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
+
+        def begin(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
 
         def raw_connection(self):  # pragma: no cover - trivial
             class Raw:
@@ -257,16 +265,24 @@ def test_connect_db_postgres_single_slash(monkeypatch) -> None:
         def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
             calls["stmt"] = stmt
 
-    class DummyCtx:
-        def __enter__(self) -> DummyConn:  # pragma: no cover - trivial
-            return DummyConn()
+        def commit(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def rollback(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def __enter__(self) -> "DummyConn":  # pragma: no cover - trivial
+            return self
 
         def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - trivial
             return None
 
     class DummyEngine:
-        def begin(self) -> DummyCtx:  # pragma: no cover - trivial
-            return DummyCtx()
+        def connect(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
+
+        def begin(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
 
         def raw_connection(self):  # pragma: no cover - trivial
             class Raw:
@@ -306,9 +322,14 @@ def test_connect_db_creates_database(monkeypatch) -> None:
         def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
             executed.append(stmt)
 
-    class DummyCtx:
-        def __enter__(self) -> DummyConn:  # pragma: no cover - trivial
-            return DummyConn()
+        def commit(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def rollback(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def __enter__(self) -> "DummyConn":  # pragma: no cover - trivial
+            return self
 
         def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - trivial
             return None
@@ -327,8 +348,11 @@ def test_connect_db_creates_database(monkeypatch) -> None:
             return None
 
     class DummyEngine:
-        def begin(self) -> DummyCtx:  # pragma: no cover - trivial
-            return DummyCtx()
+        def connect(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
+
+        def begin(self) -> DummyConn:  # pragma: no cover - trivial
+            return DummyConn()
 
         def raw_connection(self):  # pragma: no cover - trivial
             return Raw()

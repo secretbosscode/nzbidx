@@ -162,7 +162,7 @@ def connect_db() -> Any:
 
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
-            with engine.begin() as conn:  # type: ignore[call-arg]
+            with engine.connect() as conn:  # type: ignore[call-arg]
                 for stmt in (
                     "CREATE EXTENSION IF NOT EXISTS vector",
                     "CREATE EXTENSION IF NOT EXISTS pg_trgm",
@@ -180,7 +180,12 @@ def connect_db() -> Any:
                 ):
                     try:
                         conn.execute(text(stmt))
+                        conn.commit()
                     except Exception as exc:
+                        # Creating extensions requires superuser privileges.  If
+                        # unavailable, log the failure and roll back so that
+                        # subsequent statements can proceed.
+                        conn.rollback()
                         if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
                             logger.warning(
                                 "extension_unavailable",
