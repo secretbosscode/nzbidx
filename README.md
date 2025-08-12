@@ -18,6 +18,12 @@ Postgres runs with the `pgvector` extension and a set of indexes to keep queries
 fast as the dataset grows. The schema enables the extension and creates the
 indexes during initialization; see `db/init/schema.sql` for details.
 
+Connections to PostgreSQL require the [`psycopg` driver](https://www.psycopg.org/).
+The container images install `psycopg[binary] >= 3.1` from each service's
+`pyproject.toml`. The `pg_trgm` and `vector` extensions must be installed by a
+superuser—`docker-compose` mounts `db/init/schema.sql` so the database is
+provisioned with the required extensions during initialisation.
+
 The API exposes a helper that leverages an `ivfflat` index for efficient
 nearest-neighbour searches against release embeddings using the `pgvector`
 extension.

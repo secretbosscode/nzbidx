@@ -1,6 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
 CREATE TABLE IF NOT EXISTS usenet_group (
     id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL
@@ -31,7 +28,7 @@ ALTER TABLE IF EXISTS release
     USING (
         CASE
             WHEN pg_typeof(tags) = 'text'::regtype THEN string_to_array(tags, ',')
-            ELSE tags
+            ELSE tags::TEXT[]
         END
     );
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(1536);
