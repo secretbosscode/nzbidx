@@ -2,14 +2,15 @@ name: Auto Merge
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows:
+      - CI
     types:
       - completed
 
 permissions:
   contents: write
   pull-requests: write
-  workflows: write
+  actions: write
 
 jobs:
   merge:
