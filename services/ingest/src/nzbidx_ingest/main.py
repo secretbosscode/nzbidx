@@ -8,6 +8,7 @@ import re
 import sqlite3
 from pathlib import Path
 from typing import Optional, Any
+from urllib.parse import urlparse
 
 try:
     from dotenv import load_dotenv
@@ -134,13 +135,16 @@ except Exception:  # pragma: no cover - optional dependency
 def connect_db() -> Any:
     """Connect to the database and ensure the release table exists."""
     url = os.getenv("DATABASE_URL") or ":memory:"
+    parsed = urlparse(url)
 
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql+asyncpg://"):
-        url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-
-    if url.startswith("postgresql"):
+    if parsed.scheme.startswith("postgres"):
+        if not parsed.netloc and parsed.path:
+            url = f"{parsed.scheme}://{parsed.path.lstrip('/')}"
+            parsed = urlparse(url)
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+psycopg://", 1)
+        elif url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
         if not create_engine or not text:
             raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
         engine = create_engine(url, echo=False, future=True)
