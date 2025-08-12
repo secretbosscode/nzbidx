@@ -1,3 +1,5 @@
+# Automatically merges PRs after successful CI and triggers Docker image build.
+# Requires actions, contents, and pull-requests write permissions.
 name: Auto Merge
 
 on:
@@ -10,7 +12,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  workflow: write
+  actions: write
 
 jobs:
   merge:
