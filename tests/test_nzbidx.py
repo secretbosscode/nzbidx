@@ -18,7 +18,7 @@ sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 sys.path.append(str(REPO_ROOT / "services" / "ingest" / "src"))
 
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
-from nzbidx_ingest.main import CATEGORY_MAP, _infer_category  # type: ignore
+from nzbidx_ingest.main import CATEGORY_MAP, _infer_category, connect_db  # type: ignore
 
 
 class DummyCache:
@@ -103,8 +103,13 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
 
 def test_infer_category_from_group() -> None:
     """Group names should hint at the correct category."""
-    assert _infer_category("Test", group="alt.binaries.psp") == CATEGORY_MAP["console_psp"]
-    assert _infer_category("Test", group="alt.binaries.pc.games") == CATEGORY_MAP["pc_games"]
+    assert (
+        _infer_category("Test", group="alt.binaries.psp") == CATEGORY_MAP["console_psp"]
+    )
+    assert (
+        _infer_category("Test", group="alt.binaries.pc.games")
+        == CATEGORY_MAP["pc_games"]
+    )
 
 
 def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
@@ -185,3 +190,12 @@ def test_builds_nzb_auto_groups(monkeypatch) -> None:
     xml = nzb_builder.build_nzb_for_release("MyRelease")
     assert "msg1@example.com" in xml
     assert "msg2@example.com" in xml
+
+
+def test_connect_db_creates_parent(tmp_path, monkeypatch) -> None:
+    db_file = tmp_path / "sub" / "test.db"
+    monkeypatch.setenv("DATABASE_URL", str(db_file))
+    conn = connect_db()
+    conn.execute("SELECT 1")
+    conn.close()
+    assert db_file.exists()

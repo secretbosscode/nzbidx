@@ -175,9 +175,20 @@ setup_logging()
 setup_tracing()
 
 _START_TIME = time.monotonic()
-_VERSION_FILE = Path(__file__).resolve().parents[3] / "VERSION"
+
+
+def _find_version_file() -> Path:
+    current = Path(__file__).resolve()
+    for candidate in [current] + list(current.parents):
+        path = candidate / "VERSION"
+        if path.exists():
+            return path
+    return current
+
+
+_VERSION_FILE = _find_version_file()
 VERSION = os.getenv("VERSION")
-if not VERSION and _VERSION_FILE.exists():
+if not VERSION and _VERSION_FILE.name == "VERSION":
     VERSION = _VERSION_FILE.read_text(encoding="utf-8").strip()
 
 

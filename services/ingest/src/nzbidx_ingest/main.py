@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sqlite3
+from pathlib import Path
 from typing import Optional
 
 try:
@@ -126,6 +127,9 @@ GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
 def connect_db() -> sqlite3.Connection:
     """Connect to the database and ensure the release table exists."""
     url = os.getenv("DATABASE_URL") or ":memory:"
+    if url != ":memory:":
+        path = Path(url)
+        path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(url)
     conn.execute(
         """
