@@ -5,6 +5,9 @@ on:
     branches:
       - main
   pull_request:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -27,3 +30,31 @@ jobs:
       - run: pip install ruff black
       - run: ruff check services/${{ matrix.service }}/src
       - run: black --check services/${{ matrix.service }}/src
+
+  pip-audit:
+    runs-on: self-hosted
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -e services/api -e services/ingest
+      - run: pip install "pip-audit>=2.9.0"
+      - run: pip-audit --skip-editable
+
+  sbom:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -e services/api -e services/ingest
+      - run: pip install cyclonedx-bom
+      - run: cyclonedx-py environment -o sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
