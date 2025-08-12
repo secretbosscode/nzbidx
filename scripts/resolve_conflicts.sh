@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-POLICY="${POLICY:-PREFER_BASE}"  # PREFER_BASE or PREFER_PR
+POLICY="${POLICY:-PREFER_PR}"  # PREFER_BASE or PREFER_PR
 BASE_DEFAULT=$(git rev-parse --abbrev-ref HEAD)
 REPO="${GITHUB_REPOSITORY:-$(git remote get-url origin 2>/dev/null | sed -E 's#.*[:/]([^/]+/[^/]+)(\.git)?$#\1#')}"
 
