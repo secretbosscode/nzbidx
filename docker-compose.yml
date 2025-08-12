@@ -60,8 +60,6 @@ services:
       POSTGRES_DB: nzbidx
       POSTGRES_USER: nzbidx
       POSTGRES_PASSWORD: nzbidx
-    volumes:
-      - ./db/init/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
