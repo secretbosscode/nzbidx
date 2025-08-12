@@ -27,12 +27,12 @@ services:
       redis:
         condition: service_healthy
     environment:
-      PGDATABASE: nzbidx
-      PGUSER: nzbidx
-      PGPASSWORD: nzbidx
-      POSTGRES_PORT: 15432
-      OPENSEARCH_URL: http://opensearch:9200
-      REDIS_URL: redis://redis:6379/0
+        PGDATABASE: nzbidx
+        PGUSER: nzbidx
+        PGPASSWORD: nzbidx
+        POSTGRES_PORT: 5432
+        OPENSEARCH_URL: http://opensearch:9200
+        REDIS_URL: redis://redis:6379/0
       API_KEYS: dev
       SAFESEARCH: "on"
       ALLOW_XXX: "false"
