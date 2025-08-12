@@ -24,6 +24,7 @@ from nzbidx_common.os import OS_RELEASES_ALIAS  # type: ignore  # noqa: E402
 try:  # pragma: no cover - prefer real TestClient when available
     from starlette.testclient import TestClient  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover
+
     class TestClient:
         """Very small subset of Starlette's TestClient for dependency tests."""
 
@@ -100,4 +101,3 @@ def test_takedown_deletes_release(monkeypatch) -> None:
         )
         assert response.status_code == 200
         assert dummy.deleted == [(OS_RELEASES_ALIAS, "abc", "wait_for")]
-

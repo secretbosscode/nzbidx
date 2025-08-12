@@ -1,4 +1,4 @@
-"""Configuration helpers for the ingest service."""
+"""Configuration helpers for the ingest worker."""
 
 from __future__ import annotations
 

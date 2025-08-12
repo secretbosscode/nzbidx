@@ -54,7 +54,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 ## Ingest lag
 - **Symptoms:** ingest cursor behind the NNTP high-water mark.
 - **Checks:**
-  - Cursor: `sqlite3 services/ingest/cursors.sqlite 'select * from cursor'`
+  - Cursor: `sqlite3 services/api/cursors.sqlite 'select * from cursor'`
   - High-water mark: `docker compose exec nzbidx nntpstat <group>`
 - **Actions:** ensure NNTP connectivity, lower `INGEST_BATCH` or raise
   `INGEST_POLL_SECONDS` to increase backpressure, restart ingest, or scale

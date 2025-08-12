@@ -38,7 +38,7 @@ release:
 	@git diff --quiet || (echo "git tree dirty" && exit 1)
 	@ruff check .
 	@black --check .
-	@PYTHONPATH=. pytest -q services/api/tests services/ingest/tests
+        @PYTHONPATH=. pytest -q
 	@bash scripts/smoke.sh
 	# Ensure pip-audit is available
 	@pip install pip-audit >/dev/null

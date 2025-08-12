@@ -17,7 +17,6 @@ from types import SimpleNamespace
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
-sys.path.append(str(REPO_ROOT / "services" / "ingest" / "src"))
 
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore

@@ -6,13 +6,12 @@ RUN addgroup --system --gid 1000 nzbidx && \
 WORKDIR /app
 
 COPY services/api/ services/api/
-COPY services/ingest/ services/ingest/
 # Schema file required by the API when applying migrations
 COPY db/init/schema.sql services/api/src/db/init/schema.sql
 
-# Install service dependencies from their pyproject.toml files so the
+# Install service dependencies from the pyproject.toml so the
 # PostgreSQL driver is included in the final image.
-RUN pip install --no-cache-dir -e services/api -e services/ingest
+RUN pip install --no-cache-dir -e services/api
 
 COPY nzbidx_common/ nzbidx_common
 

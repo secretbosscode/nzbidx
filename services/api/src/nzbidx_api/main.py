@@ -11,11 +11,7 @@ from typing import Optional, Callable
 
 from nzbidx_common.os import OS_RELEASES_ALIAS
 import threading
-
-try:  # pragma: no cover - optional dependency
-    from nzbidx_ingest.ingest_loop import run_forever
-except Exception:  # pragma: no cover - ingest optional
-    run_forever = None  # type: ignore
+from nzbidx_ingest.ingest_loop import run_forever
 
 # Optional third party dependencies
 try:  # pragma: no cover - import guard
@@ -187,8 +183,6 @@ _START_TIME = time.monotonic()
 
 
 def start_ingest() -> None:
-    if run_forever is None:
-        return
     global _ingest_stop, _ingest_thread
     _ingest_stop = threading.Event()
     _ingest_thread = threading.Thread(

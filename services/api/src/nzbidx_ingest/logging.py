@@ -1,4 +1,4 @@
-"""Logging utilities for ingest service."""
+"""Logging utilities for the ingest worker."""
 
 from __future__ import annotations
 
