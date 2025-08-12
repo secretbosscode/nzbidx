@@ -1,8 +1,6 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: services/Dockerfile
+  nzbidx:
+    image: nzbidx:latest
     ports:
       - "8080:8080"
     read_only: true

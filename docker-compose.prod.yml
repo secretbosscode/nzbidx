@@ -1,6 +1,7 @@
 version: '3.9'
 services:
-  api:
+  nzbidx:
+    image: nzbidx:latest
     depends_on:
       opensearch:
         condition: service_healthy
