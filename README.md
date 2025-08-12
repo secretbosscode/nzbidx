@@ -100,6 +100,7 @@ of variables are required to run the stack:
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest)_ |
 | `NNTP_PORT` | NNTP port | `119` |
+| `NNTP_SSL` | `1` enables SSL, `0` forces plaintext; auto when unset (SSL if port 563) | _(auto)_ |
 | `NNTP_USER` | NNTP username | _(required for ingest)_ |
 | `NNTP_PASS` | NNTP password | _(required for ingest)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |

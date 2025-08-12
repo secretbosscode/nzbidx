@@ -53,7 +53,8 @@ def build_nzb_for_release(release_id: str) -> str:
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
     password = os.getenv("NNTP_PASS")
-    use_ssl = os.getenv("NNTP_SSL") == "1"
+    ssl_env = os.getenv("NNTP_SSL")
+    use_ssl = (ssl_env == "1") if ssl_env is not None else port == nntplib.NNTP_SSL_PORT
     conn_cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
 
     try:

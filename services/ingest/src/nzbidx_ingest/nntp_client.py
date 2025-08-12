@@ -21,7 +21,8 @@ class NNTPClient:
             return
 
         port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
-        use_ssl = (os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL") or "0") == "1"
+        ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
+        use_ssl = (ssl_env == "1") if ssl_env is not None else port == 563
 
         try:
             if use_ssl:
@@ -61,7 +62,8 @@ class NNTPClient:
             return []
 
         port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
-        use_ssl = (os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL") or "0") == "1"
+        ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
+        use_ssl = (ssl_env == "1") if ssl_env is not None else port == 563
 
         try:
             if use_ssl:
@@ -102,7 +104,8 @@ class NNTPClient:
             return 0
 
         port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
-        use_ssl = (os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL") or "0") == "1"
+        ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
+        use_ssl = (ssl_env == "1") if ssl_env is not None else port == 563
 
         try:
             if use_ssl:
