@@ -54,6 +54,43 @@ class NNTPClient:
         data = sock.recv(1024)
         return data.decode(errors="ignore").strip()
 
+    def list_groups(self) -> list[str]:
+        """Return a list of available NNTP groups."""
+        host = os.getenv("NNTP_HOST_1")
+        if not host:
+            return []
+
+        port = int(os.getenv("NNTP_PORT_1", "119"))
+        use_ssl = os.getenv("NNTP_SSL_1") == "1"
+
+        try:
+            if use_ssl:
+                context = ssl.create_default_context()
+                with socket.create_connection((host, port), timeout=10) as sock:
+                    with context.wrap_socket(sock, server_hostname=host) as ssock:
+                        return self._list(ssock)
+            else:
+                with socket.create_connection((host, port), timeout=10) as sock:
+                    return self._list(sock)
+        except Exception:  # pragma: no cover - network failure
+            return []
+
+    def _list(self, sock: socket.socket) -> list[str]:
+        try:
+            self._recv_line(sock)
+            sock.sendall(b"MODE READER\r\n")
+            self._recv_line(sock)
+            sock.sendall(b"LIST\r\n")
+            groups: list[str] = []
+            while True:
+                line = self._recv_line(sock)
+                if line == "." or not line:
+                    break
+                groups.append(line.split()[0])
+            return groups
+        except Exception:  # pragma: no cover - network issues
+            return []
+
     # The real client would issue commands like ``GROUP`` to discover the high
     # water mark for a group.  The simplified test environment has no NNTP
     # server, so this method returns ``0`` when no provider is configured.  When

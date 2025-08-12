@@ -163,9 +163,22 @@ def index_release(
             _os_warned = True
 
 
-def _infer_category(subject: str) -> Optional[str]:
-    """Heuristic category detection from the raw subject."""
+def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
+    """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
+
+    if group:
+        g = group.lower()
+        if "movie" in g or "movies" in g or "video" in g:
+            return CATEGORY_MAP["movies"]
+        if "tv" in g or "series" in g:
+            return CATEGORY_MAP["tv"]
+        if any(k in g for k in ("music", "audio", "mp3", "flac")):
+            return CATEGORY_MAP["audio"]
+        if any(k in g for k in ("book", "ebook", "ebooks")):
+            return CATEGORY_MAP["ebook"]
+        if any(k in g for k in ("xxx", "sex", "adult")):
+            return CATEGORY_MAP["xxx"]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
     for tag in extract_tags(subject):
