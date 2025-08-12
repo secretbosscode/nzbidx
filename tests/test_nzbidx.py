@@ -476,6 +476,51 @@ def test_nntp_client_uses_single_host_env(monkeypatch) -> None:
     assert captured["port"] == 119
 
 
+def test_nntp_client_xover(monkeypatch) -> None:
+    """NNTPClient.xover should return overview data from the server."""
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    import nzbidx_ingest.nntp_client as nntp_client
+
+    called: dict[str, object] = {}
+
+    class DummyServer:
+        def __init__(
+            self, host, port=119, user=None, password=None
+        ):  # pragma: no cover - trivial
+            called["args"] = (host, port, user, password)
+
+        def __enter__(self):  # pragma: no cover - trivial
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
+            return None
+
+        def group(self, group):  # pragma: no cover - simple
+            called["group"] = group
+            return "", 0, "1", "2", group
+
+        def xover(self, start, end, *, file=None):  # pragma: no cover - simple
+            called["range"] = (start, end)
+            return "", [
+                {"subject": "Example", "message-id": "<1@test>"},
+            ]
+
+    monkeypatch.setattr(
+        nntp_client,
+        "nntplib",
+        SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
+    )
+
+    client = nntp_client.NNTPClient()
+    headers = client.xover("alt.binaries.example", 1, 2)
+
+    assert headers and headers[0]["message-id"] == "<1@test>"
+    assert called["args"][0] == "example.com"
+    assert called["group"] == "alt.binaries.example"
+
+
 def test_run_forever_respects_stop(monkeypatch) -> None:
     """run_forever should exit when the stop event is set."""
     import nzbidx_ingest.ingest_loop as loop
