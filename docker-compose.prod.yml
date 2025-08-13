@@ -48,21 +48,16 @@ services:
         max-file: "5"
   redis:
     restart: unless-stopped
+    environment:
+      REDIS_DISABLE_PERSISTENCE: ${REDIS_DISABLE_PERSISTENCE:-0}
     volumes:
       - ${REDIS_DATA_DIR:-redis-data}:${REDIS_DATA_DIR:-/data}
-    command: [
-      "redis-server",
-      "--dir",
-      "${REDIS_DATA_DIR:-/data}",
-      "--save",
-      "",
-      "--appendonly",
-      "no",
-      "--maxmemory",
-      "256mb",
-      "--maxmemory-policy",
-      "volatile-lru"
-    ]
+    command: >
+      sh -c 'if [ "$${REDIS_DISABLE_PERSISTENCE}" = "1" ] || [ "$${REDIS_DISABLE_PERSISTENCE}" = "true" ] || [ "$${REDIS_DISABLE_PERSISTENCE}" = "TRUE" ] || [ "$${REDIS_DISABLE_PERSISTENCE}" = "True" ]; then
+        redis-server --dir ${REDIS_DATA_DIR:-/data} --save "" --appendonly no --maxmemory 256mb --maxmemory-policy volatile-lru;
+      else
+        redis-server --dir ${REDIS_DATA_DIR:-/data} --maxmemory 256mb --maxmemory-policy volatile-lru;
+      fi'
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
