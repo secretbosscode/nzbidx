@@ -69,16 +69,19 @@ app = main.app
 def test_health_endpoint() -> None:
     """Basic smoke test for CI to ensure app responds."""
     with TestClient(app) as client:
-        response = client.get("/api/health")
+        response = client.get("/api/health", params={"apikey": "secret"})
         assert response.status_code == 200
 
 
 def test_status_endpoint() -> None:
     """Status endpoint exposes dependency and breaker states."""
     with TestClient(app) as client:
-        response = client.get("/api/status")
+        response = client.get("/api/status", params={"apikey": "secret"})
         assert response.status_code == 200
-        data = json.loads(response.body)
+        if hasattr(response, "json"):
+            data = response.json()
+        else:
+            data = json.loads(response.body)
         assert data["breaker"]["os"] == "closed"
         assert data["breaker"]["redis"] == "closed"
 

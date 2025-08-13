@@ -33,6 +33,8 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         if not self.valid_keys:
             return await call_next(request)
         provided = request.headers.get("X-Api-Key")
+        if not provided and hasattr(request, "query_params"):
+            provided = request.query_params.get("apikey")
         if provided not in self.valid_keys:
             return unauthorized()
         return await call_next(request)
