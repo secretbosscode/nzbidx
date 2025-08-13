@@ -40,8 +40,9 @@ def _conn() -> Any:
     )
     try:
         conn.execute("ALTER TABLE cursor ADD COLUMN irrelevant INTEGER DEFAULT 0")
+        conn.commit()
     except Exception:  # column already exists
-        pass
+        conn.rollback()
     return conn
 
 
