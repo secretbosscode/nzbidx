@@ -493,14 +493,15 @@ def _os_search(
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
-    if opensearch and q:
+    if opensearch:
         try:
-            must: list[dict[str, object]] = [
-                {"match": {"norm_title": {"query": q, "fuzziness": "AUTO"}}}
-            ]
-            should: list[dict[str, object]] = [
-                {"match": {"tags": {"query": q, "boost": 2}}}
-            ]
+            must: list[dict[str, object]] = []
+            should: list[dict[str, object]] = []
+            if q:
+                must.append(
+                    {"match": {"norm_title": {"query": q, "fuzziness": "AUTO"}}}
+                )
+                should.append({"match": {"tags": {"query": q, "boost": 2}}})
             filters: list[dict[str, object]] = []
 
             tag_fields = {
