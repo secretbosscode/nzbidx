@@ -22,6 +22,7 @@ from .main import (
     connect_db,
     connect_opensearch,
     CATEGORY_MAP,
+    prune_group,
 )
 
 try:  # pragma: no cover - optional import
@@ -41,6 +42,10 @@ logger = logging.getLogger(__name__)
 def run_once() -> None:
     """Process a single batch for each configured NNTP group."""
     groups = config.NNTP_GROUPS or config._load_groups()
+    ignored = set(config.IGNORE_GROUPS or [])
+    if ignored:
+        logger.info("ingest_ignore_groups", extra={"groups": list(ignored)})
+    groups = [g for g in groups if g not in ignored]
     if not groups:
         logger.info("ingest_no_groups")
         return
@@ -57,6 +62,9 @@ def run_once() -> None:
     client.connect()
     db = connect_db()
     os_client = connect_opensearch()
+
+    for ig in ignored:
+        prune_group(db, os_client, ig)
 
     for group in groups:
         last = cursors.get_cursor(group) or 0
@@ -92,7 +100,7 @@ def run_once() -> None:
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
             start_idx = time.monotonic()
-            inserted = insert_release(db, dedupe_key, category, language, tags)
+            inserted = insert_release(db, dedupe_key, category, language, tags, group)
             os_latency = 0.0
             if inserted:
                 metrics["inserted"] += 1
@@ -103,6 +111,7 @@ def run_once() -> None:
                     category=category,
                     language=language,
                     tags=tags,
+                    group=group,
                 )
                 os_latency = time.monotonic() - os_start
                 last_os_latency = os_latency
