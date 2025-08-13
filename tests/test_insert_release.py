@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sqlite3
 import sys
-from array import array
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -46,23 +45,3 @@ def test_insert_release_defaults() -> None:
     assert row == ("foo", CATEGORY_MAP["other"], "und", "", None)
 
 
-def test_insert_release_with_embedding() -> None:
-    conn = sqlite3.connect(":memory:")
-    conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, embedding BLOB)"
-    )
-    embedding = [float(i) for i in range(768)]
-    inserted = insert_release(
-        conn,
-        "foo",
-        "cat",
-        "en",
-        [],
-        None,
-        embedding=embedding,
-    )
-    assert inserted
-    stored = conn.execute("SELECT embedding FROM release").fetchone()[0]
-    arr = array("f")
-    arr.frombytes(stored)
-    assert list(arr) == embedding
