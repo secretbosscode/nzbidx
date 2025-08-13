@@ -172,8 +172,8 @@ def connect_db() -> Any:
                             id SERIAL PRIMARY KEY,
                             norm_title TEXT UNIQUE,
                             category TEXT,
-                            language TEXT,
-                            tags TEXT,
+                            language TEXT NOT NULL DEFAULT 'und',
+                            tags TEXT NOT NULL DEFAULT '',
                             embedding vector(1536)
                         )
                         """
@@ -227,8 +227,8 @@ def connect_db() -> Any:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             norm_title TEXT UNIQUE,
             category TEXT,
-            language TEXT,
-            tags TEXT,
+            language TEXT NOT NULL DEFAULT 'und',
+            tags TEXT NOT NULL DEFAULT '',
             embedding BLOB
         )
         """
