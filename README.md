@@ -92,7 +92,7 @@ of variables are required to run the stack:
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
 | `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
-| `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup (avoids writes to `/data`) | `1` |
+| `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup (avoids writes to `/data`) | _(unset)_ |
 | `REDIS_DATA_DIR` | Directory Redis uses for persistence (bind-mounted) | `/data` |
 | `API_KEYS` | Comma separated API keys | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `on` |
@@ -107,12 +107,13 @@ of variables are required to run the stack:
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 
-Redis persistence is disabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
-to a falsy value leaves persistence enabled. When disabled, the app issues
+Redis persistence is enabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
+to a truthy value disables persistence. When disabled, the app issues
 `CONFIG SET save ""` and `appendonly no` to avoid permission errors, and the
-bundled `docker-compose` files start Redis with the same flags so nothing is
-written to `/data`. Use `REDIS_DATA_DIR` to bind mount a custom directory for
-persistence if the default `/data` path is unsuitable.
+bundled `docker-compose` files apply the same commands when
+`REDIS_DISABLE_PERSISTENCE` is set so nothing is written to `/data`. Use
+`REDIS_DATA_DIR` to bind mount a custom directory for persistence if the
+default `/data` path is unsuitable.
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category

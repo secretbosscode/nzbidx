@@ -49,7 +49,7 @@ services:
   redis:
     restart: unless-stopped
     environment:
-      REDIS_DISABLE_PERSISTENCE: ${REDIS_DISABLE_PERSISTENCE:-1}
+      REDIS_DISABLE_PERSISTENCE: ${REDIS_DISABLE_PERSISTENCE:-}
     volumes:
       - ${REDIS_DATA_DIR:-redis-data}:${REDIS_DATA_DIR:-/data}
     command: >
