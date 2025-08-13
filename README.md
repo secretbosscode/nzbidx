@@ -1,6 +1,6 @@
 # nzbidx
 
-If you find this project useful, donations are welcome at `BC1QT3CSUJELEDXRXTRNQHQCY93DW0D07SYHT5V9XF`.
+If you find this project useful, donations are welcome at `BC1QTL4RMQJXTJ2K05UMGVWXL46SGR4DJG2GCMRR38`.
 
 NZBIdx is a lightweight, Newznab-compatible indexer implemented as a single
 Python application. It exposes FastAPI endpoints backed by OpenSearch and
