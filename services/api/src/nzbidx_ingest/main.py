@@ -180,8 +180,12 @@ def connect_db() -> Any:
                         )
                         """
                     ),
+                    "DROP INDEX IF EXISTS release_embedding_idx",
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(768)",
+                    "ALTER TABLE IF EXISTS release ALTER COLUMN embedding TYPE vector(768)",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
+                    "CREATE INDEX IF NOT EXISTS release_embedding_idx ON release USING ivfflat (embedding vector_l2_ops) WITH (lists = 100)",
                 ):
                     try:
                         conn.execute(text(stmt))

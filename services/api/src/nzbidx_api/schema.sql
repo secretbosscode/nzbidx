@@ -10,11 +10,14 @@ CREATE TABLE IF NOT EXISTS release (
     embedding vector(768)
 );
 
+DROP INDEX IF EXISTS release_embedding_idx;
+
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS norm_title TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'und';
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '';
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(768);
+ALTER TABLE IF EXISTS release ALTER COLUMN embedding TYPE vector(768);
 
 UPDATE release SET language = 'und' WHERE language IS NULL;
 UPDATE release SET tags = '' WHERE tags IS NULL;
