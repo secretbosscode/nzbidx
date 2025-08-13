@@ -20,6 +20,7 @@ sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
+import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
 from nzbidx_ingest.main import CATEGORY_MAP, _infer_category, connect_db  # type: ignore
 
@@ -102,6 +103,22 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
     search_mod.search_releases(client, {"must": []}, limit=5, sort="date")
 
     assert body_holder["body"]["sort"] == [{"posted_at": {"order": "desc"}}]
+
+
+def test_os_search_multiple_categories(monkeypatch) -> None:
+    """Multiple categories should yield a ``terms`` filter."""
+    captured: dict[str, object] = {}
+
+    def dummy_search(_client, query, *, limit, offset=0, sort=None):
+        captured["query"] = query
+        return []
+
+    monkeypatch.setattr(api_main, "search_releases", dummy_search)
+    monkeypatch.setattr(api_main, "opensearch", object())
+    api_main._os_search("test", category="1000,2000")
+
+    filters = captured["query"].get("filter", [])
+    assert {"terms": {"category": ["1000", "2000"]}} in filters
 
 
 def test_infer_category_from_group() -> None:

@@ -543,7 +543,11 @@ def _os_search(
                             must.append({"match": {field: v}})
 
             if category:
-                filters.append({"term": {"category": category}})
+                categories = [c.strip() for c in category.split(",") if c.strip()]
+                if len(categories) == 1:
+                    filters.append({"term": {"category": categories[0]}})
+                elif categories:
+                    filters.append({"terms": {"category": categories}})
 
             if tag:
                 # Prefix on keyword field 'tags' (requires tags to be keyword in mapping)
