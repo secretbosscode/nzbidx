@@ -5,7 +5,7 @@ Manual steps to create the database for NZBIdx.
 ## Prerequisites
 
 * PostgreSQL 15+ with the [pgvector](https://github.com/pgvector/pgvector) extension installed on the server.
-* Superuser access to install extensions.
+* Superuser access to install extensions. Having permission to create databases alone is not enough.
 
 ## Create role and database
 
@@ -25,6 +25,8 @@ Extensions must be installed by a superuser before the application starts:
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
+
+If the `vector` extension is missing, schema application fails with `type "vector" does not exist` when the `embedding` column is created.
 
 ## Apply schema
 
