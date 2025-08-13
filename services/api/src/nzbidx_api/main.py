@@ -371,7 +371,7 @@ def init_cache() -> None:
     try:
         client = Redis.from_url(url)
         client.ping()
-        if os.getenv("REDIS_DISABLE_PERSISTENCE", "0") in {"1", "true", "TRUE", "True"}:
+        if os.getenv("REDIS_DISABLE_PERSISTENCE") in {"1", "true", "TRUE", "True"}:
             try:
                 client.config_set("save", "")
                 client.config_set("appendonly", "no")
