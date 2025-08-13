@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+# ruff: noqa: E402 - path manipulation before imports
+import sys
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
+
+from nzbidx_api.newznab import rss_xml  # type: ignore
+
+
+def test_rss_xml_includes_enclosure() -> None:
+    item = {
+        "title": "t",
+        "guid": "1",
+        "pubDate": "Mon, 01 Jan 2024 00:00:00 +0000",
+        "category": "2030",
+        "link": "/api?t=getnzb&id=1",
+    }
+    xml = rss_xml([item])
+    root = ET.fromstring(xml)
+    enclosure = root.find("./channel/item/enclosure")
+    assert enclosure is not None
+    assert enclosure.get("url") == item["link"]
+    assert enclosure.get("type") == "application/x-nzb"

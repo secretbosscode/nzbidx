@@ -202,6 +202,7 @@ def rss_xml(items: list[dict[str, str]]) -> str:
         f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
         f"<category>{html.escape(i['category'])}</category>"
         f"<link>{html.escape(i['link'])}</link>"
+        f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"0\"/>"
         "</item>"
         for i in safe_items
     )
