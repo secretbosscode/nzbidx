@@ -140,8 +140,8 @@ the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
 
 The API container also runs an ingest worker which polls NNTP groups and stores
 release metadata. Set the required NNTP environment variables and start the
-stack. When `NNTP_GROUPS` is omitted all available groups are discovered
-automatically. To invoke a one-off ingest loop manually:
+stack. When `NNTP_GROUPS` is omitted all available `alt.binaries.*` groups are
+discovered automatically. To invoke a one-off ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username
