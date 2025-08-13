@@ -38,6 +38,10 @@ def _conn() -> Any:
     conn.execute(
         'CREATE TABLE IF NOT EXISTS cursor ("group" TEXT PRIMARY KEY, last_article INTEGER, irrelevant INTEGER DEFAULT 0)'
     )
+    try:
+        conn.execute("ALTER TABLE cursor ADD COLUMN irrelevant INTEGER DEFAULT 0")
+    except Exception:  # column already exists
+        pass
     return conn
 
 
