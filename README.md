@@ -105,6 +105,7 @@ of variables are required to run the stack:
 | `NNTP_USER` | NNTP username | _(required for ingest worker)_ |
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
+| `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 
 Redis persistence remains unchanged unless `REDIS_DISABLE_PERSISTENCE` is set
 to a truthy value. When enabled, the app issues `CONFIG SET save ""` and

@@ -29,6 +29,18 @@ def _load_groups() -> List[str]:
 
 
 NNTP_GROUPS: List[str] = _load_groups()
+
+
+def _load_ignore_groups() -> List[str]:
+    env = os.getenv("NNTP_IGNORE_GROUPS", "")
+    if env:
+        groups = [g.strip() for g in env.split(",") if g.strip()]
+        logger.info("ingest_ignore_groups_config", extra={"groups": groups})
+        return groups
+    return []
+
+
+IGNORE_GROUPS: List[str] = _load_ignore_groups()
 INGEST_BATCH: int = int(os.getenv("INGEST_BATCH", "500"))
 INGEST_POLL_SECONDS: int = int(os.getenv("INGEST_POLL_SECONDS", "60"))
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")

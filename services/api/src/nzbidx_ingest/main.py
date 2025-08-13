@@ -174,10 +174,13 @@ def connect_db() -> Any:
                             category TEXT,
                             language TEXT NOT NULL DEFAULT 'und',
                             tags TEXT NOT NULL DEFAULT '',
+                            source_group TEXT,
                             embedding vector(1536)
                         )
                         """
                     ),
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
+                    "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                 ):
                     try:
                         conn.execute(text(stmt))
@@ -229,9 +232,13 @@ def connect_db() -> Any:
             category TEXT,
             language TEXT NOT NULL DEFAULT 'und',
             tags TEXT NOT NULL DEFAULT '',
+            source_group TEXT,
             embedding BLOB
         )
         """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
     )
     return conn
 
@@ -254,6 +261,7 @@ def insert_release(
     category: Optional[str],
     language: Optional[str],
     tags: Optional[list[str]] = None,
+    group: Optional[str] = None,
 ) -> bool:
     """Insert a release into the database if new. Returns True if inserted."""
 
@@ -269,15 +277,16 @@ def insert_release(
         _clean(category) or CATEGORY_MAP["other"],
         _clean(language) or "und",
         ",".join(cleaned_tags),
+        _clean(group),
     )
     if conn.__class__.__module__.startswith("sqlite3"):
         cur.execute(
-            "INSERT OR IGNORE INTO release (norm_title, category, language, tags) VALUES (?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group) VALUES (?, ?, ?, ?, ?)",
             params,
         )
     else:
         cur.execute(
-            "INSERT INTO release (norm_title, category, language, tags) VALUES (%s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
+            "INSERT INTO release (norm_title, category, language, tags, source_group) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
             params,
         )
     conn.commit()
@@ -294,6 +303,7 @@ def index_release(
     category: Optional[str] = None,
     language: Optional[str] = None,
     tags: Optional[list[str]] = None,
+    group: Optional[str] = None,
 ) -> None:
     """Index the release into OpenSearch (no-op if client is None)."""
     global _os_warned
@@ -306,6 +316,8 @@ def index_release(
         body["language"] = language
     if tags:
         body["tags"] = tags
+    if group:
+        body["source_group"] = group
     try:  # pragma: no cover - network errors
         client.index(
             index=OS_RELEASES_ALIAS,
@@ -317,6 +329,22 @@ def index_release(
         if not _os_warned:
             logger.warning("opensearch_index_failed", extra={"error": str(exc)})
             _os_warned = True
+
+
+def prune_group(conn: Any, client: Optional[object], group: str) -> None:
+    """Remove all releases associated with ``group`` from storage."""
+    cur = conn.cursor()
+    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
+    conn.commit()
+    if client:
+        try:  # pragma: no cover - network errors
+            client.delete_by_query(
+                index=OS_RELEASES_ALIAS,
+                body={"query": {"term": {"source_group": group}}},
+            )
+        except Exception:
+            logger.warning("opensearch_prune_failed", extra={"group": group})
 
 
 def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
