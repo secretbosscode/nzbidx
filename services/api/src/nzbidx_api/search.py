@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 import logging
+from datetime import datetime, timezone
+from email.utils import format_datetime
 
 from .config import search_timeout_ms
 from .middleware_circuit import CircuitOpenError, call_with_retry, os_breaker
@@ -17,6 +19,23 @@ except Exception:  # pragma: no cover - optional dependency
     OpenSearch = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+def _format_pubdate(iso_str: str) -> str:
+    """Return ``iso_str`` converted to RFC 2822 format.
+
+    ``iso_str`` is expected to be an ISO 8601 timestamp.  When parsing fails a
+    timestamp representing the current time is returned to satisfy RSS
+    requirements.
+    """
+
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    except ValueError:
+        dt = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return format_datetime(dt)
 
 
 def search_releases(
@@ -92,7 +111,7 @@ def search_releases(
             {
                 "title": src.get("norm_title", ""),
                 "guid": hit.get("_id", ""),
-                "pubDate": src.get("posted_at", ""),
+                "pubDate": _format_pubdate(src.get("posted_at", "")),
                 "category": src.get("category", ""),
                 "link": f"/api?t=getnzb&id={hit.get('_id', '')}",
             }

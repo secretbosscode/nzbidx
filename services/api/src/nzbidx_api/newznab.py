@@ -5,6 +5,8 @@ import os
 import html
 from pathlib import Path
 from typing import Optional
+from datetime import datetime, timezone
+from email.utils import format_datetime
 
 from .middleware_circuit import CircuitOpenError, call_with_retry, redis_breaker
 from .metrics_log import inc_nzb_cache_hit, inc_nzb_cache_miss
@@ -192,6 +194,7 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     safe_items = [
         i for i in items if allow_adult or not is_adult_category(i.get("category"))
     ]
+    channel_date = format_datetime(datetime.now(timezone.utc))
     items_xml = "".join(
         "<item>"
         f"<title>{html.escape(i['title'])}</title>"
@@ -202,7 +205,14 @@ def rss_xml(items: list[dict[str, str]]) -> str:
         "</item>"
         for i in safe_items
     )
-    return f'<rss version="2.0"><channel>{items_xml}</channel></rss>'
+    return (
+        '<rss version="2.0">'
+        '<channel>'
+        f"<pubDate>{html.escape(channel_date)}</pubDate>"
+        f"{items_xml}"
+        "</channel>"
+        "</rss>"
+    )
 
 
 def nzb_xml_stub(release_id: str) -> str:
