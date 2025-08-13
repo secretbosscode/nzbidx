@@ -19,7 +19,9 @@ Connections to PostgreSQL require the [`psycopg` driver](https://www.psycopg.org
 The container images install `psycopg[binary] >= 3.1` from the application's
 `pyproject.toml`. The `pg_trgm` and `vector` extensions must be installed by a
 superuser—`docker-compose` mounts `db/init/schema.sql` so the database is
-provisioned with the required extensions during initialisation.
+provisioned with the required extensions during initialisation. Having permission
+to create databases is not enough; roles without superuser rights cannot install
+extensions.
 
 The API exposes a helper that leverages an `ivfflat` index for efficient
 nearest-neighbour searches against release embeddings using the `pgvector`
@@ -298,13 +300,13 @@ DATABASE_URL=postgres://nzbidx:nzbidx@postgres:5432/nzbidx
 
 Schema creation is idempotent; running with a new database is sufficient.
 The required `vector` and `pg_trgm` extensions must be installed by a
-superuser before the application starts. The compose files mount
-`db/init/schema.sql`, which installs the extensions and creates tables during
-startup as `POSTGRES_USER`. When using an external Postgres instance or setting
-up the database manually, create the role and database, install the extensions
-and apply the schema as described in [docs/db.md](docs/db.md). Once the
-extensions are installed the `nzbidx` role only needs ownership of the
-database—no additional privileges are required.
+superuser before the application starts. Having `CREATE DATABASE` privileges
+alone won't work. The compose files mount `db/init/schema.sql`, which installs
+the extensions and creates tables during startup as `POSTGRES_USER`. When using
+an external Postgres instance or setting up the database manually, create the
+role and database, install the extensions and apply the schema as described in
+[docs/db.md](docs/db.md). Once the extensions are installed the `nzbidx` role
+only needs ownership of the database—no additional privileges are required.
 
 The application uses the `psycopg` driver for PostgreSQL connections. The Docker
 images install it from `pyproject.toml`, but local environments may need to run

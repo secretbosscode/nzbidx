@@ -54,6 +54,9 @@ def test_apply_schema_creates_database(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb):
             return None
 
+        async def scalar(self, stmt, params=None):
+            return 0  # database missing
+
         async def execute(self, stmt, params=None):
             admin_exec.append(stmt)
 
@@ -78,3 +81,40 @@ def test_apply_schema_creates_database(monkeypatch):
     assert admin_urls == [("postgresql+asyncpg://u@h/postgres", "AUTOCOMMIT")]
     assert any(stmt.startswith("CREATE DATABASE") for stmt in admin_exec)
     assert executed  # schema statements executed after creation
+
+
+def test_create_database_noop_if_exists(monkeypatch):
+    admin_urls: list[tuple[str, str | None]] = []
+    executed: list[str] = []
+
+    class AdminConn:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def scalar(self, stmt, params=None):
+            return 1  # database exists
+
+        async def execute(self, stmt, params=None):
+            executed.append(stmt)
+
+    class AdminEngine:
+        def connect(self):
+            return AdminConn()
+
+        async def dispose(self):
+            return None
+
+    def fake_create_async_engine(url, echo=False, isolation_level=None):
+        admin_urls.append((url, isolation_level))
+        return AdminEngine()
+
+    monkeypatch.setattr(db, "create_async_engine", fake_create_async_engine)
+    monkeypatch.setattr(db, "text", lambda s: s)
+
+    asyncio.run(db._create_database("postgresql+asyncpg://u@h/db"))
+
+    assert admin_urls == [("postgresql+asyncpg://u@h/postgres", "AUTOCOMMIT")]
+    assert executed == []
