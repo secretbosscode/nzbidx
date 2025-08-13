@@ -318,7 +318,9 @@ the extensions and creates tables during startup as `POSTGRES_USER`. When using
 an external Postgres instance or setting up the database manually, create the
 role and database, install the extensions and apply the schema as described in
 [docs/db.md](docs/db.md). Once the extensions are installed the `nzbidx` role
-only needs ownership of the database—no additional privileges are required.
+only needs ownership of the database—no additional privileges are required. The
+schema setup routine drops any superuser rights from the role as a final
+cleanup step, ensuring it runs as a regular user afterward.
 
 The application uses the `psycopg` driver for PostgreSQL connections. The Docker
 images install it from `pyproject.toml`, but local environments may need to run

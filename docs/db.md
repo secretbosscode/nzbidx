@@ -37,5 +37,7 @@ psql -U postgres -d nzbidx -f db/init/schema.sql
 ```
 
 After the extensions are installed and the schema applied, the `nzbidx` role does
-not require superuser privileges. Point `DATABASE_URL` at the database, e.g.
+not require superuser privileges. The schema application routine automatically
+revokes superuser rights from the role as a cleanup step, so subsequent
+connections run as an ordinary user. Point `DATABASE_URL` at the database, e.g.
 `postgres://nzbidx:nzbidx@localhost:5432/nzbidx`.

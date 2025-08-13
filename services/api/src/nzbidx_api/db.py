@@ -58,9 +58,18 @@ async def apply_schema() -> None:
                 else:
                     raise
 
+    async def _drop_privileges(conn: Any) -> None:
+        """Revoke superuser rights from the current role if possible."""
+        try:
+            await conn.execute(text("ALTER ROLE CURRENT_USER NOSUPERUSER"))
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+
     try:
         async with engine.connect() as conn:
             await _apply(conn)
+            await _drop_privileges(conn)
     except Exception as exc:
         msg = str(getattr(exc, "orig", exc)).lower()
         if "does not exist" not in msg and "invalid catalog name" not in msg:
@@ -68,6 +77,7 @@ async def apply_schema() -> None:
         await _create_database(DATABASE_URL)
         async with engine.connect() as conn:
             await _apply(conn)
+            await _drop_privileges(conn)
 
 
 async def _create_database(url: str) -> None:
