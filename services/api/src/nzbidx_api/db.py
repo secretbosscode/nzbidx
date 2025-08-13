@@ -111,6 +111,38 @@ async def ping() -> bool:
         return False
 
 
+async def _maintenance(stmt: str) -> None:
+    """Execute a maintenance statement with autocommit."""
+    if not engine or not text:
+        return
+    async with engine.connect() as conn:
+        await conn.execution_options(isolation_level="AUTOCOMMIT").execute(text(stmt))
+
+
+async def vacuum_analyze(table: str | None = None) -> None:
+    """Run ``VACUUM (ANALYZE)`` on the database or a specific table."""
+    stmt = "VACUUM (ANALYZE)"
+    if table:
+        stmt += f" {table}"
+    await _maintenance(stmt)
+
+
+async def reindex(table: str | None = None) -> None:
+    """Run ``REINDEX`` for the whole database or a given table."""
+    stmt = "REINDEX"
+    if table:
+        stmt += f" TABLE {table}"
+    await _maintenance(stmt)
+
+
+async def analyze(table: str | None = None) -> None:
+    """Update planner statistics for all tables or a specific table."""
+    stmt = "ANALYZE"
+    if table:
+        stmt += f" {table}"
+    await _maintenance(stmt)
+
+
 async def similar_releases(
     embedding: Sequence[float], *, limit: int = 10
 ) -> List[Dict[str, Any]]:
