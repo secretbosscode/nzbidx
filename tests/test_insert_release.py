@@ -51,7 +51,7 @@ def test_insert_release_with_embedding() -> None:
     conn.execute(
         "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, embedding BLOB)"
     )
-    embedding = [float(i) for i in range(1536)]
+    embedding = [float(i) for i in range(768)]
     inserted = insert_release(
         conn,
         "foo",
