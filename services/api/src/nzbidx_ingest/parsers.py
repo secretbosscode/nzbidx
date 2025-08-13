@@ -29,14 +29,32 @@ def extract_tags(subject: str) -> list[str]:
     return tags
 
 
+try:  # pragma: no cover - optional dependency
+    from langdetect import DetectorFactory, detect  # type: ignore
+
+    DetectorFactory.seed = 0
+except Exception:  # pragma: no cover - fallback when langdetect not installed
+    detect = None  # type: ignore
+
+
 def detect_language(subject: str) -> Optional[str]:
-    """Return a language code if a known token is present in the subject."""
+    """Return a language code for ``subject``.
+
+    First checks for explicit ``LANGUAGE_TOKENS`` (e.g. ``[FRENCH]``). If no
+    token is present and ``langdetect`` is available, fall back to automatic
+    detection. Returns ``None`` when the language cannot be determined.
+    """
     if not subject:
         return None
     upper = subject.upper()
     for token, code in LANGUAGE_TOKENS.items():
         if token in upper:
             return code
+    if detect is not None:
+        try:
+            return detect(subject)
+        except Exception:  # pragma: no cover - langdetect can raise on noise
+            return None
     return None
 
 
