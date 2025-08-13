@@ -39,6 +39,33 @@ from email.utils import parsedate_to_datetime
 logger = logging.getLogger(__name__)
 
 
+class _AggregateMetrics:
+    """Helper to accumulate metrics across groups during a poll cycle."""
+
+    def __init__(self) -> None:
+        self._processed = 0
+        self._remaining = 0
+        self._duration_s = 0.0
+
+    def add(self, metrics: dict[str, int | float]) -> None:
+        """Add per-group metrics to the aggregate."""
+        self._processed += int(metrics.get("processed", 0))
+        self._remaining += int(metrics.get("remaining", 0))
+        self._duration_s += float(metrics.get("duration_ms", 0)) / 1000
+
+    def summary(self) -> dict[str, int]:
+        """Return aggregate metrics including global ETA."""
+        summary: dict[str, int] = {
+            "processed": self._processed,
+            "remaining": self._remaining,
+            "eta_s": 0,
+        }
+        if self._duration_s > 0 and self._processed > 0 and self._remaining > 0:
+            rate = self._processed / self._duration_s
+            summary["eta_s"] = int(self._remaining / rate)
+        return summary
+
+
 def run_once() -> None:
     """Process a single batch for each configured NNTP group."""
     groups = config.NNTP_GROUPS or config._load_groups()
@@ -62,6 +89,8 @@ def run_once() -> None:
     client.connect()
     db = connect_db()
     os_client = connect_opensearch()
+
+    aggregate = _AggregateMetrics()
 
     for ig in ignored:
         prune_group(db, os_client, ig)
@@ -144,8 +173,11 @@ def run_once() -> None:
             rate = metrics["processed"] / duration_s
             metrics["eta_s"] = int(remaining / rate)
         logger.info("ingest_batch", extra=metrics)
+        aggregate.add(metrics)
         if metrics["inserted"] == 0:
             cursors.mark_irrelevant(group)
+
+    logger.info("ingest_summary", extra=aggregate.summary())
 
 
 def run_forever(stop_event: Event | None = None) -> None:

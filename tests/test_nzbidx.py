@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import threading
 import time
 import sys
@@ -541,7 +542,7 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
     assert calls
 
 
-def test_irrelevant_groups_skipped(tmp_path, monkeypatch) -> None:
+def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     """Groups marked irrelevant should not be polled again."""
     import nzbidx_ingest.ingest_loop as loop
     from nzbidx_ingest import config, cursors
@@ -579,5 +580,12 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch) -> None:
     )
     monkeypatch.setattr(loop, "index_release", lambda *_args, **_kwargs: None)
 
-    loop.run_once()
+    with caplog.at_level(logging.INFO):
+        loop.run_once()
+
     assert processed == ["alt.good.group"]
+    assert (
+        "nzbidx_ingest.ingest_loop",
+        logging.INFO,
+        "ingest_summary",
+    ) in caplog.record_tuples
