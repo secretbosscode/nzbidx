@@ -173,7 +173,8 @@ def connect_db() -> Any:
                             norm_title TEXT UNIQUE,
                             category TEXT,
                             language TEXT,
-                            tags TEXT
+                            tags TEXT,
+                            embedding vector(1536)
                         )
                         """
                     ),
@@ -227,7 +228,8 @@ def connect_db() -> Any:
             norm_title TEXT UNIQUE,
             category TEXT,
             language TEXT,
-            tags TEXT
+            tags TEXT,
+            embedding BLOB
         )
         """
     )
