@@ -28,7 +28,8 @@ def test_list_groups_sends_auth(monkeypatch) -> None:
         def __exit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
             return None
 
-        def list(self):  # pragma: no cover - simple
+        def list(self, pattern=None):  # pragma: no cover - simple
+            called["pattern"] = pattern
             return "", [("alt.binaries.example", "0", "0", "0")]
 
     monkeypatch.setenv("NNTP_HOST", "example.com")
@@ -45,6 +46,7 @@ def test_list_groups_sends_auth(monkeypatch) -> None:
 
     assert groups == ["alt.binaries.example"]
     assert called["args"] == ("example.com", 119, "user", "pass")
+    assert called["pattern"] == "alt.binaries.*"
 
 
 def test_high_water_mark_auth(monkeypatch) -> None:

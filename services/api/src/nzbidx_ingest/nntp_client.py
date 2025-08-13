@@ -78,7 +78,10 @@ class NNTPClient:
                 user=os.getenv("NNTP_USER"),
                 password=os.getenv("NNTP_PASS"),
             ) as server:
-                _resp, groups = server.list()
+                # Limit discovery to ``alt.binaries.*`` groups which represent the
+                # majority of binary content on Usenet.  This drastically reduces
+                # the number of groups returned and speeds up startup.
+                _resp, groups = server.list("alt.binaries.*")
                 return [name for name, *_rest in groups]
         except Exception:  # pragma: no cover - network failure
             return []
