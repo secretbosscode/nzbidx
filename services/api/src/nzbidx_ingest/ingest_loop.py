@@ -24,7 +24,6 @@ from .main import (
     CATEGORY_MAP,
     prune_group,
 )
-from .embeddings import embed
 
 try:  # pragma: no cover - optional import
     from nzbidx_api.middleware_circuit import os_breaker  # type: ignore
@@ -101,7 +100,6 @@ def run_once() -> None:
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
             start_idx = time.monotonic()
-            embedding = embed(dedupe_key)
             inserted = insert_release(
                 db,
                 dedupe_key,
@@ -109,7 +107,6 @@ def run_once() -> None:
                 language,
                 tags,
                 group,
-                embedding=embedding,
             )
             os_latency = 0.0
             if inserted:
