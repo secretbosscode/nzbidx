@@ -140,9 +140,12 @@ def run_once() -> None:
         metrics["high_water"] = high
         remaining = max(high - current, 0)
         metrics["remaining"] = remaining
+        if high > 0:
+            metrics["pct_complete"] = int(current / high * 100)
         if duration_s > 0 and metrics["processed"] > 0 and remaining > 0:
             rate = metrics["processed"] / duration_s
             metrics["eta_s"] = int(remaining / rate)
+        metrics["group"] = group
         logger.info("ingest_batch", extra=metrics)
         if metrics["inserted"] == 0:
             cursors.mark_irrelevant(group)
