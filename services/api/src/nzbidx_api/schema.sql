@@ -1,17 +1,5 @@
-CREATE TABLE IF NOT EXISTS usenet_group (
-    id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS poster (
-    id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS release (
     id SERIAL PRIMARY KEY,
-    group_id INTEGER REFERENCES usenet_group(id),
-    poster_id INTEGER REFERENCES poster(id),
     title TEXT NOT NULL,
     category TEXT,
     language TEXT,
@@ -19,8 +7,6 @@ CREATE TABLE IF NOT EXISTS release (
 );
 
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS title TEXT;
-ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES usenet_group(id);
-ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS poster_id INTEGER REFERENCES poster(id);
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS tags TEXT[];
@@ -40,8 +26,6 @@ CREATE TABLE IF NOT EXISTS release_file (
     filename TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS release_group_id_idx ON release (group_id);
-CREATE INDEX IF NOT EXISTS release_poster_id_idx ON release (poster_id);
 CREATE INDEX IF NOT EXISTS release_category_idx ON release (category);
 CREATE INDEX IF NOT EXISTS release_language_idx ON release (language);
 CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags);
