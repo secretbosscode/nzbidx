@@ -49,9 +49,11 @@ services:
   redis:
     restart: unless-stopped
     volumes:
-      - redis-data:/data
+      - ${REDIS_DATA_DIR:-redis-data}:${REDIS_DATA_DIR:-/data}
     command: [
       "redis-server",
+      "--dir",
+      "${REDIS_DATA_DIR:-/data}",
       "--save",
       "",
       "--appendonly",

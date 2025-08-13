@@ -93,6 +93,7 @@ of variables are required to run the stack:
 | `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
 | `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup | `0` |
+| `REDIS_DATA_DIR` | Directory Redis uses for persistence (bind-mounted) | `/data` |
 | `API_KEYS` | Comma separated API keys | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `on` |
 | `ALLOW_XXX` | `true` enables the XXX category | `false` |
@@ -107,7 +108,8 @@ of variables are required to run the stack:
 
 Redis persistence remains unchanged unless `REDIS_DISABLE_PERSISTENCE` is set
 to a truthy value. When enabled, the app issues `CONFIG SET save ""` and
-`appendonly no` to avoid permission errors.
+`appendonly no` to avoid permission errors. Use `REDIS_DATA_DIR` to bind mount a
+custom directory for persistence if the default `/data` path is unsuitable.
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category
