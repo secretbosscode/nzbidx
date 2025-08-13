@@ -176,7 +176,7 @@ def connect_db() -> Any:
                             language TEXT NOT NULL DEFAULT 'und',
                             tags TEXT NOT NULL DEFAULT '',
                             source_group TEXT,
-                            embedding vector(1536)
+                            embedding vector(768)
                         )
                         """
                     ),

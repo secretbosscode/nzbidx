@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS release (
     language TEXT NOT NULL DEFAULT 'und',
     tags TEXT NOT NULL DEFAULT '',
     source_group TEXT,
-    embedding vector(1536)
+    embedding vector(768)
 );
 
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS norm_title TEXT;
@@ -16,7 +16,7 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'und';
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '';
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT;
-ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(1536);
+ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(768);
 
 UPDATE release SET language = 'und' WHERE language IS NULL;
 UPDATE release SET tags = '' WHERE tags IS NULL;
