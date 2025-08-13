@@ -167,6 +167,10 @@ class NNTPClient:
             ) as server:
                 server.group(group)
                 _resp, overviews = server.xover(start, end)
-                return list(overviews)
+                # ``nntplib`` returns a list of ``(id, header_dict)`` tuples
+                # while our ingest loop expects just the header dictionaries.
+                # Some test doubles may already provide dictionaries, so handle
+                # both shapes here.
+                return [ov[1] if isinstance(ov, tuple) else ov for ov in overviews]
         except Exception:  # pragma: no cover - network failure
             return []
