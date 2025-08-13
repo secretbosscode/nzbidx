@@ -22,9 +22,9 @@ class _FakeRedis:
         pass
 
 
-def test_init_cache_disables_persistence(monkeypatch) -> None:
+def test_init_cache_disables_persistence_by_default(monkeypatch) -> None:
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-    monkeypatch.setenv("REDIS_DISABLE_PERSISTENCE", "1")
+    monkeypatch.delenv("REDIS_DISABLE_PERSISTENCE", raising=False)
     monkeypatch.setattr(main, "Redis", _FakeRedis)
     _FakeRedis.calls = []
     main.cache = None
@@ -34,9 +34,9 @@ def test_init_cache_disables_persistence(monkeypatch) -> None:
     main.cache = None
 
 
-def test_init_cache_leaves_persistence_by_default(monkeypatch) -> None:
+def test_init_cache_leaves_persistence_when_enabled(monkeypatch) -> None:
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-    monkeypatch.delenv("REDIS_DISABLE_PERSISTENCE", raising=False)
+    monkeypatch.setenv("REDIS_DISABLE_PERSISTENCE", "0")
     monkeypatch.setattr(main, "Redis", _FakeRedis)
     _FakeRedis.calls = []
     main.cache = None
