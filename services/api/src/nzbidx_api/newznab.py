@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 from . import nzb_builder
 
-ADULT_CATEGORY = 6000
+ADULT_CATEGORY_ID = 6000
 
 FAIL_SENTINEL = b"__error__"
 FAIL_TTL = 60
@@ -41,7 +41,7 @@ def is_adult_category(cat: Optional[str]) -> bool:
         value = int(cat or 0)
     except ValueError:
         return False
-    return ADULT_CATEGORY <= value < ADULT_CATEGORY + 1000
+    return ADULT_CATEGORY_ID <= value < ADULT_CATEGORY_ID + 1000
 
 
 def _default_categories() -> list[dict[str, str]]:
@@ -119,10 +119,50 @@ def _load_categories() -> list[dict[str, str]]:
 
 CATEGORIES = _load_categories()
 _CATEGORY_MAP = {c["name"]: c["id"] for c in CATEGORIES}
-MOVIES_CAT = _CATEGORY_MAP.get("Movies", "2000")
-TV_CAT = _CATEGORY_MAP.get("TV", "5000")
-AUDIO_CAT = _CATEGORY_MAP.get("Audio", _CATEGORY_MAP.get("Audio/Music", "3000"))
-BOOKS_CAT = _CATEGORY_MAP.get("EBook", "7020")
+_ID_NAME_MAP = {c["id"]: c["name"] for c in CATEGORIES}
+MOVIES_CATEGORY_ID = _CATEGORY_MAP.get("Movies", "2000")
+TV_CATEGORY_ID = _CATEGORY_MAP.get("TV", "5000")
+AUDIO_CATEGORY_ID = _CATEGORY_MAP.get("Audio", _CATEGORY_MAP.get("Audio/Music", "3000"))
+BOOKS_CATEGORY_ID = _CATEGORY_MAP.get("EBook", "7020")
+
+
+def _collect_category_ids(parent: str) -> list[str]:
+    """Return IDs for ``parent`` and any ``parent/*`` subcategories."""
+
+    return [
+        c["id"]
+        for c in CATEGORIES
+        if c["name"] == parent or c["name"].startswith(f"{parent}/")
+    ]
+
+
+def expand_category_ids(ids: list[str]) -> list[str]:
+    """Expand parent category IDs to include their subcategories."""
+
+    expanded: list[str] = []
+    for cid in ids:
+        name = _ID_NAME_MAP.get(cid)
+        if not name:
+            expanded.append(cid)
+            continue
+        if "/" in name:
+            expanded.append(cid)
+        else:
+            expanded.extend(_collect_category_ids(name))
+    seen: set[str] = set()
+    result: list[str] = []
+    for c in expanded:
+        if c not in seen:
+            seen.add(c)
+            result.append(c)
+    return result
+
+
+MOVIE_CATEGORY_IDS = _collect_category_ids("Movies")
+TV_CATEGORY_IDS = _collect_category_ids("TV")
+AUDIO_CATEGORY_IDS = _collect_category_ids("Audio")
+BOOKS_CATEGORY_IDS = _collect_category_ids("EBook")
+ADULT_CATEGORY_IDS = _collect_category_ids("XXX")
 
 
 def caps_xml() -> str:

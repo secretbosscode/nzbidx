@@ -3,11 +3,11 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from starlette.responses import Response
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
+
+from starlette.responses import Response
 
 from nzbidx_api.api_key import ApiKeyMiddleware  # noqa: E402
 
