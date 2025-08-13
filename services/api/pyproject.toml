@@ -17,6 +17,7 @@ dependencies = [
     "redis",
     "python-dotenv",
     "setuptools>=78.1.1",
+    "langdetect",
 ]
 
 [tool.setuptools.packages.find]
