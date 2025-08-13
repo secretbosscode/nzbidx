@@ -71,32 +71,16 @@ class NNTPClient:
         use_ssl = (ssl_env == "1") if ssl_env is not None else port == 563
 
         try:
-            if use_ssl:
-                context = ssl.create_default_context()
-                with socket.create_connection((host, port), timeout=10) as sock:
-                    with context.wrap_socket(sock, server_hostname=host) as ssock:
-                        return self._list(ssock)
-            else:
-                with socket.create_connection((host, port), timeout=10) as sock:
-                    return self._list(sock)
+            cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
+            with cls(
+                host,
+                port=port,
+                user=os.getenv("NNTP_USER"),
+                password=os.getenv("NNTP_PASS"),
+            ) as server:
+                _resp, groups = server.list()
+                return [name for name, *_rest in groups]
         except Exception:  # pragma: no cover - network failure
-            return []
-
-    def _list(self, sock: socket.socket) -> list[str]:
-        try:
-            self._recv_line(sock)
-            sock.sendall(b"MODE READER\r\n")
-            self._recv_line(sock)
-            self._auth_if_needed(sock)
-            sock.sendall(b"LIST\r\n")
-            groups: list[str] = []
-            while True:
-                line = self._recv_line(sock)
-                if line == "." or not line:
-                    break
-                groups.append(line.split()[0])
-            return groups
-        except Exception:  # pragma: no cover - network issues
             return []
 
     def _auth_if_needed(self, sock: socket.socket) -> None:
