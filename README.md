@@ -11,21 +11,17 @@ Only release metadata is stored; binaries are discarded during ingest.
 
 ## Database Performance
 
-Postgres runs with the `pgvector` extension and a set of indexes to keep queries
-fast as the dataset grows. The schema enables the extension and creates the
-indexes during initialization; see `db/init/schema.sql` for details.
+Postgres uses a set of indexes to keep queries fast as the dataset grows. The
+schema creates the indexes during initialization; see `db/init/schema.sql` for
+details.
 
 Connections to PostgreSQL require the [`psycopg` driver](https://www.psycopg.org/).
 The container images install `psycopg[binary] >= 3.1` from the application's
-`pyproject.toml`. The `pg_trgm` and `vector` extensions must be installed by a
+`pyproject.toml`. The `pg_trgm` extension must be installed by a
 superuser—`docker-compose` mounts `db/init/schema.sql` so the database is
-provisioned with the required extensions during initialisation. Having permission
+provisioned with the required extension during initialisation. Having permission
 to create databases is not enough; roles without superuser rights cannot install
 extensions.
-
-The API exposes a helper that leverages an `ivfflat` index for efficient
-nearest-neighbour searches against release embeddings using the `pgvector`
-extension.
 
 Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper schedules `VACUUM (ANALYZE)`, `ANALYZE`,
@@ -110,9 +106,6 @@ of variables are required to run the stack:
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
-| `OPENAI_API_KEY` | OpenAI key used to generate text embeddings | _(unset)_ |
-| `OLLAMA_URL` | Base URL for an Ollama server providing embeddings | _(unset)_ |
-| `OLLAMA_EMBED_MODEL` | Ollama embedding model | `nomic-embed-text` |
 
 Redis persistence remains unchanged unless `REDIS_DISABLE_PERSISTENCE` is set
 to a truthy value. When enabled, the app issues `CONFIG SET save ""` and
@@ -318,7 +311,9 @@ the extensions and creates tables during startup as `POSTGRES_USER`. When using
 an external Postgres instance or setting up the database manually, create the
 role and database, install the extensions and apply the schema as described in
 [docs/db.md](docs/db.md). Once the extensions are installed the `nzbidx` role
-only needs ownership of the database—no additional privileges are required.
+only needs ownership of the database—no additional privileges are required. The
+schema setup routine drops any superuser rights from the role as a final
+cleanup step, ensuring it runs as a regular user afterward.
 
 The application uses the `psycopg` driver for PostgreSQL connections. The Docker
 images install it from `pyproject.toml`, but local environments may need to run

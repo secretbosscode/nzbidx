@@ -7,7 +7,7 @@ import os
 from importlib import resources
 from urllib.parse import urlparse, urlunparse
 
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Optional
 
 # Optional SQLAlchemy dependency
 try:  # pragma: no cover - import guard
@@ -58,9 +58,18 @@ async def apply_schema() -> None:
                 else:
                     raise
 
+    async def _drop_privileges(conn: Any) -> None:
+        """Revoke superuser rights from the current role if possible."""
+        try:
+            await conn.execute(text("ALTER ROLE CURRENT_USER NOSUPERUSER"))
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+
     try:
         async with engine.connect() as conn:
             await _apply(conn)
+            await _drop_privileges(conn)
     except Exception as exc:
         msg = str(getattr(exc, "orig", exc)).lower()
         if "does not exist" not in msg and "invalid catalog name" not in msg:
@@ -68,6 +77,7 @@ async def apply_schema() -> None:
         await _create_database(DATABASE_URL)
         async with engine.connect() as conn:
             await _apply(conn)
+            await _drop_privileges(conn)
 
 
 async def _create_database(url: str) -> None:
@@ -141,24 +151,3 @@ async def analyze(table: str | None = None) -> None:
     if table:
         stmt += f" {table}"
     await _maintenance(stmt)
-
-
-async def similar_releases(
-    embedding: Sequence[float], *, limit: int = 10
-) -> List[Dict[str, Any]]:
-    """Return releases ordered by vector distance.
-
-    Utilises the ``pgvector`` ivfflat index to efficiently search for
-    nearest neighbours based on the supplied ``embedding``.
-    """
-    if not engine or not text:
-        return []
-    stmt = text(
-        "SELECT id, norm_title AS title, category, language FROM release "
-        "ORDER BY embedding <-> :embedding LIMIT :limit"
-    )
-    async with engine.connect() as conn:
-        result = await conn.execute(
-            stmt, {"embedding": list(embedding), "limit": limit}
-        )
-        return [dict(row) for row in result]
