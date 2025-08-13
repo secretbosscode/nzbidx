@@ -207,7 +207,7 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     )
     return (
         '<rss version="2.0">'
-        '<channel>'
+        "<channel>"
         f"<pubDate>{html.escape(channel_date)}</pubDate>"
         f"{items_xml}"
         "</channel>"
