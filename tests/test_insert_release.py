@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+from array import array
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,7 @@ from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
 def test_insert_release_filters_surrogates() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, embedding BLOB)"
     )
     inserted = insert_release(
         conn,
@@ -35,7 +36,7 @@ def test_insert_release_filters_surrogates() -> None:
 def test_insert_release_defaults() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, embedding BLOB)"
     )
     inserted = insert_release(conn, "foo", None, None, None, None)
     assert inserted
@@ -43,3 +44,25 @@ def test_insert_release_defaults() -> None:
         "SELECT norm_title, category, language, tags, source_group FROM release",
     ).fetchone()
     assert row == ("foo", CATEGORY_MAP["other"], "und", "", None)
+
+
+def test_insert_release_with_embedding() -> None:
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, embedding BLOB)"
+    )
+    embedding = [float(i) for i in range(1536)]
+    inserted = insert_release(
+        conn,
+        "foo",
+        "cat",
+        "en",
+        [],
+        None,
+        embedding=embedding,
+    )
+    assert inserted
+    stored = conn.execute("SELECT embedding FROM release").fetchone()[0]
+    arr = array("f")
+    arr.frombytes(stored)
+    assert list(arr) == embedding

@@ -6,8 +6,9 @@ import logging
 import os
 import re
 import sqlite3
+from array import array
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Sequence
 from urllib.parse import urlparse, urlunparse
 
 try:
@@ -262,6 +263,7 @@ def insert_release(
     language: Optional[str],
     tags: Optional[list[str]] = None,
     group: Optional[str] = None,
+    embedding: Optional[Sequence[float]] = None,
 ) -> bool:
     """Insert a release into the database if new. Returns True if inserted."""
 
@@ -272,21 +274,35 @@ def insert_release(
 
     cur = conn.cursor()
     cleaned_tags = [_clean(t) or "" for t in (tags or [])]
-    params = (
-        _clean(norm_title),
-        _clean(category) or CATEGORY_MAP["other"],
-        _clean(language) or "und",
-        ",".join(cleaned_tags),
-        _clean(group),
-    )
+    cleaned_title = _clean(norm_title)
+    cleaned_category = _clean(category) or CATEGORY_MAP["other"]
+    cleaned_language = _clean(language) or "und"
+    cleaned_group = _clean(group)
     if conn.__class__.__module__.startswith("sqlite3"):
+        encoded = array("f", embedding or []).tobytes() if embedding else None
+        params = (
+            cleaned_title,
+            cleaned_category,
+            cleaned_language,
+            ",".join(cleaned_tags),
+            cleaned_group,
+            encoded,
+        )
         cur.execute(
-            "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group, embedding) VALUES (?, ?, ?, ?, ?, ?)",
             params,
         )
     else:
+        params = (
+            cleaned_title,
+            cleaned_category,
+            cleaned_language,
+            ",".join(cleaned_tags),
+            cleaned_group,
+            list(embedding) if embedding is not None else None,
+        )
         cur.execute(
-            "INSERT INTO release (norm_title, category, language, tags, source_group) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
+            "INSERT INTO release (norm_title, category, language, tags, source_group, embedding) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
             params,
         )
     conn.commit()

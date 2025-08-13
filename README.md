@@ -110,6 +110,9 @@ of variables are required to run the stack:
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
+| `OPENAI_API_KEY` | OpenAI key used to generate text embeddings | _(unset)_ |
+| `OLLAMA_URL` | Base URL for an Ollama server providing embeddings | _(unset)_ |
+| `OLLAMA_EMBED_MODEL` | Ollama embedding model | `nomic-embed-text` |
 
 Redis persistence remains unchanged unless `REDIS_DISABLE_PERSISTENCE` is set
 to a truthy value. When enabled, the app issues `CONFIG SET save ""` and
