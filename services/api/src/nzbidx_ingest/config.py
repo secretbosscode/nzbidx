@@ -31,6 +31,6 @@ def _load_groups() -> List[str]:
 NNTP_GROUPS: List[str] = _load_groups()
 INGEST_BATCH: int = int(os.getenv("INGEST_BATCH", "500"))
 INGEST_POLL_SECONDS: int = int(os.getenv("INGEST_POLL_SECONDS", "60"))
-CURSOR_DB: str = os.getenv("CURSOR_DB", "./cursors.sqlite")
+CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
 INGEST_OS_LATENCY_MS: int = int(os.getenv("INGEST_OS_LATENCY_MS", "1200"))
