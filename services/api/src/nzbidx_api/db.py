@@ -84,7 +84,17 @@ async def _create_database(url: str) -> None:
     )
     try:
         async with admin_engine.connect() as conn:
-            await conn.execute(text(f'CREATE DATABASE "{dbname}"'))
+            exists = await conn.scalar(
+                text("SELECT 1 FROM pg_database WHERE datname=:name"),
+                {"name": dbname},
+            )
+            if not exists:
+                try:
+                    await conn.execute(text(f'CREATE DATABASE "{dbname}"'))
+                except Exception as exc:  # pragma: no cover - db may exist
+                    msg = str(getattr(exc, "orig", exc)).lower()
+                    if "already exists" not in msg and "duplicate database" not in msg:
+                        raise
     finally:
         await admin_engine.dispose()
 
