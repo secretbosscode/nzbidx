@@ -27,6 +27,10 @@ The API exposes a helper that leverages an `ivfflat` index for efficient
 nearest-neighbour searches against release embeddings using the `pgvector`
 extension.
 
+Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
+`scripts/db_maintenance.py` helper schedules `VACUUM (ANALYZE)`, `ANALYZE`,
+and `REINDEX` jobs via APScheduler.
+
 ## Performance Tuning
 
 The default compose files apply a few settings aimed at keeping searches fast:

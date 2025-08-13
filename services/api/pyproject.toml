@@ -17,7 +17,7 @@ dependencies = [
     "redis",
     "python-dotenv",
     "setuptools>=78.1.1",
-    "langdetect",
+    "apscheduler",
 ]
 
 [tool.setuptools.packages.find]
