@@ -21,6 +21,7 @@ from .main import (
     _infer_category,
     connect_db,
     connect_opensearch,
+    CATEGORY_MAP,
 )
 
 try:  # pragma: no cover - optional import
@@ -80,8 +81,9 @@ def run_once() -> None:
                 except Exception:
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
-            language = detect_language(subject)
-            category = _infer_category(subject, group)
+            language = detect_language(subject) or "und"
+            category = _infer_category(subject, group) or CATEGORY_MAP["other"]
+            tags = tags or []
             start_idx = time.monotonic()
             inserted = insert_release(db, dedupe_key, category, language, tags)
             os_latency = 0.0
