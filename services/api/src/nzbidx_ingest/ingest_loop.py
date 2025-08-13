@@ -44,6 +44,12 @@ def run_once() -> None:
     if not groups:
         logger.info("ingest_no_groups")
         return
+    skip = set(cursors.get_irrelevant_groups())
+    if skip:
+        groups = [g for g in groups if g not in skip]
+    if not groups:
+        logger.info("ingest_no_groups")
+        return
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
@@ -63,6 +69,7 @@ def run_once() -> None:
                 "ingest_idle",
                 extra={"group": group, "cursor": last, "high_water": high},
             )
+            cursors.mark_irrelevant(group)
             continue
         metrics = {"processed": 0, "inserted": 0, "indexed": 0}
         last_os_latency = 0.0
@@ -121,6 +128,8 @@ def run_once() -> None:
             rate = metrics["processed"] / duration_s
             metrics["eta_s"] = int(remaining / rate)
         logger.info("ingest_batch", extra=metrics)
+        if metrics["inserted"] == 0:
+            cursors.mark_irrelevant(group)
 
 
 def run_forever(stop_event: Event | None = None) -> None:

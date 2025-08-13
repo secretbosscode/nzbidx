@@ -36,7 +36,7 @@ def _conn() -> Any:
         conn = sqlite3.connect(CURSOR_DB)
         _PARAMSTYLE = "?"
     conn.execute(
-        'CREATE TABLE IF NOT EXISTS cursor ("group" TEXT PRIMARY KEY, last_article INTEGER)'
+        'CREATE TABLE IF NOT EXISTS cursor ("group" TEXT PRIMARY KEY, last_article INTEGER, irrelevant INTEGER DEFAULT 0)'
     )
     return conn
 
@@ -45,7 +45,8 @@ def get_cursor(group: str) -> int | None:
     """Return the last processed article number for ``group``."""
     conn = _conn()
     cur = conn.execute(
-        f'SELECT last_article FROM cursor WHERE "group" = {_PARAMSTYLE}', (group,)
+        f'SELECT last_article FROM cursor WHERE "group" = {_PARAMSTYLE} AND irrelevant = 0',
+        (group,),
     )
     row = cur.fetchone()
     conn.close()
@@ -56,9 +57,30 @@ def set_cursor(group: str, last_article: int) -> None:
     """Persist the ``last_article`` cursor for ``group``."""
     conn = _conn()
     conn.execute(
-        f'INSERT INTO cursor("group", last_article) VALUES ({_PARAMSTYLE}, {_PARAMSTYLE}) '
-        'ON CONFLICT("group") DO UPDATE SET last_article=excluded.last_article',
+        f'INSERT INTO cursor("group", last_article, irrelevant) VALUES ({_PARAMSTYLE}, {_PARAMSTYLE}, 0) '
+        'ON CONFLICT("group") DO UPDATE SET last_article=excluded.last_article, irrelevant=0',
         (group, last_article),
     )
     conn.commit()
     conn.close()
+
+
+def mark_irrelevant(group: str) -> None:
+    """Mark ``group`` as irrelevant to skip future processing."""
+    conn = _conn()
+    conn.execute(
+        f'INSERT INTO cursor("group", last_article, irrelevant) VALUES ({_PARAMSTYLE}, 0, 1) '
+        'ON CONFLICT("group") DO UPDATE SET irrelevant=1',
+        (group,),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_irrelevant_groups() -> list[str]:
+    """Return all groups marked as irrelevant."""
+    conn = _conn()
+    cur = conn.execute('SELECT "group" FROM cursor WHERE irrelevant = 1')
+    rows = cur.fetchall()
+    conn.close()
+    return [row[0] for row in rows]
