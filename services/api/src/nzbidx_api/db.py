@@ -122,7 +122,7 @@ async def similar_releases(
     if not engine or not text:
         return []
     stmt = text(
-        "SELECT id, title, category, language FROM release "
+        "SELECT id, norm_title AS title, category, language FROM release "
         "ORDER BY embedding <-> :embedding LIMIT :limit"
     )
     async with engine.connect() as conn:
