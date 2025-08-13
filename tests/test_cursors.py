@@ -51,4 +51,6 @@ def test_cursor_postgres_dsn(monkeypatch):
     cursors.set_cursor("alt.example", 99)
     assert cursors.get_cursor("alt.example") == 99
     assert executed[0] == ("url", "postgresql://user@host/db")
-    assert "%s" in executed[2][0] and "%s" in executed[5][0]
+    insert_stmt = next(stmt for stmt, _ in executed if stmt.startswith("INSERT"))
+    select_stmt = next(stmt for stmt, _ in executed if stmt.startswith("SELECT"))
+    assert "%s" in insert_stmt and "%s" in select_stmt
