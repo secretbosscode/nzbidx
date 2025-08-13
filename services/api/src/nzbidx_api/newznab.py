@@ -2,6 +2,7 @@
 
 import json
 import os
+import html
 from pathlib import Path
 from typing import Optional
 
@@ -193,11 +194,11 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     ]
     items_xml = "".join(
         "<item>"
-        f"<title>{i['title']}</title>"
-        f"<guid>{i['guid']}</guid>"
-        f"<pubDate>{i['pubDate']}</pubDate>"
-        f"<category>{i['category']}</category>"
-        f"<link>{i['link']}</link>"
+        f"<title>{html.escape(i['title'])}</title>"
+        f"<guid>{html.escape(i['guid'])}</guid>"
+        f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
+        f"<category>{html.escape(i['category'])}</category>"
+        f"<link>{html.escape(i['link'])}</link>"
         "</item>"
         for i in safe_items
     )
