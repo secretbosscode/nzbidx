@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import asyncio
 import json
 import logging
 import threading
@@ -119,6 +120,209 @@ def test_os_search_multiple_categories(monkeypatch) -> None:
 
     filters = captured["query"].get("filter", [])
     assert {"terms": {"category": ["1000", "2000"]}} in filters
+
+
+def test_movie_defaults_to_all_movie_categories(monkeypatch) -> None:
+    """Movie searches should include all movie subcategories by default."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "movie"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"].split(",") == newznab.MOVIE_CATEGORY_IDS
+
+
+def test_movie_respects_cat_param(monkeypatch) -> None:
+    """Explicit category filters should be honored."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "movie", "cat": "2030"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"] == "2030"
+
+
+def test_tv_defaults_to_all_tv_categories(monkeypatch) -> None:
+    """TV searches should include all TV subcategories by default."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "tvsearch"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"].split(",") == newznab.TV_CATEGORY_IDS
+
+
+def test_tv_respects_cat_param(monkeypatch) -> None:
+    """Explicit TV category filters should be honored."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "tvsearch", "cat": "5030"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"] == "5030"
+
+
+def test_music_defaults_to_all_audio_categories(monkeypatch) -> None:
+    """Music searches should include all audio subcategories by default."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "music"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"].split(",") == newznab.AUDIO_CATEGORY_IDS
+
+
+def test_music_respects_cat_param(monkeypatch) -> None:
+    """Explicit music category filters should be honored."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "music", "cat": "3030"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"] == "3030"
+
+
+def test_book_defaults_to_all_book_categories(monkeypatch) -> None:
+    """Book searches should include all book subcategories by default."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "book"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"].split(",") == newznab.BOOKS_CATEGORY_IDS
+
+
+def test_book_respects_cat_param(monkeypatch) -> None:
+    """Explicit book category filters should be honored."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(query_params={"t": "book", "cat": "7030"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"] == "7030"
+
+
+def test_parent_cat_expands_subcategories(monkeypatch) -> None:
+    """Parent category IDs should expand to include subcategories."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(
+        query_params={"t": "search", "q": "test", "cat": "5000"},
+        headers={},
+    )
+    asyncio.run(api_main.api(req))
+    assert captured["category"].split(",") == newznab.TV_CATEGORY_IDS
+
+
+def test_adult_parent_cat_expands(monkeypatch) -> None:
+    """Adult parent category should expand when adult content allowed."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    req = SimpleNamespace(
+        query_params={"t": "search", "q": "test", "cat": "6000"},
+        headers={},
+    )
+    asyncio.run(api_main.api(req))
+    assert captured["category"].split(",") == newznab.ADULT_CATEGORY_IDS
+
+
+def test_strips_adult_cats_when_disallowed(monkeypatch) -> None:
+    """Adult categories should be removed when not allowed."""
+
+    captured: dict[str, object] = {}
+
+    def dummy_os_search(
+        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+    ):
+        captured["category"] = category
+        return []
+
+    monkeypatch.setattr(api_main, "_os_search", dummy_os_search)
+    monkeypatch.setenv("ALLOW_XXX", "false")
+    req = SimpleNamespace(query_params={"t": "movie", "cat": "2030,6010"}, headers={})
+    asyncio.run(api_main.api(req))
+    assert captured["category"] == "2030"
+
+
+def test_caps_xml_omits_adult_when_disabled(monkeypatch) -> None:
+    """caps.xml should exclude adult categories when disabled."""
+
+    monkeypatch.setenv("SAFESEARCH", "on")
+    reloaded = importlib.reload(newznab)
+    xml = reloaded.caps_xml()
+    assert '<category id="6000"' not in xml
 
 
 def test_infer_category_from_group() -> None:

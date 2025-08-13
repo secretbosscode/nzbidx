@@ -114,10 +114,12 @@ from .newznab import (
     NzbFetchError,
     is_adult_category,
     rss_xml,
-    MOVIES_CAT,
-    AUDIO_CAT,
-    BOOKS_CAT,
-    TV_CAT,
+    MOVIE_CATEGORY_IDS,
+    TV_CATEGORY_IDS,
+    AUDIO_CATEGORY_IDS,
+    BOOKS_CATEGORY_IDS,
+    ADULT_CATEGORY_ID,
+    expand_category_ids,
 )
 from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
@@ -556,7 +558,7 @@ def _os_search(
             # Block adult content by default unless explicitly allowed
             must_not: list[dict[str, object]] = []
             if not adult_content_allowed():
-                must_not.append({"term": {"category": "xxx"}})
+                must_not.append({"prefix": {"category": str(ADULT_CATEGORY_ID)[0]}})
 
             query: dict[str, object] = {"must": must}
             if filters:
@@ -628,12 +630,14 @@ async def api(request: Request) -> Response:
     sort = params.get("sort")
 
     # Adult category gating
-    if (
-        cat
-        and any(is_adult_category(c.strip()) for c in cat.split(","))
-        and not adult_content_allowed()
-    ):
-        return _xml_response(adult_disabled_xml())
+    if cat:
+        cats = [c.strip() for c in cat.split(",") if c.strip()]
+        cats = expand_category_ids(cats)
+        if not adult_content_allowed():
+            cats = [c for c in cats if not is_adult_category(c)]
+            if not cats:
+                return _xml_response(adult_disabled_xml())
+        cat = ",".join(cats) if cats else None
 
     if t == "caps":
         return _xml_response(caps_xml())
@@ -666,9 +670,10 @@ async def api(request: Request) -> Response:
         season = params.get("season")
         episode = params.get("ep")
         tag = params.get("tag")
+        cats = cat or ",".join(TV_CATEGORY_IDS)
         items = _os_search(
             q,
-            category=TV_CAT,
+            category=cats,
             tag=tag,
             extra={"season": season, "episode": episode},
             limit=limit,
@@ -690,9 +695,10 @@ async def api(request: Request) -> Response:
             return invalid_params("query too long")
         imdbid = params.get("imdbid")
         tag = params.get("tag")
+        cats = cat or ",".join(MOVIE_CATEGORY_IDS)
         items = _os_search(
             q,
-            category=MOVIES_CAT,
+            category=cats,
             tag=tag,
             extra={"imdbid": imdbid, "resolution": params.get("resolution")},
             limit=limit,
@@ -718,9 +724,10 @@ async def api(request: Request) -> Response:
         extra = {"tags": [t for t in tags if t]}
         if year:
             extra["year"] = year
+        cats = cat or ",".join(AUDIO_CATEGORY_IDS)
         items = _os_search(
             q,
-            category=AUDIO_CAT,
+            category=cats,
             tag=tag,
             extra=extra,
             limit=limit,
@@ -746,9 +753,10 @@ async def api(request: Request) -> Response:
         extra = {"tags": [t for t in tags if t]}
         if year:
             extra["year"] = year
+        cats = cat or ",".join(BOOKS_CATEGORY_IDS)
         items = _os_search(
             q,
-            category=BOOKS_CAT,
+            category=cats,
             tag=tag,
             extra=extra,
             limit=limit,
