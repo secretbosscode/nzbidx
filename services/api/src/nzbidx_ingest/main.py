@@ -253,7 +253,7 @@ def insert_release(
     norm_title: str,
     category: Optional[str],
     language: Optional[str],
-    tags: list[str],
+    tags: Optional[list[str]] = None,
 ) -> bool:
     """Insert a release into the database if new. Returns True if inserted."""
 
@@ -263,12 +263,12 @@ def insert_release(
         return text.encode("utf-8", "surrogateescape").decode("utf-8", "ignore")
 
     cur = conn.cursor()
-    cleaned_tags = [_clean(t) or "" for t in tags] if tags else []
+    cleaned_tags = [_clean(t) or "" for t in (tags or [])]
     params = (
         _clean(norm_title),
-        _clean(category),
-        _clean(language),
-        ",".join(cleaned_tags) if cleaned_tags else None,
+        _clean(category) or CATEGORY_MAP["other"],
+        _clean(language) or "und",
+        ",".join(cleaned_tags),
     )
     if conn.__class__.__module__.startswith("sqlite3"):
         cur.execute(
