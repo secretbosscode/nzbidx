@@ -14,6 +14,12 @@ LANGUAGE_TOKENS: Dict[str, str] = {
 
 _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
 
+# Regexes used to sanitize text before automatic language detection. We strip
+# URLs and anything that is not an ASCII letter so short subjects with a lot of
+# noise still contain useful signals for ``langdetect``.
+_URL_RE = re.compile(r"http\S+|www\.\S+", re.IGNORECASE)
+_NON_LETTER_RE = re.compile(r"[^A-Za-z\s]+")
+
 
 def extract_tags(subject: str) -> list[str]:
     """Extract lowercased tags from bracketed segments in ``subject``."""
@@ -52,10 +58,26 @@ def detect_language(subject: str) -> Optional[str]:
             return code
     if detect is not None:
         try:
-            return detect(subject)
+            cleaned = _clean_language_text(subject)
+            if not cleaned:
+                return None
+            return detect(cleaned)
         except Exception:  # pragma: no cover - langdetect can raise on noise
             return None
     return None
+
+
+def _clean_language_text(text: str) -> str:
+    """Return ``text`` stripped of URLs, numbers and punctuation.
+
+    ``langdetect`` performs poorly on very short or noisy strings. Removing
+    obvious non-linguistic characters gives it a better chance at correctly
+    identifying the language of Usenet subject lines filled with dates or
+    adverts.
+    """
+    text = _URL_RE.sub(" ", text)
+    text = _NON_LETTER_RE.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def extract_music_tags(subject: str) -> Dict[str, str]:
