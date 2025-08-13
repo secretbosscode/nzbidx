@@ -539,3 +539,45 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
     stop.set()
     t.join(1)
     assert calls
+
+
+def test_irrelevant_groups_skipped(tmp_path, monkeypatch) -> None:
+    """Groups marked irrelevant should not be polled again."""
+    import nzbidx_ingest.ingest_loop as loop
+    from nzbidx_ingest import config, cursors
+
+    db_path = tmp_path / "cursors.sqlite"
+    monkeypatch.setattr(config, "CURSOR_DB", str(db_path))
+    monkeypatch.setattr(cursors, "CURSOR_DB", str(db_path))
+
+    cursors.mark_irrelevant("alt.bad.group")
+
+    monkeypatch.setattr(
+        config, "NNTP_GROUPS", ["alt.good.group", "alt.bad.group"], raising=False
+    )
+
+    processed: list[str] = []
+
+    class DummyClient:
+        def connect(self) -> None:  # pragma: no cover - trivial
+            pass
+
+        def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
+            return 0
+
+        def xover(self, group: str, start: int, end: int):  # pragma: no cover - simple
+            processed.append(group)
+            return [{"subject": "Example"}]
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
+    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
+    monkeypatch.setattr(
+        loop,
+        "insert_release",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(loop, "index_release", lambda *_args, **_kwargs: None)
+
+    loop.run_once()
+    assert processed == ["alt.good.group"]
