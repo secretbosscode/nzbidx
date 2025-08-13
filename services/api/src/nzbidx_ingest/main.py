@@ -6,9 +6,8 @@ import logging
 import os
 import re
 import sqlite3
-from array import array
 from pathlib import Path
-from typing import Optional, Any, Sequence
+from typing import Optional, Any
 from urllib.parse import urlparse, urlunparse
 
 try:
@@ -165,7 +164,6 @@ def connect_db() -> Any:
             engine = create_engine(u, echo=False, future=True)
             with engine.connect() as conn:  # type: ignore[call-arg]
                 for stmt in (
-                    "CREATE EXTENSION IF NOT EXISTS vector",
                     "CREATE EXTENSION IF NOT EXISTS pg_trgm",
                     (
                         """
@@ -175,17 +173,14 @@ def connect_db() -> Any:
                             category TEXT,
                             language TEXT NOT NULL DEFAULT 'und',
                             tags TEXT NOT NULL DEFAULT '',
-                            source_group TEXT,
-                            embedding vector(768)
+                            source_group TEXT
                         )
                         """
                     ),
                     "DROP INDEX IF EXISTS release_embedding_idx",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS embedding vector(768)",
-                    "ALTER TABLE IF EXISTS release ALTER COLUMN embedding TYPE vector(768)",
+                    "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
-                    "CREATE INDEX IF NOT EXISTS release_embedding_idx ON release USING ivfflat (embedding vector_l2_ops) WITH (lists = 100)",
                 ):
                     try:
                         conn.execute(text(stmt))
@@ -237,8 +232,7 @@ def connect_db() -> Any:
             category TEXT,
             language TEXT NOT NULL DEFAULT 'und',
             tags TEXT NOT NULL DEFAULT '',
-            source_group TEXT,
-            embedding BLOB
+            source_group TEXT
         )
         """
     )
@@ -267,7 +261,6 @@ def insert_release(
     language: Optional[str],
     tags: Optional[list[str]] = None,
     group: Optional[str] = None,
-    embedding: Optional[Sequence[float]] = None,
 ) -> bool:
     """Insert a release into the database if new. Returns True if inserted."""
 
@@ -283,17 +276,15 @@ def insert_release(
     cleaned_language = _clean(language) or "und"
     cleaned_group = _clean(group)
     if conn.__class__.__module__.startswith("sqlite3"):
-        encoded = array("f", embedding or []).tobytes() if embedding else None
         params = (
             cleaned_title,
             cleaned_category,
             cleaned_language,
             ",".join(cleaned_tags),
             cleaned_group,
-            encoded,
         )
         cur.execute(
-            "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group, embedding) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group) VALUES (?, ?, ?, ?, ?)",
             params,
         )
     else:
@@ -303,10 +294,9 @@ def insert_release(
             cleaned_language,
             ",".join(cleaned_tags),
             cleaned_group,
-            list(embedding) if embedding is not None else None,
         )
         cur.execute(
-            "INSERT INTO release (norm_title, category, language, tags, source_group, embedding) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
+            "INSERT INTO release (norm_title, category, language, tags, source_group) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
             params,
         )
     conn.commit()
