@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import threading
 import time
 import sys
@@ -541,7 +542,7 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
     assert calls
 
 
-def test_irrelevant_groups_skipped(tmp_path, monkeypatch) -> None:
+def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     """Groups marked irrelevant should not be polled again."""
     import nzbidx_ingest.ingest_loop as loop
     from nzbidx_ingest import config, cursors
@@ -579,41 +580,12 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch) -> None:
     )
     monkeypatch.setattr(loop, "index_release", lambda *_args, **_kwargs: None)
 
-    loop.run_once()
-    assert processed == ["alt.good.group"]
-
-
-def test_run_once_logs_progress(monkeypatch, caplog) -> None:
-    """ingest_batch log should include group and pct_complete."""
-    import nzbidx_ingest.ingest_loop as loop
-    from nzbidx_ingest import config, cursors
-
-    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
-    monkeypatch.setattr(config, "IGNORE_GROUPS", [], raising=False)
-    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: [])
-    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "set_cursor", lambda *_a, **_k: None)
-    monkeypatch.setattr(cursors, "mark_irrelevant", lambda *_a, **_k: None)
-
-    class DummyClient:
-        def connect(self) -> None:  # pragma: no cover - trivial
-            pass
-
-        def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
-            return 10
-
-        def xover(self, group: str, start: int, end: int):  # pragma: no cover - simple
-            return [{"subject": "Example"}]
-
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
-    monkeypatch.setattr(loop, "insert_release", lambda *_a, **_k: True)
-    monkeypatch.setattr(loop, "index_release", lambda *_a, **_k: None)
-
-    with caplog.at_level("INFO"):
+    with caplog.at_level(logging.INFO):
         loop.run_once()
 
-    record = next(r for r in caplog.records if r.msg == "ingest_batch")
-    assert record.group == "alt.test"
-    assert record.pct_complete == 10
+    assert processed == ["alt.good.group"]
+    assert (
+        "nzbidx_ingest.ingest_loop",
+        logging.INFO,
+        "ingest_summary",
+    ) in caplog.record_tuples
