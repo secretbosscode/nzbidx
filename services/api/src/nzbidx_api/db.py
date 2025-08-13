@@ -7,7 +7,7 @@ import os
 from importlib import resources
 from urllib.parse import urlparse, urlunparse
 
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Optional
 
 # Optional SQLAlchemy dependency
 try:  # pragma: no cover - import guard
@@ -141,24 +141,3 @@ async def analyze(table: str | None = None) -> None:
     if table:
         stmt += f" {table}"
     await _maintenance(stmt)
-
-
-async def similar_releases(
-    embedding: Sequence[float], *, limit: int = 10
-) -> List[Dict[str, Any]]:
-    """Return releases ordered by vector distance.
-
-    Utilises the ``pgvector`` ivfflat index to efficiently search for
-    nearest neighbours based on the supplied ``embedding``.
-    """
-    if not engine or not text:
-        return []
-    stmt = text(
-        "SELECT id, norm_title AS title, category, language FROM release "
-        "ORDER BY embedding <-> :embedding LIMIT :limit"
-    )
-    async with engine.connect() as conn:
-        result = await conn.execute(
-            stmt, {"embedding": list(embedding), "limit": limit}
-        )
-        return [dict(row) for row in result]
