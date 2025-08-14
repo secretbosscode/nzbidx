@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
 from .config import (
@@ -88,128 +87,103 @@ def run_once() -> None:
 
     client = NNTPClient()
     client.connect()
+    db = connect_db()
+    os_client = connect_opensearch()
 
     aggregate = _AggregateMetrics()
 
-    prune_db = prune_os = None
-    if ignored:
-        prune_db = connect_db()
-        prune_os = connect_opensearch()
-        for ig in ignored:
-            prune_group(prune_db, prune_os, ig)
-        if prune_db and hasattr(prune_db, "close"):
-            try:
-                prune_db.close()
-            except Exception:  # pragma: no cover - close failures are non-fatal
-                pass
+    for ig in ignored:
+        prune_group(db, os_client, ig)
 
-    def _process_group(group: str) -> dict[str, int | float] | None:
-        db = connect_db()
-        os_client = connect_opensearch()
-        try:
-            last = cursors.get_cursor(group) or 0
-            start = last + 1
-            end = start + INGEST_BATCH - 1
-            high = client.high_water_mark(group)
-            headers = client.xover(group, start, end)
-            if not headers:
-                logger.info(
-                    "ingest_idle",
-                    extra={"group": group, "cursor": last, "high_water": high},
-                )
-                if high > 0:
-                    cursors.mark_irrelevant(group)
-                return None
-            metrics: dict[str, int | float] = {
-                "processed": 0,
-                "inserted": 0,
-                "indexed": 0,
-            }
-            last_os_latency = 0.0
-            batch_start = time.monotonic()
-            current = last
-            for idx, header in enumerate(headers, start=start):
-                metrics["processed"] += 1
-                subject = header.get("subject", "")
-                norm_title, tags = normalize_subject(subject, with_tags=True)
-                norm_title = norm_title.lower()
-                posted = header.get("date")
-                day_bucket = ""
-                if posted:
-                    try:
-                        day_bucket = parsedate_to_datetime(str(posted)).strftime(
-                            "%Y-%m-%d"
-                        )
-                    except Exception:
-                        day_bucket = ""
-                dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
-                language = detect_language(subject) or "und"
-                category = _infer_category(subject, group) or CATEGORY_MAP["other"]
-                tags = tags or []
-                start_idx = time.monotonic()
-                inserted = insert_release(
-                    db,
-                    dedupe_key,
-                    category,
-                    language,
-                    tags,
-                    group,
-                )
-                os_latency = 0.0
-                if inserted:
-                    metrics["inserted"] += 1
-                    os_start = time.monotonic()
-                    index_release(
-                        os_client,
-                        dedupe_key,
-                        category=category,
-                        language=language,
-                        tags=tags,
-                        group=group,
-                    )
-                    os_latency = time.monotonic() - os_start
-                    last_os_latency = os_latency
-                    metrics["indexed"] += 1
-                latency = time.monotonic() - start_idx
-                if os_breaker.is_open():
-                    time.sleep(CB_RESET_SECONDS / 2)
-                elif os_latency * 1000 > INGEST_OS_LATENCY_MS:
-                    time.sleep(min(os_latency / 2, 2))
-                elif latency > 0.5:
-                    time.sleep(min(latency, 5))
-                current = idx
-            cursors.set_cursor(group, current)
-            metrics["deduped"] = metrics["processed"] - metrics["inserted"]
-            duration_s = time.monotonic() - batch_start
-            metrics["duration_ms"] = int(duration_s * 1000)
-            metrics["os_latency_ms"] = int(last_os_latency * 1000)
-            metrics["cursor"] = current
-            metrics["high_water"] = high
-            remaining = max(high - current, 0)
-            metrics["remaining"] = remaining
+    for group in groups:
+        last = cursors.get_cursor(group) or 0
+        start = last + 1
+        end = start + INGEST_BATCH - 1
+        high = client.high_water_mark(group)
+        headers = client.xover(group, start, end)
+        if not headers:
+            logger.info(
+                "ingest_idle",
+                extra={"group": group, "cursor": last, "high_water": high},
+            )
+            # ``high`` is ``0`` when the NNTP server is unreachable.  Avoid
+            # marking the group as irrelevant in that case so it will be
+            # retried once connectivity is restored.
             if high > 0:
-                metrics["pct_complete"] = int(current / high * 100)
-            if duration_s > 0 and metrics["processed"] > 0 and remaining > 0:
-                rate = metrics["processed"] / duration_s
-                metrics["eta_s"] = int(remaining / rate)
-            metrics["group"] = group
-            logger.info("ingest_batch", extra=metrics)
-            if metrics["inserted"] == 0:
                 cursors.mark_irrelevant(group)
-            return metrics
-        finally:
-            if db and hasattr(db, "close"):
+            continue
+        metrics = {"processed": 0, "inserted": 0, "indexed": 0}
+        last_os_latency = 0.0
+        batch_start = time.monotonic()
+        current = last
+        collected: list[tuple[str, str, str, list[str], str | None]] = []
+        for idx, header in enumerate(headers, start=start):
+            metrics["processed"] += 1
+            subject = header.get("subject", "")
+            norm_title, tags = normalize_subject(subject, with_tags=True)
+            norm_title = norm_title.lower()
+            posted = header.get("date")
+            day_bucket = ""
+            if posted:
                 try:
-                    db.close()
-                except Exception:  # pragma: no cover - close failures are non-fatal
-                    pass
+                    day_bucket = parsedate_to_datetime(str(posted)).strftime("%Y-%m-%d")
+                except Exception:
+                    day_bucket = ""
+            dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
+            language = detect_language(subject) or "und"
+            category = _infer_category(subject, group) or CATEGORY_MAP["other"]
+            tags = tags or []
+            collected.append((dedupe_key, category, language, tags, group))
+            current = idx
 
-    with ThreadPoolExecutor(max_workers=len(groups)) as executor:
-        futures = [executor.submit(_process_group, g) for g in groups]
-        for future in futures:
-            metrics = future.result()
-            if metrics:
-                aggregate.add(metrics)
+        inserted_titles = insert_release(db, releases=collected)
+        if isinstance(inserted_titles, bool):  # legacy mocks may return bool
+            metrics["inserted"] = int(inserted_titles)
+            inserted_titles = set()
+        else:
+            metrics["inserted"] = len(inserted_titles)
+
+        for dedupe_key, category, language, tags, _group in collected:
+            if inserted_titles and dedupe_key not in inserted_titles:
+                continue
+            os_start = time.monotonic()
+            index_release(
+                os_client,
+                dedupe_key,
+                category=category,
+                language=language,
+                tags=tags,
+                group=_group,
+            )
+            os_latency = time.monotonic() - os_start
+            last_os_latency = os_latency
+            metrics["indexed"] += 1
+            if os_breaker.is_open():
+                time.sleep(CB_RESET_SECONDS / 2)
+            elif os_latency * 1000 > INGEST_OS_LATENCY_MS:
+                time.sleep(min(os_latency / 2, 2))
+            elif os_latency > 0.5:
+                time.sleep(min(os_latency, 5))
+
+        cursors.set_cursor(group, current)
+        metrics["deduped"] = metrics["processed"] - metrics["inserted"]
+        duration_s = time.monotonic() - batch_start
+        metrics["duration_ms"] = int(duration_s * 1000)
+        metrics["os_latency_ms"] = int(last_os_latency * 1000)
+        metrics["cursor"] = current
+        metrics["high_water"] = high
+        remaining = max(high - current, 0)
+        metrics["remaining"] = remaining
+        if high > 0:
+            metrics["pct_complete"] = int(current / high * 100)
+        if duration_s > 0 and metrics["processed"] > 0 and remaining > 0:
+            rate = metrics["processed"] / duration_s
+            metrics["eta_s"] = int(remaining / rate)
+        metrics["group"] = group
+        logger.info("ingest_batch", extra=metrics)
+        aggregate.add(metrics)
+        if metrics["inserted"] == 0:
+            cursors.mark_irrelevant(group)
 
     logger.info("ingest_summary", extra=aggregate.summary())
 
