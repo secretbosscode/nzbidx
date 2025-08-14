@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import ORJSONResponse, Response
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -17,7 +17,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         length = request.headers.get("content-length")
         if length and int(length) > self.max_request_bytes:
-            return JSONResponse({"detail": "request too large"}, status_code=413)
+            return ORJSONResponse({"detail": "request too large"}, status_code=413)
         response = await call_next(request)
         headers = response.headers
         headers.setdefault("X-Content-Type-Options", "nosniff")

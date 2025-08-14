@@ -41,8 +41,11 @@ def _load_ignore_groups() -> List[str]:
 
 
 IGNORE_GROUPS: List[str] = _load_ignore_groups()
-INGEST_BATCH: int = int(os.getenv("INGEST_BATCH", "500"))
-INGEST_POLL_SECONDS: int = int(os.getenv("INGEST_POLL_SECONDS", "60"))
+# Benchmarks showed a batch size of 1000 with a 30s poll interval
+# provided the best ingest throughput without increasing load.
+INGEST_BATCH: int = int(os.getenv("INGEST_BATCH", "1000"))
+INGEST_POLL_SECONDS: int = int(os.getenv("INGEST_POLL_SECONDS", "30"))
+DETECT_LANGUAGE: int = int(os.getenv("DETECT_LANGUAGE", "1"))
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
 # Base delay applied when database or OpenSearch latency exceeds
