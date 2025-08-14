@@ -494,6 +494,10 @@ def _os_search(
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
+    q = q.strip() if isinstance(q, str) else None
+    extra_has_value = any(v for v in (extra or {}).values())
+    if not (q or tag or extra_has_value):
+        return items
     if opensearch:
         try:
             must: list[dict[str, object]] = []
