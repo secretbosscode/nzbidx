@@ -11,6 +11,7 @@
 - Consolidate ingest into the API application and remove the separate ingest service.
 - Ensure release `language` and `tags` columns have non-null defaults.
 - Include `langdetect` dependency for automatic language detection.
+- Ignore empty search queries to avoid returning entire categories.
 
 ## [0.0.0] - 2024-01-01
 - Initial release.
