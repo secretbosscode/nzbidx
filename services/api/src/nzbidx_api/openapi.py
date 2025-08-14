@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from starlette.responses import ORJSONResponse
+from .orjson_response import ORJSONResponse
 
 OPENAPI = {
     "openapi": "3.0.0",

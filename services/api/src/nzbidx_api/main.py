@@ -31,7 +31,6 @@ except Exception:  # pragma: no cover - optional dependency
 try:  # pragma: no cover - import guard
     from starlette.applications import Starlette
     from starlette.requests import Request
-    from starlette.responses import ORJSONResponse, Response
     from starlette.routing import Route
     from starlette.middleware import Middleware
     from starlette.middleware.cors import CORSMiddleware
@@ -43,26 +42,6 @@ except Exception:  # pragma: no cover - optional dependency
 
         def __init__(self, scope: dict) -> None:
             self.query_params = scope.get("query_params", {})
-
-    class Response:  # type: ignore
-        def __init__(
-            self,
-            content: str,
-            *,
-            status_code: int = 200,
-            media_type: str = "text/plain",
-        ) -> None:
-            self.status_code = status_code
-            self.body = content.encode("utf-8")
-            self.headers = {"content-type": media_type}
-
-    class ORJSONResponse(Response):  # type: ignore
-        def __init__(self, content: dict, *, status_code: int = 200) -> None:
-            super().__init__(
-                orjson.dumps(content).decode(),
-                status_code=status_code,
-                media_type="application/json",
-            )
 
     class Route:  # type: ignore
         def __init__(
@@ -108,6 +87,7 @@ except Exception:  # pragma: no cover - optional dependency
             self.middleware = middleware or []
 
 
+from .orjson_response import ORJSONResponse, Response
 from .db import ping, apply_schema
 from .newznab import (
     adult_content_allowed,
