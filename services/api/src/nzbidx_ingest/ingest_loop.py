@@ -116,6 +116,7 @@ def run_once() -> None:
         last_os_latency = 0.0
         batch_start = time.monotonic()
         current = last
+        collected: list[tuple[str, str, str, list[str], str | None]] = []
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
             subject = header.get("subject", "")
@@ -132,38 +133,38 @@ def run_once() -> None:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
-            start_idx = time.monotonic()
-            inserted = insert_release(
-                db,
+            collected.append((dedupe_key, category, language, tags, group))
+            current = idx
+
+        inserted_titles = insert_release(db, releases=collected)
+        if isinstance(inserted_titles, bool):  # legacy mocks may return bool
+            metrics["inserted"] = int(inserted_titles)
+            inserted_titles = set()
+        else:
+            metrics["inserted"] = len(inserted_titles)
+
+        for dedupe_key, category, language, tags, _group in collected:
+            if inserted_titles and dedupe_key not in inserted_titles:
+                continue
+            os_start = time.monotonic()
+            index_release(
+                os_client,
                 dedupe_key,
-                category,
-                language,
-                tags,
-                group,
+                category=category,
+                language=language,
+                tags=tags,
+                group=_group,
             )
-            os_latency = 0.0
-            if inserted:
-                metrics["inserted"] += 1
-                os_start = time.monotonic()
-                index_release(
-                    os_client,
-                    dedupe_key,
-                    category=category,
-                    language=language,
-                    tags=tags,
-                    group=group,
-                )
-                os_latency = time.monotonic() - os_start
-                last_os_latency = os_latency
-                metrics["indexed"] += 1
-            latency = time.monotonic() - start_idx
+            os_latency = time.monotonic() - os_start
+            last_os_latency = os_latency
+            metrics["indexed"] += 1
             if os_breaker.is_open():
                 time.sleep(CB_RESET_SECONDS / 2)
             elif os_latency * 1000 > INGEST_OS_LATENCY_MS:
                 time.sleep(min(os_latency / 2, 2))
-            elif latency > 0.5:
-                time.sleep(min(latency, 5))
-            current = idx
+            elif os_latency > 0.5:
+                time.sleep(min(os_latency, 5))
+
         cursors.set_cursor(group, current)
         metrics["deduped"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start

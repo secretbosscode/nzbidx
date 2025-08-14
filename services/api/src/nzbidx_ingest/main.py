@@ -7,7 +7,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
 
 try:
@@ -262,13 +262,17 @@ def connect_opensearch() -> Optional[object]:
 
 def insert_release(
     conn: Any,
-    norm_title: str,
-    category: Optional[str],
-    language: Optional[str],
+    norm_title: str | None = None,
+    category: Optional[str] = None,
+    language: Optional[str] = None,
     tags: Optional[list[str]] = None,
     group: Optional[str] = None,
-) -> bool:
-    """Insert a release into the database if new. Returns True if inserted."""
+    *,
+    releases: Optional[
+        Iterable[tuple[str, Optional[str], Optional[str], Optional[list[str]], Optional[str]]]
+    ] = None,
+) -> set[str]:
+    """Insert one or more releases and return the inserted titles."""
 
     def _clean(text: Optional[str]) -> Optional[str]:
         if text is None:
@@ -276,37 +280,56 @@ def insert_release(
         return text.encode("utf-8", "surrogateescape").decode("utf-8", "ignore")
 
     cur = conn.cursor()
-    cleaned_tags = [_clean(t) or "" for t in (tags or [])]
-    cleaned_title = _clean(norm_title)
-    cleaned_category = _clean(category) or CATEGORY_MAP["other"]
-    cleaned_language = _clean(language) or "und"
-    cleaned_group = _clean(group)
-    if conn.__class__.__module__.startswith("sqlite3"):
-        params = (
-            cleaned_title,
-            cleaned_category,
-            cleaned_language,
-            ",".join(cleaned_tags),
-            cleaned_group,
-        )
-        cur.execute(
-            "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group) VALUES (?, ?, ?, ?, ?)",
-            params,
-        )
+
+    items: list[tuple[str, Optional[str], Optional[str], list[str], Optional[str]]] = []
+    if releases is not None:
+        for r in releases:
+            n, c, lang, t, g = r
+            items.append((n, c, lang, list(t or []), g))
+    elif norm_title is not None:
+        items.append((norm_title, category, language, list(tags or []), group))
     else:
-        params = (
-            cleaned_title,
-            cleaned_category,
-            cleaned_language,
-            ",".join(cleaned_tags),
-            cleaned_group,
+        return set()
+
+    cleaned: list[tuple[str, str, str, str, Optional[str]]] = []
+    titles: list[str] = []
+    for n, c, lang, t, g in items:
+        cleaned_title = _clean(n) or ""
+        titles.append(cleaned_title)
+        cleaned_category = _clean(c) or CATEGORY_MAP["other"]
+        cleaned_language = _clean(lang) or "und"
+        cleaned_tags = ",".join(_clean(tag) or "" for tag in t)
+        cleaned_group = _clean(g)
+        cleaned.append(
+            (cleaned_title, cleaned_category, cleaned_language, cleaned_tags, cleaned_group)
         )
+
+    placeholders = ",".join(
+        ["?" if conn.__class__.__module__.startswith("sqlite3") else "%s" for _ in titles]
+    )
+    existing: set[str] = set()
+    if titles:
         cur.execute(
-            "INSERT INTO release (norm_title, category, language, tags, source_group) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
-            params,
+            f"SELECT norm_title FROM release WHERE norm_title IN ({placeholders})",
+            titles,
         )
+        existing = {row[0] for row in cur.fetchall()}
+
+    to_insert = [row for row in cleaned if row[0] not in existing]
+    inserted = {row[0] for row in to_insert}
+    if to_insert:
+        if conn.__class__.__module__.startswith("sqlite3"):
+            cur.executemany(
+                "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group) VALUES (?, ?, ?, ?, ?)",
+                to_insert,
+            )
+        else:
+            cur.executemany(
+                "INSERT INTO release (norm_title, category, language, tags, source_group) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
+                to_insert,
+            )
     conn.commit()
-    return cur.rowcount > 0
+    return inserted
 
 
 _os_warned = False

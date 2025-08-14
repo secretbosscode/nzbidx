@@ -25,7 +25,7 @@ def test_insert_release_filters_surrogates() -> None:
         ["tag\udc80"],
         "alt.binaries.example",
     )
-    assert inserted
+    assert inserted == {"foobar"}
     row = conn.execute(
         "SELECT norm_title, category, language, tags, source_group FROM release",
     ).fetchone()
@@ -38,8 +38,24 @@ def test_insert_release_defaults() -> None:
         "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT)"
     )
     inserted = insert_release(conn, "foo", None, None, None, None)
-    assert inserted
+    assert inserted == {"foo"}
     row = conn.execute(
         "SELECT norm_title, category, language, tags, source_group FROM release",
     ).fetchone()
     assert row == ("foo", CATEGORY_MAP["other"], "und", "", None)
+
+
+def test_insert_release_batch() -> None:
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT)"
+    )
+    releases = [
+        ("foo", None, None, None, None),
+        ("bar", "cat", "en", ["tag"], "alt.binaries.example"),
+        ("foo", None, None, None, None),
+    ]
+    inserted = insert_release(conn, releases=releases)
+    assert inserted == {"foo", "bar"}
+    rows = conn.execute("SELECT norm_title FROM release ORDER BY norm_title").fetchall()
+    assert rows == [("bar",), ("foo",)]
