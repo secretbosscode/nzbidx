@@ -11,6 +11,8 @@ from .config import (
     INGEST_POLL_SECONDS,
     INGEST_OS_LATENCY_MS,
     CB_RESET_SECONDS,
+    INGEST_SLEEP_MS,
+    INGEST_DB_LATENCY_MS,
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
@@ -115,6 +117,10 @@ def run_once() -> None:
         metrics = {"processed": 0, "inserted": 0, "indexed": 0}
         last_os_latency = 0.0
         batch_start = time.monotonic()
+        total_db_latency = 0.0
+        total_os_latency = 0.0
+        db_count = 0
+        os_count = 0
         current = last
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
@@ -132,7 +138,7 @@ def run_once() -> None:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
-            start_idx = time.monotonic()
+            db_start = time.monotonic()
             inserted = insert_release(
                 db,
                 dedupe_key,
@@ -141,6 +147,9 @@ def run_once() -> None:
                 tags,
                 group,
             )
+            db_latency = time.monotonic() - db_start
+            total_db_latency += db_latency
+            db_count += 1
             os_latency = 0.0
             if inserted:
                 metrics["inserted"] += 1
@@ -155,20 +164,24 @@ def run_once() -> None:
                 )
                 os_latency = time.monotonic() - os_start
                 last_os_latency = os_latency
+                total_os_latency += os_latency
+                os_count += 1
                 metrics["indexed"] += 1
-            latency = time.monotonic() - start_idx
-            if os_breaker.is_open():
-                time.sleep(CB_RESET_SECONDS / 2)
-            elif os_latency * 1000 > INGEST_OS_LATENCY_MS:
-                time.sleep(min(os_latency / 2, 2))
-            elif latency > 0.5:
-                time.sleep(min(latency, 5))
             current = idx
         cursors.set_cursor(group, current)
         metrics["deduped"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
         metrics["duration_ms"] = int(duration_s * 1000)
+        metrics["avg_batch_ms"] = (
+            int(metrics["duration_ms"] / metrics["processed"])
+            if metrics["processed"]
+            else 0
+        )
         metrics["os_latency_ms"] = int(last_os_latency * 1000)
+        avg_db_ms = int((total_db_latency / db_count) * 1000) if db_count else 0
+        avg_os_ms = int((total_os_latency / os_count) * 1000) if os_count else 0
+        metrics["avg_db_ms"] = avg_db_ms
+        metrics["avg_os_ms"] = avg_os_ms
         metrics["cursor"] = current
         metrics["high_water"] = high
         remaining = max(high - current, 0)
@@ -183,6 +196,13 @@ def run_once() -> None:
         aggregate.add(metrics)
         if metrics["inserted"] == 0:
             cursors.mark_irrelevant(group)
+        sleep_ms = 0
+        if os_breaker.is_open():
+            sleep_ms = max(sleep_ms, int(CB_RESET_SECONDS * 500))
+        if avg_db_ms > INGEST_DB_LATENCY_MS or avg_os_ms > INGEST_OS_LATENCY_MS:
+            sleep_ms = max(sleep_ms, INGEST_SLEEP_MS)
+        if sleep_ms > 0:
+            time.sleep(sleep_ms / 1000)
 
     logger.info("ingest_summary", extra=aggregate.summary())
 

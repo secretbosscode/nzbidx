@@ -959,3 +959,47 @@ def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None
     loop.run_once()
 
     assert cursors.get_irrelevant_groups() == []
+
+
+def test_batch_throttle_on_latency(monkeypatch) -> None:
+    """run_once should backoff when avg DB latency exceeds threshold."""
+    import nzbidx_ingest.ingest_loop as loop
+    from nzbidx_ingest import config, cursors
+    import time as _time
+
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
+    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
+    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(loop, "INGEST_DB_LATENCY_MS", 0, raising=False)
+    monkeypatch.setattr(loop, "INGEST_SLEEP_MS", 10, raising=False)
+
+    class DummyClient:
+        def connect(self) -> None:
+            pass
+
+        def high_water_mark(self, group: str) -> int:
+            return 0
+
+        def xover(self, group: str, start: int, end: int):
+            return [{"subject": "Example"}]
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
+    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
+
+    real_sleep = _time.sleep
+    sleeps: list[float] = []
+    monkeypatch.setattr(loop.time, "sleep", lambda s: sleeps.append(s))
+
+    def fake_insert(*_args, **_kwargs):
+        real_sleep(0.001)
+        return True
+
+    monkeypatch.setattr(loop, "insert_release", fake_insert)
+    monkeypatch.setattr(loop, "index_release", lambda *_a, **_k: None)
+
+    loop.run_once()
+
+    assert sleeps and sleeps[0] == 0.01
