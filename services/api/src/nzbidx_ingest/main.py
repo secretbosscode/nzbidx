@@ -357,6 +357,7 @@ def index_release(
     language: Optional[str] = None,
     tags: Optional[list[str]] = None,
     group: Optional[str] = None,
+    size_bytes: Optional[int] = None,
 ) -> None:
     """Index the release into OpenSearch (no-op if client is None)."""
     global _os_warned
@@ -371,6 +372,8 @@ def index_release(
         body["tags"] = tags
     if group:
         body["source_group"] = group
+    if size_bytes is not None and size_bytes > 0:
+        body["size_bytes"] = size_bytes
     try:  # pragma: no cover - network errors
         client.index(
             index=OS_RELEASES_ALIAS,
