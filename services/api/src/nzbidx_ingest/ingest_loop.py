@@ -199,8 +199,15 @@ def run_once() -> None:
         sleep_ms = 0
         if os_breaker.is_open():
             sleep_ms = max(sleep_ms, int(CB_RESET_SECONDS * 500))
-        if avg_db_ms > INGEST_DB_LATENCY_MS or avg_os_ms > INGEST_OS_LATENCY_MS:
-            sleep_ms = max(sleep_ms, INGEST_SLEEP_MS)
+        if INGEST_SLEEP_MS > 0 and (
+            avg_db_ms > INGEST_DB_LATENCY_MS or avg_os_ms > INGEST_OS_LATENCY_MS
+        ):
+            ratio = 1.0
+            if avg_db_ms > INGEST_DB_LATENCY_MS and INGEST_DB_LATENCY_MS > 0:
+                ratio = max(ratio, avg_db_ms / INGEST_DB_LATENCY_MS)
+            if avg_os_ms > INGEST_OS_LATENCY_MS and INGEST_OS_LATENCY_MS > 0:
+                ratio = max(ratio, avg_os_ms / INGEST_OS_LATENCY_MS)
+            sleep_ms = max(sleep_ms, int(INGEST_SLEEP_MS * ratio))
         if sleep_ms > 0:
             time.sleep(sleep_ms / 1000)
 
