@@ -106,6 +106,7 @@ of variables are required to run the stack:
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
+| `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
 
 Redis persistence is enabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
 to a truthy value disables persistence. When disabled, the app issues
@@ -114,6 +115,11 @@ bundled `docker-compose` files apply the same commands when
 `REDIS_DISABLE_PERSISTENCE` is set so nothing is written to `/data`. Use
 `REDIS_DATA_DIR` to bind mount a custom directory for persistence if the
 default `/data` path is unsuitable.
+
+Language detection improves the accuracy of release metadata but incurs a
+performance cost. Results are cached using an LRU strategy, yet disabling
+language detection (`DETECT_LANGUAGE=0`) may be desirable when ingest speed is
+preferred over precise language tags.
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category
