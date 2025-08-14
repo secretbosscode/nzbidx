@@ -83,6 +83,30 @@ def test_apply_schema_creates_database(monkeypatch):
     assert executed  # schema statements executed after creation
 
 
+def test_apply_schema_retries_on_oserror(monkeypatch):
+    attempts = 0
+
+    class DummyConn:
+        async def __aenter__(self):
+            nonlocal attempts
+            attempts += 1
+            raise OSError("unreachable")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    class DummyEngine:
+        def connect(self):
+            return DummyConn()
+
+    monkeypatch.setattr(db, "engine", DummyEngine())
+    monkeypatch.setattr(db, "text", lambda s: s)
+
+    asyncio.run(db.apply_schema(max_attempts=3, retry_delay=0))
+
+    assert attempts == 3
+
+
 def test_create_database_noop_if_exists(monkeypatch):
     admin_urls: list[tuple[str, str | None]] = []
     executed: list[str] = []

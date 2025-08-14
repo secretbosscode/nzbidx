@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from importlib import resources
@@ -31,7 +32,7 @@ else:  # pragma: no cover - no sqlalchemy available
     engine = None
 
 
-async def apply_schema() -> None:
+async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     """Create database schema if it does not already exist."""
     if not engine or not text:
         return
@@ -66,18 +67,31 @@ async def apply_schema() -> None:
         except Exception:
             await conn.rollback()
 
-    try:
-        async with engine.connect() as conn:
-            await _apply(conn)
-            await _drop_privileges(conn)
-    except Exception as exc:
-        msg = str(getattr(exc, "orig", exc)).lower()
-        if "does not exist" not in msg and "invalid catalog name" not in msg:
-            raise
-        await _create_database(DATABASE_URL)
-        async with engine.connect() as conn:
-            await _apply(conn)
-            await _drop_privileges(conn)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.connect() as conn:
+                await _apply(conn)
+                await _drop_privileges(conn)
+            return
+        except OSError as exc:
+            logger.warning(
+                "database_unavailable",
+                extra={
+                    "error": str(exc),
+                    "attempt": attempt,
+                    "max_attempts": max_attempts,
+                },
+            )
+            if attempt == max_attempts:
+                return
+            await asyncio.sleep(retry_delay)
+        except Exception as exc:
+            msg = str(getattr(exc, "orig", exc)).lower()
+            if "does not exist" not in msg and "invalid catalog name" not in msg:
+                raise
+            await _create_database(DATABASE_URL)
+            # Retry after creating the database
+            continue
 
 
 async def _create_database(url: str) -> None:
