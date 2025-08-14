@@ -27,6 +27,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     # to the default alias if the package is not available on ``sys.path``.
     OS_RELEASES_ALIAS = "nzbidx-releases"
 
+from .config import INGEST_OS_BULK
 from .logging import setup_logging
 from .parsers import extract_tags
 
@@ -390,19 +391,20 @@ def bulk_index_releases(
     global _os_warned
     if not client or not docs:
         return
-    lines: list[str] = []
-    for doc_id, body in docs:
-        lines.append(
-            json.dumps({"index": {"_index": OS_RELEASES_ALIAS, "_id": doc_id}})
-        )
-        lines.append(json.dumps(body))
-    payload = "\n".join(lines) + "\n"
-    try:  # pragma: no cover - network errors
-        client.bulk(body=payload, refresh=False)
-    except Exception as exc:  # pragma: no cover - network errors
-        if not _os_warned:
-            logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
-            _os_warned = True
+    for i in range(0, len(docs), INGEST_OS_BULK):
+        lines: list[str] = []
+        for doc_id, body in docs[i : i + INGEST_OS_BULK]:
+            lines.append(
+                json.dumps({"index": {"_index": OS_RELEASES_ALIAS, "_id": doc_id}})
+            )
+            lines.append(json.dumps(body))
+        payload = "\n".join(lines) + "\n"
+        try:  # pragma: no cover - network errors
+            client.bulk(body=payload, refresh=False)
+        except Exception as exc:  # pragma: no cover - network errors
+            if not _os_warned:
+                logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
+                _os_warned = True
 
 
 def prune_group(conn: Any, client: Optional[object], group: str) -> None:

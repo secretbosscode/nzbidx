@@ -57,10 +57,11 @@ script at `db/init/schema.sql` handles this during database provisioning.
   - Cursor: `sqlite3 services/api/cursors.sqlite 'select * from cursor'`
   - High-water mark: `docker compose exec nzbidx nntpstat <group>`
 - **Actions:** ensure NNTP connectivity, lower `INGEST_BATCH_MAX` or raise
-  `INGEST_POLL_SECONDS` to increase backpressure, restart ingest, or scale
-  workers. Benchmarks set the defaults at `INGEST_BATCH_MAX=1000`,
-  `INGEST_BATCH_MIN=100`, and `INGEST_POLL_SECONDS=30` to balance
-  throughput and load.
+  `INGEST_POLL_MIN_SECONDS`/`INGEST_POLL_MAX_SECONDS` to increase
+  backpressure, restart ingest, or scale workers. Benchmarks set the
+  defaults at `INGEST_BATCH_MAX=1000`, `INGEST_BATCH_MIN=100`, and polling
+  between 5–60 seconds (`INGEST_POLL_MIN_SECONDS=5`,
+  `INGEST_POLL_MAX_SECONDS=60`) to balance throughput and load.
 - **Threshold hint:** alert if lag >10k articles or >30m.
 - **PromQL:** `nzbidx_ingest_lag_articles > 10000 or nzbidx_ingest_lag_seconds > 1800`
 - **Alert rule:**

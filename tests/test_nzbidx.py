@@ -891,6 +891,7 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
 
     def fake_run_once():
         calls.append(True)
+        return 1
 
     monkeypatch.setattr(loop, "run_once", fake_run_once)
 

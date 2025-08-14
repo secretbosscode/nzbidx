@@ -9,7 +9,8 @@ from threading import Event
 from .config import (
     INGEST_BATCH_MIN,
     INGEST_BATCH_MAX,
-    INGEST_POLL_SECONDS,
+    INGEST_POLL_MIN_SECONDS,
+    INGEST_POLL_MAX_SECONDS,
     INGEST_OS_LATENCY_MS,
     CB_RESET_SECONDS,
     INGEST_SLEEP_MS,
@@ -70,8 +71,11 @@ class _AggregateMetrics:
         return summary
 
 
-def run_once() -> None:
-    """Process a single batch for each configured NNTP group."""
+def run_once() -> float:
+    """Process a single batch for each configured NNTP group.
+
+    Returns the suggested delay before the next poll.
+    """
     groups = config.NNTP_GROUPS or config._load_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
@@ -79,13 +83,13 @@ def run_once() -> None:
     groups = [g for g in groups if g not in ignored]
     if not groups:
         logger.info("ingest_no_groups")
-        return
+        return INGEST_POLL_MAX_SECONDS
     skip = set(cursors.get_irrelevant_groups())
     if skip:
         groups = [g for g in groups if g not in skip]
     if not groups:
         logger.info("ingest_no_groups")
-        return
+        return INGEST_POLL_MAX_SECONDS
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
@@ -226,15 +230,28 @@ def run_once() -> None:
         if sleep_ms > 0:
             time.sleep(sleep_ms / 1000)
 
-    logger.info("ingest_summary", extra=aggregate.summary())
+    summary = aggregate.summary()
+    logger.info("ingest_summary", extra=summary)
+    remaining = summary.get("remaining", 0)
+    processed = summary.get("processed", 0)
+    if remaining <= 0:
+        return INGEST_POLL_MAX_SECONDS
+    if processed <= 0:
+        return INGEST_POLL_MIN_SECONDS
+    ratio = remaining / (processed + remaining)
+    delay = INGEST_POLL_MIN_SECONDS + (
+        INGEST_POLL_MAX_SECONDS - INGEST_POLL_MIN_SECONDS
+    ) * (1 - ratio)
+    return delay
 
 
 def run_forever(stop_event: Event | None = None) -> None:
     """Continuously poll groups until ``stop_event`` is set."""
     while not (stop_event and stop_event.is_set()):
-        run_once()
+        delay = run_once()
+        delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
         if stop_event:
-            if stop_event.wait(INGEST_POLL_SECONDS):
+            if stop_event.wait(delay):
                 break
         else:
-            time.sleep(INGEST_POLL_SECONDS)
+            time.sleep(delay)
