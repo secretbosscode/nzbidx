@@ -110,7 +110,7 @@ def test_os_search_multiple_categories(monkeypatch) -> None:
     """Multiple categories should yield a ``terms`` filter."""
     captured: dict[str, object] = {}
 
-    def dummy_search(_client, query, *, limit, offset=0, sort=None):
+    def dummy_search(_client, query, *, limit, offset=0, sort=None, api_key=None):
         captured["query"] = query
         return []
 
@@ -126,7 +126,7 @@ def test_os_search_without_query(monkeypatch) -> None:
     """Searches with no query should match all and apply filters."""
     captured: dict[str, object] = {}
 
-    def dummy_search(_client, query, *, limit, offset=0, sort=None):
+    def dummy_search(_client, query, *, limit, offset=0, sort=None, api_key=None):
         captured["query"] = query
         return []
 
@@ -144,7 +144,15 @@ def test_movie_defaults_to_all_movie_categories(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -161,7 +169,15 @@ def test_movie_respects_cat_param(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -178,7 +194,15 @@ def test_tv_defaults_to_all_tv_categories(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -195,7 +219,15 @@ def test_tv_respects_cat_param(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -212,7 +244,15 @@ def test_music_defaults_to_all_audio_categories(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -229,7 +269,15 @@ def test_music_respects_cat_param(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -246,7 +294,15 @@ def test_book_defaults_to_all_book_categories(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -263,7 +319,15 @@ def test_book_respects_cat_param(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -280,7 +344,15 @@ def test_parent_cat_expands_subcategories(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -300,7 +372,15 @@ def test_adult_parent_cat_expands(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -320,7 +400,15 @@ def test_strips_adult_cats_when_disallowed(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def dummy_os_search(
-        q, *, category, tag=None, extra=None, limit=50, offset=0, sort=None
+        q,
+        *,
+        category,
+        tag=None,
+        extra=None,
+        limit=50,
+        offset=0,
+        sort=None,
+        api_key=None,
     ):
         captured["category"] = category
         return []
@@ -378,6 +466,7 @@ def test_caps_xml_defaults(monkeypatch) -> None:
     xml = reloaded.caps_xml()
     assert '<category id="1000" name="Console"/>' in xml
     assert '<category id="7030" name="Comics"/>' in xml
+    assert '<category id="6090" name="XXX/WEB-DL"/>' in xml
 
 
 def test_failed_fetch_cached(monkeypatch) -> None:

@@ -490,6 +490,7 @@ def _os_search(
     limit: int = 50,
     offset: int = 0,
     sort: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> list[dict[str, str]]:
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
@@ -570,7 +571,12 @@ def _os_search(
                 query["should"] = should
                 query["minimum_should_match"] = 0
             items = search_releases(
-                opensearch, query, limit=limit, offset=offset, sort=sort
+                opensearch,
+                query,
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                api_key=api_key,
             )
         except Exception:
             items = []
@@ -604,6 +610,7 @@ def _params_key(params) -> str:
 async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
+    api_key = params.get("apikey")
     raw_qs = getattr(request, "query_string", None)
     if isinstance(raw_qs, (bytes, bytearray)):
         qs_len = len(raw_qs)
@@ -653,7 +660,13 @@ async def api(request: Request) -> Response:
             return invalid_params("query too long")
         tag = params.get("tag")
         items = _os_search(
-            q, category=cat, tag=tag, limit=limit, offset=offset, sort=sort
+            q,
+            category=cat,
+            tag=tag,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+            api_key=api_key,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -680,6 +693,7 @@ async def api(request: Request) -> Response:
             limit=limit,
             offset=offset,
             sort=sort,
+            api_key=api_key,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -705,6 +719,7 @@ async def api(request: Request) -> Response:
             limit=limit,
             offset=offset,
             sort=sort,
+            api_key=api_key,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -734,6 +749,7 @@ async def api(request: Request) -> Response:
             limit=limit,
             offset=offset,
             sort=sort,
+            api_key=api_key,
         )
         xml = rss_xml(items)
         if not no_cache:
@@ -763,6 +779,7 @@ async def api(request: Request) -> Response:
             limit=limit,
             offset=offset,
             sort=sort,
+            api_key=api_key,
         )
         xml = rss_xml(items)
         if not no_cache:
