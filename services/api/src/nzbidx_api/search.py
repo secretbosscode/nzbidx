@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -38,7 +39,7 @@ def _format_pubdate(iso_str: str) -> str:
     return format_datetime(dt)
 
 
-def search_releases(
+async def search_releases_async(
     client: OpenSearch,
     query: Dict[str, Any],
     *,
@@ -79,7 +80,8 @@ def search_releases(
         body["sort"] = [{field_map.get(sort, sort): {"order": "desc"}}]
     try:
         with start_span("opensearch.search"):
-            result = call_with_retry(
+            result = await asyncio.to_thread(
+                call_with_retry,
                 os_breaker,
                 "opensearch",
                 client.search,
@@ -94,7 +96,8 @@ def search_releases(
         return []
     except TypeError:
         try:
-            result = call_with_retry(
+            result = await asyncio.to_thread(
+                call_with_retry,
                 os_breaker,
                 "opensearch",
                 client.search,
@@ -124,3 +127,25 @@ def search_releases(
             }
         )
     return items
+
+
+def search_releases(
+    client: OpenSearch,
+    query: Dict[str, Any],
+    *,
+    limit: int,
+    offset: int = 0,
+    sort: str | None = None,
+    api_key: str | None = None,
+) -> List[Dict[str, str]]:
+    """Synchronous wrapper for tests."""
+    return asyncio.run(
+        search_releases_async(
+            client,
+            query,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+            api_key=api_key,
+        )
+    )
