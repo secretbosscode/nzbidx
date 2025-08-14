@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
+from typing import Optional
 
 # Language detection tokens found in many Usenet subjects
-LANGUAGE_TOKENS: Dict[str, str] = {
+LANGUAGE_TOKENS: dict[str, str] = {
     "[ITA]": "it",
     "[FRENCH]": "fr",
     "[GERMAN]": "de",
@@ -80,7 +80,7 @@ def _clean_language_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def extract_music_tags(subject: str) -> Dict[str, str]:
+def extract_music_tags(subject: str) -> dict[str, str]:
     """Return music related tags from a subject line.
 
     Handles scene style strings like ``Artist-Album-2021-FLAC`` or
@@ -103,7 +103,7 @@ def extract_music_tags(subject: str) -> Dict[str, str]:
     return tags
 
 
-def extract_book_tags(subject: str) -> Dict[str, str]:
+def extract_book_tags(subject: str) -> dict[str, str]:
     """Return book related tags from a subject line.
 
     Expected patterns look like ``Author-Title-2020-EPUB`` or optionally
@@ -126,7 +126,7 @@ def extract_book_tags(subject: str) -> Dict[str, str]:
     return tags
 
 
-def extract_xxx_tags(subject: str) -> Dict[str, str]:
+def extract_xxx_tags(subject: str) -> dict[str, str]:
     """Return adult content related tags from a subject line.
 
     Supports two common patterns:
@@ -160,7 +160,7 @@ def extract_xxx_tags(subject: str) -> Dict[str, str]:
 
 def normalize_subject(
     subject: str, *, with_tags: bool = False
-) -> tuple[str, List[str]] | str:
+) -> tuple[str, list[str]] | str:
     """Return a cleaned, human-readable version of a Usenet subject line.
 
     Lightweight normalization:
@@ -181,10 +181,10 @@ def normalize_subject(
     # ``extract_*`` helpers operate on the raw subject, so run them before we
     # strip punctuation.
     generic_tags = extract_tags(subject)
-    tag_dict: Dict[str, str] = {}
+    tag_dict: dict[str, str] = {}
     for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
         tag_dict.update(extractor(subject))
-    for t in extract_tags(subject):
+    for t in generic_tags:
         tag_dict[t] = t
 
     # Convert common separators to spaces.
