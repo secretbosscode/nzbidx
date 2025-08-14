@@ -45,6 +45,7 @@ def search_releases(
     limit: int,
     offset: int = 0,
     sort: str | None = None,
+    api_key: str | None = None,
 ) -> List[Dict[str, str]]:
     """Execute ``query`` against ``client`` and return RSS-style items.
 
@@ -107,13 +108,16 @@ def search_releases(
     items: List[Dict[str, str]] = []
     for hit in result.get("hits", {}).get("hits", []):
         src = hit.get("_source", {})
+        link = f"/api?t=getnzb&id={hit.get('_id', '')}"
+        if api_key:
+            link = f"{link}&apikey={api_key}"
         items.append(
             {
                 "title": src.get("norm_title", ""),
                 "guid": hit.get("_id", ""),
                 "pubDate": _format_pubdate(src.get("posted_at", "")),
                 "category": src.get("category", ""),
-                "link": f"/api?t=getnzb&id={hit.get('_id', '')}",
+                "link": link,
             }
         )
     return items
