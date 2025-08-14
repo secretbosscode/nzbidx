@@ -31,9 +31,7 @@ class NNTPClient:
     # Connection helpers
     def _create_server(self) -> nntplib.NNTP:
         cls = nntplib.NNTP_SSL if self.use_ssl else nntplib.NNTP
-        return cls(
-            self.host, port=self.port, user=self.user, password=self.password
-        )
+        return cls(self.host, port=self.port, user=self.user, password=self.password)
 
     def _ensure_connection(self) -> Optional[nntplib.NNTP]:
         if not self.host:
@@ -131,4 +129,3 @@ class NNTPClient:
                 return [name for name, *_rest in groups]
         except Exception:  # pragma: no cover - network failure
             return []
-

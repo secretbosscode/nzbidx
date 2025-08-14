@@ -45,6 +45,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - fallback when langdetect not installed
     detect = None  # type: ignore
 
+
 @lru_cache(maxsize=1024)
 def _detect_language_cached(subject: str) -> Optional[str]:
     """Return a language code for ``subject``.
