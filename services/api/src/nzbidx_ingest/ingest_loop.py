@@ -173,18 +173,20 @@ def run_once() -> None:
         duration_s = time.monotonic() - batch_start
         metrics["duration_ms"] = int(duration_s * 1000)
         metrics["avg_batch_ms"] = (
-            int(metrics["duration_ms"] / metrics["processed"])
+            round((duration_s * 1000) / metrics["processed"], 3)
             if metrics["processed"]
-            else 0
+            else 0.0
         )
         metrics["os_latency_ms"] = int(os_latency * 1000)
         avg_db_ms = (
-            int((db_latency / metrics["processed"]) * 1000)
+            round((db_latency * 1000) / metrics["processed"], 3)
             if metrics["processed"]
-            else 0
+            else 0.0
         )
         avg_os_ms = (
-            int((os_latency / metrics["indexed"]) * 1000) if metrics["indexed"] else 0
+            round((os_latency * 1000) / metrics["indexed"], 3)
+            if metrics["indexed"]
+            else 0.0
         )
         metrics["avg_db_ms"] = avg_db_ms
         metrics["avg_os_ms"] = avg_os_ms
