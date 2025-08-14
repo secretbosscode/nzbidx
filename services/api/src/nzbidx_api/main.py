@@ -850,4 +850,4 @@ def _set_stop(cb):
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8080, loop="asyncio", http="h11")
