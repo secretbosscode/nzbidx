@@ -17,9 +17,9 @@ def test_list_groups_sends_auth(monkeypatch) -> None:
 
     class DummyServer:
         def __init__(
-            self, host, port=119, user=None, password=None
+            self, host, port=119, user=None, password=None, timeout=None
         ):  # pragma: no cover - trivial
-            called["args"] = (host, port, user, password)
+            called["args"] = (host, port, user, password, timeout)
 
         def __enter__(self):  # pragma: no cover - trivial
             return self
@@ -44,7 +44,7 @@ def test_list_groups_sends_auth(monkeypatch) -> None:
     groups = client.list_groups()
 
     assert groups == ["alt.binaries.example"]
-    assert called["args"] == ("example.com", 119, "user", "pass")
+    assert called["args"] == ("example.com", 119, "user", "pass", 30.0)
     assert called["pattern"] == "alt.binaries.*"
 
 
@@ -52,8 +52,8 @@ def test_high_water_mark_auth(monkeypatch) -> None:
     called: dict[str, object] = {}
 
     class DummyServer:
-        def __init__(self, host, port=119, user=None, password=None):
-            called["args"] = (host, port, user, password)
+        def __init__(self, host, port=119, user=None, password=None, timeout=None):
+            called["args"] = (host, port, user, password, timeout)
 
         def reader(self) -> None:  # pragma: no cover - trivial
             pass
@@ -68,6 +68,7 @@ def test_high_water_mark_auth(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_USER", "user")
     monkeypatch.setenv("NNTP_PASS", "pass")
+    monkeypatch.setenv("NNTP_TIMEOUT", "60")
     monkeypatch.setattr(
         nntp_client,
         "nntplib",
@@ -78,7 +79,7 @@ def test_high_water_mark_auth(monkeypatch) -> None:
     high = client.high_water_mark("alt.binaries.example")
 
     assert high == 2
-    assert called["args"] == ("example.com", 119, "user", "pass")
+    assert called["args"] == ("example.com", 119, "user", "pass", 60.0)
     assert called["group"] == "alt.binaries.example"
 
 
@@ -89,7 +90,7 @@ def test_high_water_mark_reconnect(monkeypatch) -> None:
         instances = 0
         fail_next = True
 
-        def __init__(self, host, port=119, user=None, password=None):
+        def __init__(self, host, port=119, user=None, password=None, timeout=None):
             DummyServer.instances += 1
 
         def reader(self) -> None:  # pragma: no cover - trivial
@@ -123,7 +124,7 @@ def test_quit_closes_connection(monkeypatch) -> None:
     called: dict[str, int] = {"quit": 0}
 
     class DummyServer:
-        def __init__(self, host, port=119, user=None, password=None):
+        def __init__(self, host, port=119, user=None, password=None, timeout=None):
             pass
 
         def reader(self) -> None:  # pragma: no cover - trivial
