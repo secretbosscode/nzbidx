@@ -778,43 +778,29 @@ def test_nntp_client_uses_single_host_env(monkeypatch) -> None:
 
     import nzbidx_ingest.nntp_client as nntp_client
 
-    calls: dict[str, tuple[str, int]] = {}
+    called: dict[str, object] = {}
 
-    class DummySock:
-        def __enter__(self):  # pragma: no cover - trivial
-            return self
+    class DummyServer:
+        def __init__(self, host, port=119, user=None, password=None):
+            called["args"] = (host, port, user, password)
 
-        def __exit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
+        def reader(self) -> None:  # pragma: no cover - trivial
+            called["reader"] = True
+
+        def quit(self) -> None:  # pragma: no cover - trivial
             pass
 
-        def recv(self, _n: int) -> bytes:
-            return b"200 ready"
-
-        def sendall(self, _data: bytes) -> None:  # pragma: no cover - trivial
-            pass
-
-    def fake_create_connection(addr, timeout=10):  # pragma: no cover - simple
-        calls["addr"] = addr
-        return DummySock()
-
-    monkeypatch.setattr(nntp_client.socket, "create_connection", fake_create_connection)
-
-    captured: dict[str, object] = {}
-
-    def fake_talk(
-        self, _sock, host: str, port: int
-    ) -> None:  # pragma: no cover - simple
-        captured["host"] = host
-        captured["port"] = port
-
-    monkeypatch.setattr(nntp_client.NNTPClient, "_talk", fake_talk)
+    monkeypatch.setattr(
+        nntp_client,
+        "nntplib",
+        SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
+    )
 
     client = nntp_client.NNTPClient()
     client.connect()
 
-    assert calls["addr"] == ("example.org", 119)
-    assert captured["host"] == "example.org"
-    assert captured["port"] == 119
+    assert called["args"] == ("example.org", 119, None, None)
+    assert called.get("reader")
 
 
 def test_nntp_client_xover(monkeypatch) -> None:
