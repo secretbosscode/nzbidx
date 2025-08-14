@@ -106,7 +106,11 @@ def run_once() -> None:
                 "ingest_idle",
                 extra={"group": group, "cursor": last, "high_water": high},
             )
-            cursors.mark_irrelevant(group)
+            # ``high`` is ``0`` when the NNTP server is unreachable.  Avoid
+            # marking the group as irrelevant in that case so it will be
+            # retried once connectivity is restored.
+            if high > 0:
+                cursors.mark_irrelevant(group)
             continue
         metrics = {"processed": 0, "inserted": 0, "indexed": 0}
         last_os_latency = 0.0

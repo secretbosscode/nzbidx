@@ -826,3 +826,33 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
         logging.INFO,
         "ingest_summary",
     ) in caplog.record_tuples
+
+
+def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None:
+    """Groups remain eligible when the NNTP server is unreachable."""
+    import nzbidx_ingest.ingest_loop as loop
+    from nzbidx_ingest import config, cursors
+
+    db_path = tmp_path / "cursors.sqlite"
+    monkeypatch.setattr(config, "CURSOR_DB", str(db_path))
+    monkeypatch.setattr(cursors, "CURSOR_DB", str(db_path))
+
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.offline"], raising=False)
+
+    class DummyClient:
+        def connect(self) -> None:  # pragma: no cover - trivial
+            pass
+
+        def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
+            return 0
+
+        def xover(self, group: str, start: int, end: int):  # pragma: no cover - simple
+            return []
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
+    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
+
+    loop.run_once()
+
+    assert cursors.get_irrelevant_groups() == []
