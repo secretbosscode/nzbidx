@@ -601,6 +601,25 @@ def test_builds_nzb_auto_ssl(monkeypatch) -> None:
     assert used["cls"] == "ssl"
 
 
+def test_build_nzb_logs_exception(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    class FailNNTP(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=FailNNTP, NNTP_SSL=FailNNTP, NNTP_SSL_PORT=563),
+    )
+    with caplog.at_level(logging.ERROR):
+        xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert "nzb build failed for MyRelease" in caplog.text
+    assert "<nzb" in xml
+
+
 def test_connect_db_creates_parent(tmp_path, monkeypatch) -> None:
     db_file = tmp_path / "sub" / "test.db"
     monkeypatch.setenv("DATABASE_URL", str(db_file))

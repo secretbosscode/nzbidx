@@ -7,6 +7,7 @@ articles are found a small stub document is returned instead.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import sys
@@ -30,6 +31,8 @@ spec.loader.exec_module(nntplib)
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
+
+log = logging.getLogger(__name__)
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -128,7 +131,8 @@ def build_nzb_for_release(release_id: str) -> str:
             return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
                 root, encoding="unicode"
             )
-    except Exception:
+    except Exception as exc:
+        log.exception("nzb build failed for %s: %s", release_id, exc)
         from .newznab import nzb_xml_stub
 
         return nzb_xml_stub(release_id)
