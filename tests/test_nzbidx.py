@@ -13,6 +13,8 @@ from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 # ruff: noqa: E402 - path manipulation before imports
 
 # Ensure local packages are importable
@@ -85,6 +87,46 @@ class DummyNNTP:
 class AutoNNTP(DummyNNTP):
     def list(self):
         return "", [("alt.binaries.example", "0", "0", "0")]
+
+
+def test_build_nzb_without_host(monkeypatch) -> None:
+    monkeypatch.delenv("NNTP_HOST", raising=False)
+    with pytest.raises(newznab.NzbFetchError):
+        nzb_builder.build_nzb_for_release("MyRelease")
+
+
+def test_build_nzb_without_groups(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+
+    class EmptyList(DummyNNTP):
+        def list(self):
+            return "", []
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=EmptyList, NNTP_SSL=EmptyList, NNTP_SSL_PORT=563),
+    )
+    with pytest.raises(newznab.NzbFetchError):
+        nzb_builder.build_nzb_for_release("MyRelease")
+
+
+def test_build_nzb_without_matches(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    class NoResults(DummyNNTP):
+        def xover(self, start, end):  # pragma: no cover - simple
+            return "", []
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=NoResults, NNTP_SSL=NoResults, NNTP_SSL_PORT=563),
+    )
+    with pytest.raises(newznab.NzbFetchError):
+        nzb_builder.build_nzb_for_release("MyRelease")
 
 
 def test_basic_api_and_ingest(monkeypatch) -> None:

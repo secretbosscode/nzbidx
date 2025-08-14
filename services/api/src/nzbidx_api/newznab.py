@@ -241,12 +241,13 @@ def nzb_xml_stub(release_id: str) -> str:
 def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     """Return an NZB document for ``release_id`` using ``cache``.
 
-    The actual NZB building is delegated to :func:`nzb_builder.build_nzb_for_release`
-    which currently returns a stub XML document.  When ``cache`` is provided the
-    result is stored under ``nzb:<release_id>`` with a TTL of ``SUCCESS_TTL`` and
-    retrieved from there on subsequent calls.  Failed fetch attempts are cached
-    under the same key using ``FAIL_SENTINEL`` for ``FAIL_TTL`` seconds to reduce
-    hammering of upstream resources.
+    The actual NZB building is delegated to :func:`nzb_builder.build_nzb_for_release`.
+    When ``cache`` is provided the result is stored under ``nzb:<release_id>`` with
+    a TTL of ``SUCCESS_TTL`` and retrieved from there on subsequent calls. Failed
+    fetch attempts are cached under the same key using ``FAIL_SENTINEL`` for
+    ``FAIL_TTL`` seconds to reduce hammering of upstream resources. Any
+    :class:`NzbFetchError` raised by the builder is re-raised so callers can
+    handle it explicitly.
     """
     key = f"nzb:{release_id}"
     if cache:
@@ -267,6 +268,21 @@ def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
             inc_nzb_cache_miss()
     try:
         xml = nzb_builder.build_nzb_for_release(release_id)
+    except NzbFetchError:
+        if cache:
+            try:
+                with start_span("redis.setex"):
+                    call_with_retry(
+                        redis_breaker,
+                        "redis",
+                        cache.setex,
+                        key,
+                        FAIL_TTL,
+                        FAIL_SENTINEL,
+                    )
+            except Exception:
+                pass
+        raise
     except Exception as exc:  # pragma: no cover - future real implementation
         if cache:
             try:
