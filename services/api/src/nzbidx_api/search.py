@@ -45,6 +45,7 @@ def search_releases(
     limit: int,
     offset: int = 0,
     sort: str | None = None,
+    api_key: str | None = None,
 ) -> List[Dict[str, str]]:
     """Execute ``query`` against ``client`` and return RSS-style items.
 
@@ -60,6 +61,8 @@ def search_releases(
         Optional sort key. Accepted values are ``date`` (``posted_at``),
         ``size`` (``size_bytes``) or any raw field name. Sorting is in
         descending order.
+    api_key:
+        Optional API key to include in generated links.
     """
     body: Dict[str, Any] = {
         "query": {"bool": query},
@@ -113,7 +116,7 @@ def search_releases(
                 "guid": hit.get("_id", ""),
                 "pubDate": _format_pubdate(src.get("posted_at", "")),
                 "category": src.get("category", ""),
-                "link": f"/api?t=getnzb&id={hit.get('_id', '')}",
+                "link": f"/api?t=getnzb&id={hit.get('_id', '')}" + (f"&apikey={api_key}" if api_key else ""),
                 "size": str(src.get("size_bytes", 0)),
             }
         )
