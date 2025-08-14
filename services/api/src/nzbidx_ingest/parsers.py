@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Optional
+
+from .config import DETECT_LANGUAGE
 
 # Language detection tokens found in many Usenet subjects
 LANGUAGE_TOKENS: dict[str, str] = {
@@ -42,8 +45,8 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - fallback when langdetect not installed
     detect = None  # type: ignore
 
-
-def detect_language(subject: str) -> Optional[str]:
+@lru_cache(maxsize=1024)
+def _detect_language_cached(subject: str) -> Optional[str]:
     """Return a language code for ``subject``.
 
     First checks for explicit ``LANGUAGE_TOKENS`` (e.g. ``[FRENCH]``). If no
@@ -65,6 +68,13 @@ def detect_language(subject: str) -> Optional[str]:
         except Exception:  # pragma: no cover - langdetect can raise on noise
             return None
     return None
+
+
+def detect_language(subject: str) -> Optional[str]:
+    """Return a language code for ``subject`` or ``None`` when disabled."""
+    if not DETECT_LANGUAGE:
+        return None
+    return _detect_language_cached(subject)
 
 
 def _clean_language_text(text: str) -> str:
