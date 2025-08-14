@@ -11,13 +11,15 @@ from .config import (
     INGEST_POLL_SECONDS,
     INGEST_OS_LATENCY_MS,
     CB_RESET_SECONDS,
+    INGEST_OS_BULK,
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
 from .parsers import normalize_subject, detect_language
 from .main import (
     insert_release,
-    index_release,
+    bulk_index_releases,
+    index_release,  # noqa: F401 - retained for backward compatibility
     _infer_category,
     connect_db,
     connect_opensearch,
@@ -89,6 +91,7 @@ def run_once() -> None:
     client.connect()
     db = connect_db()
     os_client = connect_opensearch()
+    bulk_docs: list[tuple[str, dict[str, object]]] = []
 
     aggregate = _AggregateMetrics()
 
@@ -116,7 +119,6 @@ def run_once() -> None:
         last_os_latency = 0.0
         batch_start = time.monotonic()
         current = last
-        collected: list[tuple[str, str, str, list[str], str | None]] = []
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
             subject = header.get("subject", "")
@@ -133,38 +135,46 @@ def run_once() -> None:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
-            collected.append((dedupe_key, category, language, tags, group))
-            current = idx
-
-        inserted_titles = insert_release(db, releases=collected)
-        if isinstance(inserted_titles, bool):  # legacy mocks may return bool
-            metrics["inserted"] = int(inserted_titles)
-            inserted_titles = set()
-        else:
-            metrics["inserted"] = len(inserted_titles)
-
-        for dedupe_key, category, language, tags, _group in collected:
-            if inserted_titles and dedupe_key not in inserted_titles:
-                continue
-            os_start = time.monotonic()
-            index_release(
-                os_client,
+            start_idx = time.monotonic()
+            inserted = insert_release(
+                db,
                 dedupe_key,
-                category=category,
-                language=language,
-                tags=tags,
-                group=_group,
+                category,
+                language,
+                tags,
+                group,
             )
-            os_latency = time.monotonic() - os_start
-            last_os_latency = os_latency
-            metrics["indexed"] += 1
+            if inserted:
+                metrics["inserted"] += 1
+                body: dict[str, object] = {"norm_title": dedupe_key}
+                if category:
+                    body["category"] = category
+                if language:
+                    body["language"] = language
+                if tags:
+                    body["tags"] = tags
+                if group:
+                    body["source_group"] = group
+                bulk_docs.append((dedupe_key, body))
+                metrics["indexed"] += 1
+                if len(bulk_docs) >= INGEST_OS_BULK:
+                    os_start = time.monotonic()
+                    bulk_index_releases(os_client, bulk_docs)
+                    last_os_latency = time.monotonic() - os_start
+                    bulk_docs.clear()
+            latency = time.monotonic() - start_idx
             if os_breaker.is_open():
                 time.sleep(CB_RESET_SECONDS / 2)
-            elif os_latency * 1000 > INGEST_OS_LATENCY_MS:
-                time.sleep(min(os_latency / 2, 2))
-            elif os_latency > 0.5:
-                time.sleep(min(os_latency, 5))
-
+            elif last_os_latency * 1000 > INGEST_OS_LATENCY_MS:
+                time.sleep(min(last_os_latency / 2, 2))
+            elif latency > 0.5:
+                time.sleep(min(latency, 5))
+            current = idx
+        if bulk_docs:
+            os_start = time.monotonic()
+            bulk_index_releases(os_client, bulk_docs)
+            last_os_latency = time.monotonic() - os_start
+            bulk_docs.clear()
         cursors.set_cursor(group, current)
         metrics["deduped"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start

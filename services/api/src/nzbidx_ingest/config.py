@@ -46,4 +46,4 @@ INGEST_POLL_SECONDS: int = int(os.getenv("INGEST_POLL_SECONDS", "60"))
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
 INGEST_OS_LATENCY_MS: int = int(os.getenv("INGEST_OS_LATENCY_MS", "1200"))
-DETECT_LANGUAGE: bool = os.getenv("DETECT_LANGUAGE", "1") != "0"
+INGEST_OS_BULK: int = int(os.getenv("INGEST_OS_BULK", "100"))

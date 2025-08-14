@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -367,6 +368,29 @@ def index_release(
     except Exception as exc:  # pragma: no cover - network errors
         if not _os_warned:
             logger.warning("opensearch_index_failed", extra={"error": str(exc)})
+            _os_warned = True
+
+
+def bulk_index_releases(
+    client: Optional[object],
+    docs: list[tuple[str, dict[str, object]]],
+) -> None:
+    """Index multiple releases into OpenSearch using the bulk API."""
+    global _os_warned
+    if not client or not docs:
+        return
+    lines: list[str] = []
+    for doc_id, body in docs:
+        lines.append(
+            json.dumps({"index": {"_index": OS_RELEASES_ALIAS, "_id": doc_id}})
+        )
+        lines.append(json.dumps(body))
+    payload = "\n".join(lines) + "\n"
+    try:  # pragma: no cover - network errors
+        client.bulk(body=payload, refresh=False)
+    except Exception as exc:  # pragma: no cover - network errors
+        if not _os_warned:
+            logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
             _os_warned = True
 
 
