@@ -5,6 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nzbidx-api"
 version = "0.0.0"
+authors = [{ name = "NZBidx Contributors" }]
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
