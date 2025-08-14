@@ -106,7 +106,8 @@ of variables are required to run the stack:
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
-| `INGEST_OS_BULK` | Releases per OpenSearch bulk request (higher values may improve throughput but risk exceeding OpenSearch limits) | `100` |
+| `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
+| `INGEST_OS_BULK` | Releases per OpenSearch bulk request | `100` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
 
 Redis persistence is enabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
@@ -142,7 +143,8 @@ the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
 The API container also runs an ingest worker which polls NNTP groups and stores
 release metadata. Set the required NNTP environment variables and start the
 stack. When `NNTP_GROUPS` is omitted all available `alt.binaries.*` groups are
-discovered automatically. To invoke a one-off ingest loop manually:
+discovered automatically. Use `NNTP_TIMEOUT` to adjust the socket timeout for
+slow or flaky providers. To invoke a one-off ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username

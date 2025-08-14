@@ -25,13 +25,21 @@ class NNTPClient:
         self.use_ssl = (ssl_env == "1") if ssl_env is not None else self.port == 563
         self.user = os.getenv("NNTP_USER")
         self.password = os.getenv("NNTP_PASS")
+        # Default to a generous timeout to handle slow or flaky providers
+        self.timeout = float(os.getenv("NNTP_TIMEOUT") or "30")
         self._server: Optional[nntplib.NNTP] = None
 
     # ------------------------------------------------------------------
     # Connection helpers
     def _create_server(self) -> nntplib.NNTP:
         cls = nntplib.NNTP_SSL if self.use_ssl else nntplib.NNTP
-        return cls(self.host, port=self.port, user=self.user, password=self.password)
+        return cls(
+            self.host,
+            port=self.port,
+            user=self.user,
+            password=self.password,
+            timeout=self.timeout,
+        )
 
     def _ensure_connection(self) -> Optional[nntplib.NNTP]:
         if not self.host:

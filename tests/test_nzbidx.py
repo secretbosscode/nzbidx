@@ -816,8 +816,8 @@ def test_nntp_client_uses_single_host_env(monkeypatch) -> None:
     called: dict[str, object] = {}
 
     class DummyServer:
-        def __init__(self, host, port=119, user=None, password=None):
-            called["args"] = (host, port, user, password)
+        def __init__(self, host, port=119, user=None, password=None, timeout=None):
+            called["args"] = (host, port, user, password, timeout)
 
         def reader(self) -> None:  # pragma: no cover - trivial
             called["reader"] = True
@@ -834,7 +834,7 @@ def test_nntp_client_uses_single_host_env(monkeypatch) -> None:
     client = nntp_client.NNTPClient()
     client.connect()
 
-    assert called["args"] == ("example.org", 119, None, None)
+    assert called["args"] == ("example.org", 119, None, None, 30.0)
     assert called.get("reader")
 
 
@@ -849,9 +849,9 @@ def test_nntp_client_xover(monkeypatch) -> None:
 
     class DummyServer:
         def __init__(
-            self, host, port=119, user=None, password=None
+            self, host, port=119, user=None, password=None, timeout=None
         ):  # pragma: no cover - trivial
-            called["args"] = (host, port, user, password)
+            called["args"] = (host, port, user, password, timeout)
 
         def __enter__(self):  # pragma: no cover - trivial
             return self
