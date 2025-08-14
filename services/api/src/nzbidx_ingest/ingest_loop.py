@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
-from threading import Event
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Lock
 
 from .config import (
     INGEST_BATCH,
@@ -48,24 +49,27 @@ class _AggregateMetrics:
         self._processed = 0
         self._remaining = 0
         self._duration_s = 0.0
+        self._lock = Lock()
 
     def add(self, metrics: dict[str, int | float]) -> None:
         """Add per-group metrics to the aggregate."""
-        self._processed += int(metrics.get("processed", 0))
-        self._remaining += int(metrics.get("remaining", 0))
-        self._duration_s += float(metrics.get("duration_ms", 0)) / 1000
+        with self._lock:
+            self._processed += int(metrics.get("processed", 0))
+            self._remaining += int(metrics.get("remaining", 0))
+            self._duration_s += float(metrics.get("duration_ms", 0)) / 1000
 
     def summary(self) -> dict[str, int]:
         """Return aggregate metrics including global ETA."""
-        summary: dict[str, int] = {
-            "processed": self._processed,
-            "remaining": self._remaining,
-            "eta_s": 0,
-        }
-        if self._duration_s > 0 and self._processed > 0 and self._remaining > 0:
-            rate = self._processed / self._duration_s
-            summary["eta_s"] = int(self._remaining / rate)
-        return summary
+        with self._lock:
+            summary: dict[str, int] = {
+                "processed": self._processed,
+                "remaining": self._remaining,
+                "eta_s": 0,
+            }
+            if self._duration_s > 0 and self._processed > 0 and self._remaining > 0:
+                rate = self._processed / self._duration_s
+                summary["eta_s"] = int(self._remaining / rate)
+            return summary
 
 
 def run_once() -> None:
@@ -87,18 +91,23 @@ def run_once() -> None:
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
-    client = NNTPClient()
-    client.connect()
-    db = connect_db()
-    os_client = connect_opensearch()
+    prune_db = connect_db()
+    prune_os_client = connect_opensearch()
 
     aggregate = _AggregateMetrics()
+    cursor_lock = Lock()
 
     for ig in ignored:
-        prune_group(db, os_client, ig)
+        prune_group(prune_db, prune_os_client, ig)
 
-    for group in groups:
-        last = cursors.get_cursor(group) or 0
+    def _process_group(group: str) -> None:
+        client = NNTPClient()
+        client.connect()
+        db = connect_db()
+        os_client = connect_opensearch()
+
+        with cursor_lock:
+            last = cursors.get_cursor(group) or 0
         start = last + 1
         end = start + INGEST_BATCH - 1
         high = client.high_water_mark(group)
@@ -108,13 +117,11 @@ def run_once() -> None:
                 "ingest_idle",
                 extra={"group": group, "cursor": last, "high_water": high},
             )
-            # ``high`` is ``0`` when the NNTP server is unreachable.  Avoid
-            # marking the group as irrelevant in that case so it will be
-            # retried once connectivity is restored.
             if high > 0:
-                cursors.mark_irrelevant(group)
-            continue
-        metrics = {"processed": 0, "inserted": 0, "indexed": 0}
+                with cursor_lock:
+                    cursors.mark_irrelevant(group)
+            return
+        metrics: dict[str, int | float] = {"processed": 0, "inserted": 0, "indexed": 0}
         last_os_latency = 0.0
         batch_start = time.monotonic()
         total_db_latency = 0.0
@@ -168,7 +175,8 @@ def run_once() -> None:
                 os_count += 1
                 metrics["indexed"] += 1
             current = idx
-        cursors.set_cursor(group, current)
+        with cursor_lock:
+            cursors.set_cursor(group, current)
         metrics["deduped"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
         metrics["duration_ms"] = int(duration_s * 1000)
@@ -195,7 +203,8 @@ def run_once() -> None:
         logger.info("ingest_batch", extra=metrics)
         aggregate.add(metrics)
         if metrics["inserted"] == 0:
-            cursors.mark_irrelevant(group)
+            with cursor_lock:
+                cursors.mark_irrelevant(group)
         sleep_ms = 0
         if os_breaker.is_open():
             sleep_ms = max(sleep_ms, int(CB_RESET_SECONDS * 500))
@@ -210,6 +219,11 @@ def run_once() -> None:
             sleep_ms = max(sleep_ms, int(INGEST_SLEEP_MS * ratio))
         if sleep_ms > 0:
             time.sleep(sleep_ms / 1000)
+
+    with ThreadPoolExecutor(max_workers=len(groups)) as executor:
+        futures = [executor.submit(_process_group, g) for g in groups]
+        for f in futures:
+            f.result()
 
     logger.info("ingest_summary", extra=aggregate.summary())
 
