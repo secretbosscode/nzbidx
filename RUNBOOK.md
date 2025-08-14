@@ -1,4 +1,4 @@
-# NZBIdx Runbook
+# NZBidx Runbook
 
 Quick reference for common operational issues.
 
@@ -23,7 +23,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **PromQL:** `nzbidx_breaker_state == 1`
 - **Alert rule:**
   ```yaml
-  - alert: NZBIdxBreakerOpen
+  - alert: NZBidxBreakerOpen
     expr: nzbidx_breaker_state == 1
     for: 5m
     labels: {severity: page}
@@ -44,7 +44,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **PromQL:** `sum(rate(http_server_errors_total[5m])) / sum(rate(http_requests_total[5m])) > 0.01`
 - **Alert rule:**
   ```yaml
-  - alert: NZBIdx5xxRateHigh
+  - alert: NZBidx5xxRateHigh
     expr: sum(rate(http_server_errors_total[5m])) / sum(rate(http_requests_total[5m])) > 0.01
     for: 5m
     labels: {severity: page}
@@ -64,7 +64,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **PromQL:** `nzbidx_ingest_lag_articles > 10000 or nzbidx_ingest_lag_seconds > 1800`
 - **Alert rule:**
   ```yaml
-  - alert: NZBIdxIngestLag
+  - alert: NZBidxIngestLag
     expr: nzbidx_ingest_lag_articles > 10000 or nzbidx_ingest_lag_seconds > 1800
     for: 10m
     labels: {severity: ticket}
@@ -81,7 +81,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **PromQL:** `time() - nzbidx_snapshot_last_success > 86400`
 - **Alert rule:**
   ```yaml
-  - alert: NZBIdxSnapshotStale
+  - alert: NZBidxSnapshotStale
     expr: time() - nzbidx_snapshot_last_success > 86400
     for: 10m
     labels: {severity: ticket}

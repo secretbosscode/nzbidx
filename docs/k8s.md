@@ -1,6 +1,6 @@
 # Kubernetes
 
-The `k8s/` directory contains an example manifest for running NZBIdx on a
+The `k8s/` directory contains an example manifest for running NZBidx on a
 Kubernetes cluster. It provides minimal `Deployment` and `Service` resources for
 the API (which also runs the ingest worker) and exposes configuration via
 environment variables.
