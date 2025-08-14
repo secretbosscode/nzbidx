@@ -37,4 +37,4 @@ def setup_logging() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
-    root.setLevel(logging.INFO)
+    root.setLevel(logging.DEBUG)
