@@ -94,7 +94,7 @@ of variables are required to run the stack:
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
 | `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup (avoids writes to `/data`) | _(unset)_ |
 | `REDIS_DATA_DIR` | Directory Redis uses for persistence (bind-mounted) | `/data` |
-| `API_KEYS` | Comma separated API keys | _(empty)_ |
+| `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `on` |
 | `ALLOW_XXX` | `true` enables the XXX category | `false` |
 | `RATE_LIMIT` | Requests per window | `60` |
