@@ -1,8 +1,9 @@
 """Thin NZB builder interface.
 
 This module exposes :func:`build_nzb_for_release` which connects to an NNTP
-server to build a real NZB document.  If the NNTP connection fails or no
-articles are found a small stub document is returned instead.
+server to build a real NZB document.  Missing configuration or empty results
+raise :class:`newznab.NzbFetchError` while unexpected failures fall back to a
+stub NZB document for compatibility.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ spec.loader.exec_module(nntplib)
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
+MAX_SEGMENTS = 1000
 
 log = logging.getLogger(__name__)
 
@@ -43,15 +45,16 @@ def build_nzb_for_release(release_id: str) -> str:
     ``NNTP_GROUPS``).  All articles whose subject contains ``release_id`` are
     collected and stitched into NZB ``<file>`` and ``<segment>`` elements.
 
-    When no NNTP configuration is present or the fetch fails a minimal stub
-    NZB is returned for compatibility.
+    When mandatory configuration is missing or no matching articles are found
+    an :class:`newznab.NzbFetchError` is raised.  Other unexpected errors are
+    logged and a minimal stub NZB is returned for compatibility.
     """
+
+    from . import newznab
 
     host = os.getenv("NNTP_HOST")
     if not host:
-        from .newznab import nzb_xml_stub
-
-        return nzb_xml_stub(release_id)
+        raise newznab.NzbFetchError("NNTP_HOST not configured")
 
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
@@ -82,9 +85,7 @@ def build_nzb_for_release(release_id: str) -> str:
                 except Exception:
                     groups = []
             if not groups:
-                from .newznab import nzb_xml_stub
-
-                return nzb_xml_stub(release_id)
+                raise newznab.NzbFetchError("no NNTP groups configured")
             files: Dict[str, List[Tuple[int, int, str]]] = {}
             for group in groups:
                 try:
@@ -99,20 +100,18 @@ def build_nzb_for_release(release_id: str) -> str:
                     message_id = str(ov.get("message-id", ""))
                     seg_num = _extract_segment_number(subject)
                     filename = _extract_filename(subject) or release_id
-                    size = 0
-                    if message_id:
+                    size = int(ov.get("bytes") or 0)
+                    if size == 0 and message_id:
                         try:
                             _resp, _num, _mid, lines = server.body(
                                 message_id, decode=False
                             )
                             size = sum(len(line) for line in lines)
                         except Exception:
-                            size = int(ov.get("bytes") or 0)
+                            pass
                     files.setdefault(filename, []).append((seg_num, size, message_id))
             if not files:
-                from .newznab import nzb_xml_stub
-
-                return nzb_xml_stub(release_id)
+                raise newznab.NzbFetchError("no matching articles found")
 
             root = ET.Element("nzb", xmlns=NZB_XMLNS)
             for filename, segments in files.items():
@@ -121,7 +120,9 @@ def build_nzb_for_release(release_id: str) -> str:
                 for g in groups:
                     ET.SubElement(groups_el, "group").text = g
                 segments_el = ET.SubElement(file_el, "segments")
-                for number, size, msgid in sorted(segments, key=lambda s: s[0]):
+                for number, size, msgid in sorted(segments, key=lambda s: s[0])[
+                    :MAX_SEGMENTS
+                ]:
                     seg_el = ET.SubElement(
                         segments_el,
                         "segment",
@@ -131,11 +132,11 @@ def build_nzb_for_release(release_id: str) -> str:
             return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
                 root, encoding="unicode"
             )
+    except newznab.NzbFetchError:
+        raise
     except Exception as exc:
         log.exception("nzb build failed for %s: %s", release_id, exc)
-        from .newznab import nzb_xml_stub
-
-        return nzb_xml_stub(release_id)
+        return newznab.nzb_xml_stub(release_id)
 
 
 def _extract_filename(subject: str) -> str | None:
