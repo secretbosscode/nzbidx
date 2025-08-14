@@ -269,7 +269,9 @@ def insert_release(
     group: Optional[str] = None,
     *,
     releases: Optional[
-        Iterable[tuple[str, Optional[str], Optional[str], Optional[list[str]], Optional[str]]]
+        Iterable[
+            tuple[str, Optional[str], Optional[str], Optional[list[str]], Optional[str]]
+        ]
     ] = None,
 ) -> set[str]:
     """Insert one or more releases and return the inserted titles."""
@@ -301,11 +303,20 @@ def insert_release(
         cleaned_tags = ",".join(_clean(tag) or "" for tag in t)
         cleaned_group = _clean(g)
         cleaned.append(
-            (cleaned_title, cleaned_category, cleaned_language, cleaned_tags, cleaned_group)
+            (
+                cleaned_title,
+                cleaned_category,
+                cleaned_language,
+                cleaned_tags,
+                cleaned_group,
+            )
         )
 
     placeholders = ",".join(
-        ["?" if conn.__class__.__module__.startswith("sqlite3") else "%s" for _ in titles]
+        [
+            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+            for _ in titles
+        ]
     )
     existing: set[str] = set()
     if titles:
