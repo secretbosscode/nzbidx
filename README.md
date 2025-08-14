@@ -106,6 +106,7 @@ of variables are required to run the stack:
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
+| `INGEST_SLEEP_MS` | Base backoff in ms when ingest latencies exceed thresholds | `1000` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
 
 Redis persistence is enabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
@@ -148,6 +149,11 @@ discovered automatically. To invoke a one-off ingest loop manually:
     export NNTP_PASS=secret
     export NNTP_GROUPS=alt.binaries.example  # optional; auto-discovered if unset
     docker compose exec api python -m nzbidx_ingest
+
+`INGEST_SLEEP_MS` controls how long the worker pauses when average database or
+OpenSearch latency exceeds `INGEST_DB_LATENCY_MS` or `INGEST_OS_LATENCY_MS`.
+Raise the value to ease pressure on dependencies or set to `0` to disable the
+adaptive backoff.
 
 ## Auth & Rate Limit
 

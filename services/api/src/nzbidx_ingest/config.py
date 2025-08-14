@@ -45,17 +45,10 @@ INGEST_BATCH: int = int(os.getenv("INGEST_BATCH", "500"))
 INGEST_POLL_SECONDS: int = int(os.getenv("INGEST_POLL_SECONDS", "60"))
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
-INGEST_SLEEP_MS: int = int(os.getenv("INGEST_SLEEP_MS", "0"))
+# Base delay applied when database or OpenSearch latency exceeds
+# thresholds. Set to ``0`` to disable adaptive backoff.
+INGEST_SLEEP_MS: int = int(os.getenv("INGEST_SLEEP_MS", "1000"))
 INGEST_DB_LATENCY_MS: int = int(os.getenv("INGEST_DB_LATENCY_MS", "1200"))
 INGEST_OS_LATENCY_MS: int = int(os.getenv("INGEST_OS_LATENCY_MS", "1200"))
 INGEST_OS_BULK: int = int(os.getenv("INGEST_OS_BULK", "100"))
-
-# Enable or disable automatic language detection. Defaults to enabled and can
-# be turned off by setting ``DETECT_LANGUAGE`` to ``0`` or ``false`` in the
-# environment. The parsers module imports this constant during module import,
-# so tests modify the environment and reload the modules to verify behaviour.
-DETECT_LANGUAGE: bool = os.getenv("DETECT_LANGUAGE", "1").lower() not in (
-    "0",
-    "false",
-    "",
-)
+DETECT_LANGUAGE: int = int(os.getenv("DETECT_LANGUAGE", "1"))
