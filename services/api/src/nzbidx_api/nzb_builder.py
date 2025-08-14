@@ -2,7 +2,7 @@
 
 This module exposes :func:`build_nzb_for_release` which connects to an NNTP
 server to build a real NZB document.  If the NNTP connection fails or no
-articles are found a small stub document is returned instead.
+articles are found an :class:`NzbFetchError` is raised.
 """
 
 from __future__ import annotations
@@ -40,15 +40,15 @@ def build_nzb_for_release(release_id: str) -> str:
     ``NNTP_GROUPS``).  All articles whose subject contains ``release_id`` are
     collected and stitched into NZB ``<file>`` and ``<segment>`` elements.
 
-    When no NNTP configuration is present or the fetch fails a minimal stub
-    NZB is returned for compatibility.
+    When the NNTP configuration is missing or no matching articles can be
+    found an :class:`NzbFetchError` is raised.
     """
+
+    from .newznab import NzbFetchError
 
     host = os.getenv("NNTP_HOST")
     if not host:
-        from .newznab import nzb_xml_stub
-
-        return nzb_xml_stub(release_id)
+        raise NzbFetchError("nzb unavailable")
 
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
@@ -79,9 +79,7 @@ def build_nzb_for_release(release_id: str) -> str:
                 except Exception:
                     groups = []
             if not groups:
-                from .newznab import nzb_xml_stub
-
-                return nzb_xml_stub(release_id)
+                raise NzbFetchError("nzb unavailable")
             files: Dict[str, List[Tuple[int, int, str]]] = {}
             for group in groups:
                 try:
@@ -107,9 +105,7 @@ def build_nzb_for_release(release_id: str) -> str:
                             size = int(ov.get("bytes") or 0)
                     files.setdefault(filename, []).append((seg_num, size, message_id))
             if not files:
-                from .newznab import nzb_xml_stub
-
-                return nzb_xml_stub(release_id)
+                raise NzbFetchError("nzb unavailable")
 
             root = ET.Element("nzb", xmlns=NZB_XMLNS)
             for filename, segments in files.items():
@@ -129,9 +125,7 @@ def build_nzb_for_release(release_id: str) -> str:
                 root, encoding="unicode"
             )
     except Exception:
-        from .newznab import nzb_xml_stub
-
-        return nzb_xml_stub(release_id)
+        raise NzbFetchError("nzb unavailable")
 
 
 def _extract_filename(subject: str) -> str | None:
