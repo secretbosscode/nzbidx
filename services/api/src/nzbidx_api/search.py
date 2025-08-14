@@ -8,6 +8,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from email.utils import format_datetime
+from urllib.parse import quote
 
 from .config import search_timeout_ms
 from .middleware_circuit import CircuitOpenError, call_with_retry, os_breaker
@@ -113,7 +114,8 @@ async def search_releases_async(
     items: List[Dict[str, str]] = []
     for hit in result.get("hits", {}).get("hits", []):
         src = hit.get("_source", {})
-        link = f"/api?t=getnzb&id={hit.get('_id', '')}"
+        release_id = hit.get("_id", "")
+        link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
         if api_key:
             link += f"&apikey={api_key}"
         items.append(

@@ -794,7 +794,7 @@ async def api(request: Request) -> Response:
         if not release_id:
             return invalid_params("missing id")
         try:
-            xml = get_nzb(release_id, None)
+            xml = await asyncio.to_thread(get_nzb, release_id, None)
         except CircuitOpenError:
             return breaker_open()
         except NzbFetchError:
