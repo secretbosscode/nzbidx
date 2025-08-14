@@ -30,6 +30,7 @@ spec.loader.exec_module(nntplib)
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
+MAX_SEGMENTS = 10_000
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -39,6 +40,8 @@ def build_nzb_for_release(release_id: str) -> str:
     variables (``NNTP_HOST``, ``NNTP_PORT``, ``NNTP_USER``, ``NNTP_PASS`` and
     ``NNTP_GROUPS``).  All articles whose subject contains ``release_id`` are
     collected and stitched into NZB ``<file>`` and ``<segment>`` elements.
+    No more than ``MAX_SEGMENTS`` segments are included; extra articles are
+    omitted and a partial NZB is returned.
 
     When no NNTP configuration is present or the fetch fails a minimal stub
     NZB is returned for compatibility.
@@ -83,6 +86,7 @@ def build_nzb_for_release(release_id: str) -> str:
 
                 return nzb_xml_stub(release_id)
             files: Dict[str, List[Tuple[int, int, str]]] = {}
+            total_segments = 0
             for group in groups:
                 try:
                     _resp, _count, first, last, _name = server.group(group)
@@ -106,25 +110,36 @@ def build_nzb_for_release(release_id: str) -> str:
                         except Exception:
                             size = int(ov.get("bytes") or 0)
                     files.setdefault(filename, []).append((seg_num, size, message_id))
+                    total_segments += 1
+                    if total_segments >= MAX_SEGMENTS:
+                        break
+                if total_segments >= MAX_SEGMENTS:
+                    break
             if not files:
                 from .newznab import nzb_xml_stub
 
                 return nzb_xml_stub(release_id)
 
             root = ET.Element("nzb", xmlns=NZB_XMLNS)
+            added = 0
             for filename, segments in files.items():
+                if added >= MAX_SEGMENTS:
+                    break
                 file_el = ET.SubElement(root, "file", {"subject": filename})
                 groups_el = ET.SubElement(file_el, "groups")
                 for g in groups:
                     ET.SubElement(groups_el, "group").text = g
                 segments_el = ET.SubElement(file_el, "segments")
                 for number, size, msgid in sorted(segments, key=lambda s: s[0]):
+                    if added >= MAX_SEGMENTS:
+                        break
                     seg_el = ET.SubElement(
                         segments_el,
                         "segment",
                         {"bytes": str(size), "number": str(number)},
                     )
                     seg_el.text = msgid
+                    added += 1
             return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
                 root, encoding="unicode"
             )
