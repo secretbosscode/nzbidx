@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import orjson
 import os
 import time
 from importlib import resources
@@ -28,7 +29,7 @@ except Exception:  # pragma: no cover - optional dependency
 try:  # pragma: no cover - import guard
     from starlette.applications import Starlette
     from starlette.requests import Request
-    from starlette.responses import JSONResponse, Response
+    from starlette.responses import ORJSONResponse, Response
     from starlette.routing import Route
     from starlette.middleware import Middleware
     from starlette.middleware.cors import CORSMiddleware
@@ -53,10 +54,10 @@ except Exception:  # pragma: no cover - optional dependency
             self.body = content.encode("utf-8")
             self.headers = {"content-type": media_type}
 
-    class JSONResponse(Response):  # type: ignore
+    class ORJSONResponse(Response):  # type: ignore
         def __init__(self, content: dict, *, status_code: int = 200) -> None:
             super().__init__(
-                json.dumps(content),
+                orjson.dumps(content).decode(),
                 status_code=status_code,
                 media_type="application/json",
             )
@@ -165,7 +166,7 @@ class JsonFormatter(logging.Formatter):
                 payload[k] = v
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
-        return json.dumps(payload)
+        return orjson.dumps(payload).decode()
 
 
 def setup_logging() -> None:
@@ -402,7 +403,7 @@ async def shutdown() -> None:
         cache = None
 
 
-async def health(request: Request) -> JSONResponse:
+async def health(request: Request) -> ORJSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
@@ -432,10 +433,10 @@ async def health(request: Request) -> JSONResponse:
     payload["version"] = VERSION or "dev"
     payload["uptime_ms"] = int((time.monotonic() - _START_TIME) * 1000)
     payload["build"] = BUILD
-    return JSONResponse(payload)
+    return ORJSONResponse(payload)
 
 
-async def status(request: Request) -> JSONResponse:
+async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
     payload = {"request_id": req_id, "breaker": {}}
@@ -457,13 +458,13 @@ async def status(request: Request) -> JSONResponse:
         payload["redis"] = "down"
     payload["breaker"]["os"] = os_breaker.state()
     payload["breaker"]["redis"] = redis_breaker.state()
-    return JSONResponse(payload)
+    return ORJSONResponse(payload)
 
 
-async def admin_takedown(request: Request) -> JSONResponse:
+async def admin_takedown(request: Request) -> ORJSONResponse:
     """Remove a release from the search index."""
     if opensearch is None:
-        return JSONResponse({"status": "unavailable"}, status_code=503)
+        return ORJSONResponse({"status": "unavailable"}, status_code=503)
     try:
         data = await request.json()
     except Exception:
@@ -477,8 +478,8 @@ async def admin_takedown(request: Request) -> JSONResponse:
         )
     except Exception as exc:
         logger.warning("takedown_failed", extra={"id": release_id, "error": str(exc)})
-        return JSONResponse({"status": "error"}, status_code=500)
-    return JSONResponse({"status": "ok"})
+        return ORJSONResponse({"status": "error"}, status_code=500)
+    return ORJSONResponse({"status": "ok"})
 
 
 def _os_search(
