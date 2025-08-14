@@ -48,8 +48,11 @@ class DummyCache:
 
 
 class DummyNNTP:
+    instance: "DummyNNTP | None" = None
+
     def __init__(self, *_args, **_kwargs):
-        pass
+        self.body_calls = 0
+        DummyNNTP.instance = self
 
     def __enter__(self):  # pragma: no cover - trivial
         return self
@@ -68,20 +71,19 @@ class DummyNNTP:
                 {
                     "subject": 'MyRelease "testfile.bin" (1/2)',
                     "message-id": "msg1@example.com",
+                    "bytes": 123,
                 },
                 {
                     "subject": 'MyRelease "testfile.bin" (2/2)',
                     "message-id": "msg2@example.com",
+                    "bytes": 456,
                 },
             ],
         )
 
     def body(self, message_id, decode=False):  # pragma: no cover - simple
-        if message_id == "msg1@example.com":
-            lines = [b"a" * 123]
-        else:
-            lines = [b"b" * 456]
-        return "", 0, message_id, lines
+        self.body_calls += 1
+        return "", 0, message_id, []
 
 
 class AutoNNTP(DummyNNTP):
@@ -601,6 +603,7 @@ def test_builds_nzb(monkeypatch) -> None:
     assert "msg2@example.com" in xml
     assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
     assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
+    assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
 
 
 def test_builds_nzb_auto_groups(monkeypatch) -> None:
@@ -614,6 +617,7 @@ def test_builds_nzb_auto_groups(monkeypatch) -> None:
     xml = nzb_builder.build_nzb_for_release("MyRelease")
     assert "msg1@example.com" in xml
     assert "msg2@example.com" in xml
+    assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
 
 
 def test_builds_nzb_auto_ssl(monkeypatch) -> None:
@@ -641,6 +645,7 @@ def test_builds_nzb_auto_ssl(monkeypatch) -> None:
     )
     nzb_builder.build_nzb_for_release("MyRelease")
     assert used["cls"] == "ssl"
+    assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
 
 
 def test_connect_db_creates_parent(tmp_path, monkeypatch) -> None:
