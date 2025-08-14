@@ -925,7 +925,7 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
             pass
 
         def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
-            return 0
+            return 1
 
         def xover(self, group: str, start: int, end: int):  # pragma: no cover - simple
             processed.append(group)
@@ -1001,7 +1001,7 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
             pass
 
         def high_water_mark(self, group: str) -> int:
-            return 0
+            return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{"subject": "Example"}]

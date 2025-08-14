@@ -7,7 +7,8 @@ import time
 from threading import Event
 
 from .config import (
-    INGEST_BATCH,
+    INGEST_BATCH_MIN,
+    INGEST_BATCH_MAX,
     INGEST_POLL_SECONDS,
     INGEST_OS_LATENCY_MS,
     CB_RESET_SECONDS,
@@ -101,9 +102,15 @@ def run_once() -> None:
     for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
-        end = start + INGEST_BATCH - 1
         high = client.high_water_mark(group)
-        headers = client.xover(group, start, end)
+        remaining = max(high - last, 0)
+        if remaining <= 0:
+            headers: list[dict[str, object]] = []
+        else:
+            batch = min(remaining, INGEST_BATCH_MAX)
+            batch = max(batch, min(remaining, INGEST_BATCH_MIN))
+            end = start + batch - 1
+            headers = client.xover(group, start, end)
         if not headers:
             logger.info(
                 "ingest_idle",
