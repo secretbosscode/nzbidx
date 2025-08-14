@@ -106,7 +106,7 @@ of variables are required to run the stack:
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
-| `INGEST_OS_BULK` | Releases per OpenSearch bulk request | `100` |
+| `INGEST_OS_BULK` | Releases per OpenSearch bulk request (higher values may improve throughput but risk exceeding OpenSearch limits) | `100` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
 
 Redis persistence is enabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
