@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import time
+import asyncio
+import inspect
 from importlib import resources
 from pathlib import Path
 from typing import Optional, Callable
@@ -20,7 +22,7 @@ except Exception:  # pragma: no cover - optional dependency
     OpenSearch = None  # type: ignore
 
 try:  # pragma: no cover - import guard
-    from redis import Redis
+    from redis.asyncio import Redis
 except Exception:  # pragma: no cover - optional dependency
     Redis = None  # type: ignore
 
@@ -237,6 +239,12 @@ opensearch: Optional[OpenSearch] = None
 cache: Optional[Redis] = None
 
 
+async def _maybe_await(result):
+    if inspect.isawaitable(result):
+        return await result
+    return result
+
+
 def build_ilm_policy() -> dict[str, object]:
     with (
         resources.files("nzbidx_api.opensearch")
@@ -364,7 +372,7 @@ def init_opensearch() -> None:
         logger.warning("OpenSearch unavailable: %s", exc)
 
 
-def init_cache() -> None:
+async def init_cache_async() -> None:
     """Connect to Redis for caching NZB documents."""
     global cache
     if Redis is None:
@@ -372,17 +380,22 @@ def init_cache() -> None:
     url = os.getenv("REDIS_URL", "redis://redis:6379/0")
     try:
         client = Redis.from_url(url)
-        client.ping()
+        await _maybe_await(client.ping())
         if os.getenv("REDIS_DISABLE_PERSISTENCE") in {"1", "true", "TRUE", "True"}:
             try:
-                client.config_set("save", "")
-                client.config_set("appendonly", "no")
+                await _maybe_await(client.config_set("save", ""))
+                await _maybe_await(client.config_set("appendonly", "no"))
             except Exception as exc:
                 logger.warning("Failed to disable Redis persistence: %s", exc)
         cache = client
         logger.info("Redis ready")
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("Redis unavailable: %s", exc)
+
+
+def init_cache() -> None:
+    """Synchronous wrapper for tests to initialize Redis."""
+    asyncio.run(init_cache_async())
 
 
 async def shutdown() -> None:
@@ -396,7 +409,7 @@ async def shutdown() -> None:
         opensearch = None
     if cache:
         try:
-            cache.close()  # type: ignore[attr-defined]
+            await _maybe_await(cache.close())  # type: ignore[attr-defined]
         except Exception:
             pass
         cache = None
@@ -421,7 +434,7 @@ async def health(request: Request) -> JSONResponse:
     if cache:
         start = time.monotonic()
         try:  # pragma: no cover - network errors
-            cache.ping()
+            await _maybe_await(cache.ping())
             payload["redis"] = "ok"
         except Exception:
             payload["redis"] = "down"
@@ -449,7 +462,7 @@ async def status(request: Request) -> JSONResponse:
         payload["os"] = "down"
     if cache:
         try:  # pragma: no cover - network errors
-            cache.ping()
+            await _maybe_await(cache.ping())
             payload["redis"] = "ok"
         except Exception:
             payload["redis"] = "down"
@@ -656,14 +669,15 @@ async def api(request: Request) -> Response:
 
     if t == "search":
         cache_key = f"search:{_params_key(params)}"
-        cached = get_cached_rss(cache_key) if not no_cache else None
+        cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
         q = params.get("q")
         if q and len(q) > 256:
             return invalid_params("query too long")
         tag = params.get("tag")
-        items = _os_search(
+        items = await asyncio.to_thread(
+            _os_search,
             q,
             category=cat,
             tag=tag,
@@ -674,12 +688,12 @@ async def api(request: Request) -> Response:
         )
         xml = rss_xml(items)
         if not no_cache:
-            cache_rss(cache_key, xml)
+            await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "tvsearch":
         cache_key = f"tvsearch:{_params_key(params)}"
-        cached = get_cached_rss(cache_key) if not no_cache else None
+        cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
         q = params.get("q")
@@ -689,7 +703,8 @@ async def api(request: Request) -> Response:
         episode = params.get("ep")
         tag = params.get("tag")
         cats = cat or ",".join(TV_CATEGORY_IDS)
-        items = _os_search(
+        items = await asyncio.to_thread(
+            _os_search,
             q,
             category=cats,
             tag=tag,
@@ -701,12 +716,12 @@ async def api(request: Request) -> Response:
         )
         xml = rss_xml(items)
         if not no_cache:
-            cache_rss(cache_key, xml)
+            await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "movie":
         cache_key = f"movie:{_params_key(params)}"
-        cached = get_cached_rss(cache_key) if not no_cache else None
+        cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
         q = params.get("q")
@@ -715,7 +730,8 @@ async def api(request: Request) -> Response:
         imdbid = params.get("imdbid")
         tag = params.get("tag")
         cats = cat or ",".join(MOVIE_CATEGORY_IDS)
-        items = _os_search(
+        items = await asyncio.to_thread(
+            _os_search,
             q,
             category=cats,
             tag=tag,
@@ -727,12 +743,12 @@ async def api(request: Request) -> Response:
         )
         xml = rss_xml(items)
         if not no_cache:
-            cache_rss(cache_key, xml)
+            await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "music":
         cache_key = f"music:{_params_key(params)}"
-        cached = get_cached_rss(cache_key) if not no_cache else None
+        cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
         q = params.get("q")
@@ -745,7 +761,8 @@ async def api(request: Request) -> Response:
         if year:
             extra["year"] = year
         cats = cat or ",".join(AUDIO_CATEGORY_IDS)
-        items = _os_search(
+        items = await asyncio.to_thread(
+            _os_search,
             q,
             category=cats,
             tag=tag,
@@ -757,12 +774,12 @@ async def api(request: Request) -> Response:
         )
         xml = rss_xml(items)
         if not no_cache:
-            cache_rss(cache_key, xml)
+            await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "book":
         cache_key = f"book:{_params_key(params)}"
-        cached = get_cached_rss(cache_key) if not no_cache else None
+        cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
         q = params.get("q")
@@ -775,7 +792,8 @@ async def api(request: Request) -> Response:
         if year:
             extra["year"] = year
         cats = cat or ",".join(BOOKS_CATEGORY_IDS)
-        items = _os_search(
+        items = await asyncio.to_thread(
+            _os_search,
             q,
             category=cats,
             tag=tag,
@@ -787,7 +805,7 @@ async def api(request: Request) -> Response:
         )
         xml = rss_xml(items)
         if not no_cache:
-            cache_rss(cache_key, xml)
+            await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "getnzb":
@@ -795,7 +813,7 @@ async def api(request: Request) -> Response:
         if not release_id:
             return invalid_params("missing id")
         try:
-            xml = get_nzb(release_id, cache)
+            xml = get_nzb(release_id, None)
         except CircuitOpenError:
             return breaker_open()
         except NzbFetchError:
@@ -830,7 +848,7 @@ app = Starlette(
     on_startup=[
         apply_schema,
         init_opensearch,
-        init_cache,
+        init_cache_async,
         start_ingest,
         lambda: _set_stop(start_metrics()),
     ],

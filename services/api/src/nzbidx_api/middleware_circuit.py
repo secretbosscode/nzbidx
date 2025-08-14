@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import random
 import time
-from typing import Callable, Generic, TypeVar
+import asyncio
+import inspect
+from typing import Callable, Generic, TypeVar, Awaitable
 
 from .config import (
     cb_failure_threshold,
@@ -122,6 +124,63 @@ def call_with_retry(
                 raise
             jitter = random.uniform(0, retry_jitter_ms() / 1000)
             time.sleep(delay + jitter)
+            delay *= 2
+            attempt += 1
+
+
+async def call_with_retry_async(
+    breaker: CircuitBreaker[T],
+    dep: str,
+    func: Callable[..., Awaitable[T] | T],
+    *args,
+    **kwargs,
+) -> T:
+    """Async wrapper around ``func`` with retries and circuit breaker."""
+
+    retries = retry_max()
+    delay = retry_base_ms() / 1000
+    attempt = 0
+    while True:
+        try:
+            with start_span("dep_call"):
+                set_span_attr("dep", dep)
+                if breaker.is_open():
+                    raise CircuitOpenError("circuit open")
+                result = func(*args, **kwargs)
+                if inspect.isawaitable(result):
+                    result = await result
+                breaker._record_success()
+                state = "open" if breaker.is_open() else "closed"
+                set_span_attr("breaker_state", state)
+            logger.info(
+                "dep_call",
+                extra={
+                    "dep": dep,
+                    "retries": attempt,
+                    "breaker_state": state,
+                },
+            )
+            return result
+        except CircuitOpenError:
+            set_span_attr("breaker_state", "open")
+            logger.warning(
+                "dep_unavailable",
+                extra={"dep": dep, "retries": attempt, "breaker_state": "open"},
+            )
+            inc_breaker_open(dep)
+            raise
+        except Exception:
+            breaker._record_failure()
+            state = "half-open" if breaker.is_open() else "closed"
+            set_span_attr("breaker_state", state)
+            if breaker.is_open() or attempt >= retries:
+                logger.warning(
+                    "dep_fail",
+                    extra={"dep": dep, "retries": attempt, "breaker_state": state},
+                )
+                raise
+            jitter = random.uniform(0, retry_jitter_ms() / 1000)
+            await asyncio.sleep(delay + jitter)
             delay *= 2
             attempt += 1
 
