@@ -149,6 +149,7 @@ def run_once() -> float:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
+            size = int(header.get("bytes") or 0)
             releases.append((dedupe_key, category, language, tags, group))
             body: dict[str, object] = {"norm_title": dedupe_key}
             if category:
@@ -159,6 +160,8 @@ def run_once() -> float:
                 body["tags"] = tags
             if group:
                 body["source_group"] = group
+            if size > 0:
+                body["size_bytes"] = size
             docs.append((dedupe_key, body))
             current = idx
         db_latency = 0.0
