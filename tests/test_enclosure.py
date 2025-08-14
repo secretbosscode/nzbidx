@@ -18,6 +18,7 @@ def test_rss_xml_includes_enclosure() -> None:
         "pubDate": "Mon, 01 Jan 2024 00:00:00 +0000",
         "category": "2030",
         "link": "/api?t=getnzb&id=1",
+        "size": "123",
     }
     xml = rss_xml([item])
     root = ET.fromstring(xml)
@@ -25,3 +26,4 @@ def test_rss_xml_includes_enclosure() -> None:
     assert enclosure is not None
     assert enclosure.get("url") == item["link"]
     assert enclosure.get("type") == "application/x-nzb"
+    assert enclosure.get("length") == item["size"]

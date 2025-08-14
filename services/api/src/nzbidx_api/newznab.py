@@ -193,8 +193,10 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     """Return a simple RSS feed with the provided items.
 
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
-    ``category`` and ``link`` keys. No escaping is performed as the values are
-    expected to be safe for XML. Adult items are stripped when not allowed.
+    ``category``, ``link`` and ``size`` keys. ``size`` is used for the
+    enclosure length and defaults to ``0`` when missing. No escaping is
+    performed as the values are expected to be safe for XML. Adult items are
+    stripped when not allowed.
     """
     allow_adult = adult_content_allowed()
     safe_items = [
@@ -208,7 +210,7 @@ def rss_xml(items: list[dict[str, str]]) -> str:
         f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
         f"<category>{html.escape(i['category'])}</category>"
         f"<link>{html.escape(i['link'])}</link>"
-        f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"0\"/>"
+        f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"{html.escape(str(i.get('size', '0')))}\"/>"
         "</item>"
         for i in safe_items
     )

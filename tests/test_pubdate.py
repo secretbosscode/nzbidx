@@ -31,7 +31,7 @@ def test_rss_xml_includes_channel_pubdate() -> None:
     assert parsedate_to_datetime(pub) is not None
 
 
-def test_search_releases_formats_pubdate(monkeypatch) -> None:
+def test_search_releases_formats_pubdate_and_includes_size(monkeypatch) -> None:
     iso_date = "2024-01-01T00:00:00Z"
 
     class DummyClient:
@@ -45,6 +45,7 @@ def test_search_releases_formats_pubdate(monkeypatch) -> None:
                                 "norm_title": "Test",
                                 "posted_at": iso_date,
                                 "category": "2030",
+                                "size_bytes": 123,
                             },
                         }
                     ]
@@ -60,3 +61,4 @@ def test_search_releases_formats_pubdate(monkeypatch) -> None:
     client = DummyClient()
     items = search_mod.search_releases(client, {"must": []}, limit=1)
     assert parsedate_to_datetime(items[0]["pubDate"]) is not None
+    assert items[0]["size"] == "123"
