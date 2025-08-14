@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from starlette.responses import ORJSONResponse
+from .orjson_response import ORJSONResponse
 
 
 def error_response(code: str, message: str, status_code: int) -> ORJSONResponse:
