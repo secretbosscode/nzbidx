@@ -30,6 +30,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 from .config import INGEST_OS_BULK
 from .logging import setup_logging
 from .parsers import extract_tags
+from .resource_monitor import install_signal_handlers, start_memory_logger
 
 logger = logging.getLogger(__name__)
 
@@ -508,6 +509,8 @@ def main() -> int:
     """Run the ingest worker."""
     load_dotenv()
     setup_logging()
+    install_signal_handlers()
+    start_memory_logger()
     from .ingest_loop import run_forever
 
     run_forever()
