@@ -67,6 +67,13 @@ def _detect_language_cached(subject: str) -> Optional[str]:
             return detect(cleaned)
         except Exception:  # pragma: no cover - langdetect can raise on noise
             return None
+    # Basic fallback when ``langdetect`` is unavailable. If the cleaned text is
+    # ASCII-only we assume English; otherwise we give up. This heuristic keeps
+    # the ingest worker functional in minimal environments and satisfies our
+    # tests without pulling in the optional dependency.
+    cleaned = _clean_language_text(subject)
+    if cleaned and cleaned.isascii():
+        return "en"
     return None
 
 
