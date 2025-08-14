@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from typing import Set
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -35,6 +36,18 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         provided = request.headers.get("X-Api-Key")
         if not provided and hasattr(request, "query_params"):
             provided = request.query_params.get("apikey")
+        if not provided:
+            auth = request.headers.get("Authorization")
+            if auth and auth.lower().startswith("basic "):
+                try:
+                    decoded = base64.b64decode(auth.split(" ", 1)[1]).decode()
+                    username, _, password = decoded.partition(":")
+                    for cred in (username, password):
+                        if cred in self.valid_keys:
+                            provided = cred
+                            break
+                except Exception:
+                    pass
         if provided not in self.valid_keys:
             return unauthorized()
         return await call_next(request)
