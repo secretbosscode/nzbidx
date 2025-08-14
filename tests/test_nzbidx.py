@@ -23,7 +23,13 @@ sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
-from nzbidx_ingest.main import CATEGORY_MAP, _infer_category, connect_db  # type: ignore
+from nzbidx_ingest.main import (
+    CATEGORY_MAP,
+    _infer_category,
+    connect_db,
+    bulk_index_releases,
+    OS_RELEASES_ALIAS,
+)  # type: ignore
 
 
 class DummyCache:
@@ -104,6 +110,35 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
     search_mod.search_releases(client, {"must": []}, limit=5, sort="date")
 
     assert body_holder["body"]["sort"] == [{"posted_at": {"order": "desc"}}]
+
+
+def test_bulk_index_releases_builds_payload() -> None:
+    """Bulk payload should include action and source pairs."""
+
+    captured: dict[str, object] = {}
+
+    class DummyClient:
+        def bulk(self, *, body: str, refresh: bool) -> None:
+            captured["body"] = body
+            captured["refresh"] = refresh
+
+    docs = [
+        ("id1", {"norm_title": "one", "category": "2000"}),
+        ("id2", {"norm_title": "two", "category": "3000"}),
+    ]
+
+    bulk_index_releases(DummyClient(), docs)
+
+    lines = captured["body"].splitlines()
+    assert json.loads(lines[0]) == {
+        "index": {"_index": OS_RELEASES_ALIAS, "_id": "id1"}
+    }
+    assert json.loads(lines[1])["norm_title"] == "one"
+    assert json.loads(lines[2]) == {
+        "index": {"_index": OS_RELEASES_ALIAS, "_id": "id2"}
+    }
+    assert json.loads(lines[3])["norm_title"] == "two"
+    assert captured["refresh"] is False
 
 
 def test_os_search_multiple_categories(monkeypatch) -> None:
@@ -904,7 +939,7 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
         "insert_release",
         lambda *_args, **_kwargs: True,
     )
-    monkeypatch.setattr(loop, "index_release", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_args, **_kwargs: None)
 
     with caplog.at_level(logging.INFO):
         loop.run_once()
@@ -984,7 +1019,7 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
         return True
 
     monkeypatch.setattr(loop, "insert_release", fake_insert)
-    monkeypatch.setattr(loop, "index_release", lambda *_a, **_k: None)
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     loop.run_once()
 

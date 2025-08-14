@@ -13,13 +13,14 @@ from .config import (
     CB_RESET_SECONDS,
     INGEST_SLEEP_MS,
     INGEST_DB_LATENCY_MS,
+    INGEST_OS_BULK,
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
 from .parsers import normalize_subject, detect_language
 from .main import (
     insert_release,
-    index_release,
+    bulk_index_releases,
     _infer_category,
     connect_db,
     connect_opensearch,
@@ -121,6 +122,20 @@ def run_once() -> None:
         total_os_latency = 0.0
         db_count = 0
         os_count = 0
+        bulk_docs: list[tuple[str, dict[str, object]]] = []
+
+        def flush_bulk() -> None:
+            nonlocal last_os_latency, total_os_latency, os_count
+            if not bulk_docs:
+                return
+            os_start = time.monotonic()
+            bulk_index_releases(os_client, bulk_docs)
+            os_latency = time.monotonic() - os_start
+            last_os_latency = os_latency / len(bulk_docs)
+            total_os_latency += os_latency
+            os_count += len(bulk_docs)
+            bulk_docs.clear()
+
         current = last
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
@@ -150,24 +165,21 @@ def run_once() -> None:
             db_latency = time.monotonic() - db_start
             total_db_latency += db_latency
             db_count += 1
-            os_latency = 0.0
             if inserted:
                 metrics["inserted"] += 1
-                os_start = time.monotonic()
-                index_release(
-                    os_client,
-                    dedupe_key,
-                    category=category,
-                    language=language,
-                    tags=tags,
-                    group=group,
-                )
-                os_latency = time.monotonic() - os_start
-                last_os_latency = os_latency
-                total_os_latency += os_latency
-                os_count += 1
+                body = {
+                    "norm_title": dedupe_key,
+                    "category": category,
+                    "language": language,
+                    "tags": tags,
+                    "source_group": group,
+                }
+                bulk_docs.append((dedupe_key, body))
                 metrics["indexed"] += 1
+                if len(bulk_docs) >= INGEST_OS_BULK:
+                    flush_bulk()
             current = idx
+        flush_bulk()
         cursors.set_cursor(group, current)
         metrics["deduped"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
