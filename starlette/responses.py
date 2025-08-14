@@ -1,4 +1,4 @@
-import json
+import orjson
 
 
 class Response:  # pragma: no cover - trivial
@@ -17,8 +17,14 @@ class Response:  # pragma: no cover - trivial
             self.headers.update(headers)
 
 
-class JSONResponse(Response):  # pragma: no cover - trivial
+class ORJSONResponse(Response):  # pragma: no cover - trivial
     def __init__(self, content: dict, *, status_code: int = 200) -> None:
         super().__init__(
-            json.dumps(content), status_code=status_code, media_type="application/json"
+            orjson.dumps(content).decode(),
+            status_code=status_code,
+            media_type="application/json",
         )
+
+
+class JSONResponse(ORJSONResponse):  # pragma: no cover - backwards compat
+    pass
