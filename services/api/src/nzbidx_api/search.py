@@ -114,6 +114,7 @@ def search_releases(
                 "pubDate": _format_pubdate(src.get("posted_at", "")),
                 "category": src.get("category", ""),
                 "link": f"/api?t=getnzb&id={hit.get('_id', '')}",
+                "size": str(src.get("size_bytes", 0)),
             }
         )
     return items
