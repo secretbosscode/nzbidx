@@ -378,6 +378,7 @@ def test_caps_xml_defaults(monkeypatch) -> None:
     xml = reloaded.caps_xml()
     assert '<category id="1000" name="Console"/>' in xml
     assert '<category id="7030" name="Comics"/>' in xml
+    assert '<category id="6090" name="XXX/WEB-DL"/>' in xml
 
 
 def test_failed_fetch_cached(monkeypatch) -> None:
