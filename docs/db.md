@@ -1,6 +1,6 @@
 # Postgres
 
-Manual steps to create the database for NZBIdx.
+Manual steps to create the database for NZBidx.
 
 ## Prerequisites
 

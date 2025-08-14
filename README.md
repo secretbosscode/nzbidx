@@ -1,8 +1,8 @@
-# nzbidx
+# NZBidx
 
 If you find this project useful, donations are welcome at `BC1QTL4RMQJXTJ2K05UMGVWXL46SGR4DJG2GCMRR38`.
 
-NZBIdx is a lightweight, Newznab-compatible indexer implemented as a single
+NZBidx is a lightweight, Newznab-compatible indexer implemented as a single
 Python application. It exposes FastAPI endpoints backed by OpenSearch and
 Redis and runs a background worker that parses NNTP headers, normalises
 subjects and indexes metadata into OpenSearch.
