@@ -184,9 +184,7 @@ def run_once() -> None:
             else 0
         )
         avg_os_ms = (
-            int((os_latency / metrics["indexed"]) * 1000)
-            if metrics["indexed"]
-            else 0
+            int((os_latency / metrics["indexed"]) * 1000) if metrics["indexed"] else 0
         )
         metrics["avg_db_ms"] = avg_db_ms
         metrics["avg_os_ms"] = avg_os_ms
