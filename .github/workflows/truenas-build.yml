@@ -45,8 +45,8 @@ jobs:
           context: .
           file: services/Dockerfile
           outputs: |
-            type=registry,registry.insecure=true,name=truenas:5000/nzbidx:${{ steps.vars.outputs.tag }},push=true
-            type=registry,registry.insecure=true,name=truenas:5000/nzbidx:latest,push=true
+            type=registry,registry.insecure=true,name=192.168.1.2:5000/nzbidx:${{ steps.vars.outputs.tag }},push=true
+            type=registry,registry.insecure=true,name=192.168.1.2:5000/nzbidx:latest,push=true
           sbom: true
           provenance: true
           cache-from: type=local,src=~/.cache/buildx
