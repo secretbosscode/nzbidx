@@ -1,5 +1,6 @@
 """Helpers for the Newznab API."""
 
+import asyncio
 import json
 import os
 import html
@@ -299,7 +300,7 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
             inc_nzb_cache_miss()
 
     try:
-        xml = nzb_builder.build_nzb_for_release(release_id)
+        xml = await asyncio.to_thread(nzb_builder.build_nzb_for_release, release_id)
     except NzbFetchError:
         if cache:
             try:
