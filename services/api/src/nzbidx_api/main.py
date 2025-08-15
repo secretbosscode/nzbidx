@@ -813,9 +813,11 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
+        if cache is None:
+            await init_cache_async()
         try:
             xml = await asyncio.wait_for(
-                asyncio.to_thread(get_nzb, release_id, None),
+                asyncio.to_thread(get_nzb, release_id, cache),
                 timeout=nzb_timeout_seconds(),
             )
         except CircuitOpenError:
