@@ -158,7 +158,8 @@ def setup_logging() -> None:
     root.handlers.clear()
     root.addHandler(handler)
     root.addFilter(LogSanitizerFilter())
-    root.setLevel(logging.DEBUG)
+    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    root.setLevel(getattr(logging, level, logging.INFO))
 
 
 setup_logging()
