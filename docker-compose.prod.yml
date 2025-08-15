@@ -14,7 +14,7 @@ services:
         max-size: "10m"
         max-file: "5"
     environment:
-      NZBIDX_USE_STD_JSON: ${NZBIDX_USE_STD_JSON:-}
+      NZBIDX_USE_STD_JSON: ${NZBIDX_USE_STD_JSON:-1}
   opensearch:
     restart: unless-stopped
     volumes:

@@ -5,7 +5,7 @@ RUN addgroup --system --gid 1000 nzbidx && \
 
 WORKDIR /app
 
-ARG NZBIDX_USE_STD_JSON
+ARG NZBIDX_USE_STD_JSON=1
 ENV NZBIDX_USE_STD_JSON=${NZBIDX_USE_STD_JSON}
 
 COPY services/api/ services/api/

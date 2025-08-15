@@ -84,6 +84,12 @@ Environment variables are defined directly in the compose files. Adjust values
 there or set them via the environment before running the stack. Only a small set
 of variables are required to run the stack:
 
+The compose files and Docker image default to the standard library `json`
+module (`NZBIDX_USE_STD_JSON=1`) because `orjson` may not support the latest
+Python release. Install the optional `orjson` extra with
+`pip install "nzbidx-api[orjson]"` and set `NZBIDX_USE_STD_JSON=0` (or unset it)
+to regain the faster serializer once compatible.
+
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `DATABASE_URL` | Connection string for the application | `postgres://nzbidx:nzbidx@postgres:5432/nzbidx` |
@@ -99,6 +105,7 @@ of variables are required to run the stack:
 | `ALLOW_XXX` | `true` enables the XXX category | `false` |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
+| `NZBIDX_USE_STD_JSON` | `1` forces the standard library `json` module; unset or `0` uses `orjson` if installed | `1` |
 | `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing | `5` |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
 | `NNTP_PORT` | NNTP port | `119` |
