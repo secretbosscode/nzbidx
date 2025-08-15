@@ -219,6 +219,34 @@ def test_build_nzb_overview_tuple(monkeypatch) -> None:
     nzb_builder.build_nzb_for_release("MyRelease")
 
 
+def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+    monkeypatch.delenv("NNTP_TIMEOUT", raising=False)
+
+    called: dict[str, float | None] = {}
+
+    class CaptureTimeout(DummyNNTP):
+        def __init__(self, *args, **kwargs):
+            called["timeout"] = kwargs.get("timeout")
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(
+            NNTP=CaptureTimeout, NNTP_SSL=CaptureTimeout, NNTP_SSL_PORT=563
+        ),
+    )
+
+    nzb_builder.build_nzb_for_release("MyRelease")
+    assert called["timeout"] == 30.0
+
+    monkeypatch.setenv("NNTP_TIMEOUT", "45")
+    nzb_builder.build_nzb_for_release("MyRelease")
+    assert called["timeout"] == 45.0
+
+
 def test_basic_api_and_ingest(monkeypatch) -> None:
     """Ensure search sort and ingest category inference work."""
     # Ingest: category inference

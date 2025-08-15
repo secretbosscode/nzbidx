@@ -84,7 +84,7 @@ def build_nzb_for_release(release_id: str) -> str:
                     user=user,
                     password=password,
                     readermode=True,
-                    timeout=10,
+                    timeout=float(os.getenv("NNTP_TIMEOUT", "30")),
                 ) as server:
                     groups = [
                         g.strip()
