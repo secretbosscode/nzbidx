@@ -802,6 +802,23 @@ def test_failed_fetch_cached(monkeypatch, cache_cls) -> None:
 
 
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
+def test_timeout_populates_fail_sentinel(monkeypatch, cache_cls) -> None:
+    cache = cache_cls()
+    monkeypatch.setattr(api_main, "cache", cache)
+
+    async def fake_wait_for(coro, *_args, **_kwargs):
+        coro.close()
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(api_main.asyncio, "wait_for", fake_wait_for)
+
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
+    resp = asyncio.run(api_main.api(req))
+    assert resp.status_code == 503
+    assert cache.store["nzb:123"] == newznab.FAIL_SENTINEL
+
+
+@pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
 def test_cached_nzb_served(monkeypatch, cache_cls) -> None:
     """A cached NZB should be returned without rebuilding."""
 
