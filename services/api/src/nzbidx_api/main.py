@@ -815,6 +815,7 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
+        start = time.monotonic()
         try:
             xml = await asyncio.wait_for(
                 asyncio.to_thread(get_nzb, release_id, cache),
@@ -825,6 +826,8 @@ async def api(request: Request) -> Response:
         except NzbFetchError:
             return nzb_unavailable()
         except asyncio.TimeoutError:
+            elapsed = time.monotonic() - start
+            logger.warning("nzb fetch timed out after %.2fs", elapsed)
             return nzb_unavailable("nzb fetch timed out")
         return Response(xml, media_type="application/x-nzb")
 
