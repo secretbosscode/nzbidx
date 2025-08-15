@@ -667,6 +667,32 @@ def test_builds_nzb_strips_brackets(monkeypatch) -> None:
     assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
 
 
+def test_builds_nzb_tuple_overview(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    class TupleNNTP(DummyNNTP):
+        def xover(self, start, end):
+            return "", [
+                (
+                    1,
+                    {
+                        "subject": 'MyRelease "testfile.bin" (1/1)',
+                        "message-id": "msg1@example.com",
+                        "bytes": 123,
+                    },
+                )
+            ]
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=TupleNNTP, NNTP_SSL=TupleNNTP, NNTP_SSL_PORT=563),
+    )
+    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
+
+
 def test_enforces_segment_limit(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
