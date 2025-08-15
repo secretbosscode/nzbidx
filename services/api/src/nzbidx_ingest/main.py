@@ -27,7 +27,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     # to the default alias if the package is not available on ``sys.path``.
     OS_RELEASES_ALIAS = "nzbidx-releases"
 
-from .config import INGEST_OS_BULK
+from .config import INGEST_OS_BULK, opensearch_timeout_seconds
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
@@ -264,7 +264,7 @@ def connect_opensearch() -> Optional[object]:
     try:
         from opensearchpy import OpenSearch  # type: ignore
 
-        return OpenSearch(url, timeout=2)
+        return OpenSearch(url, timeout=opensearch_timeout_seconds())
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.info("opensearch_unavailable", extra={"error": str(exc)})
         return None

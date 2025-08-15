@@ -58,3 +58,17 @@ INGEST_SLEEP_MS: int = int(os.getenv("INGEST_SLEEP_MS", "1000"))
 INGEST_DB_LATENCY_MS: int = int(os.getenv("INGEST_DB_LATENCY_MS", "1200"))
 INGEST_OS_LATENCY_MS: int = int(os.getenv("INGEST_OS_LATENCY_MS", "1200"))
 INGEST_OS_BULK: int = int(os.getenv("INGEST_OS_BULK", "100"))
+
+
+def opensearch_timeout_seconds() -> int:
+    """Timeout in seconds for OpenSearch connections."""
+    value = os.getenv("OPENSEARCH_TIMEOUT_SECONDS")
+    if value is None:
+        return 2
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(
+            "Invalid OPENSEARCH_TIMEOUT_SECONDS=%r, using default 2", value
+        )
+        return 2
