@@ -679,6 +679,23 @@ def test_getnzb_timeout(monkeypatch) -> None:
     assert resp.status_code == 503
 
 
+def test_getnzb_sets_content_disposition(monkeypatch) -> None:
+    """NZB downloads should include a content-disposition header."""
+
+    async def fake_get_nzb(_release_id, _cache):
+        return "<nzb></nzb>"
+
+    monkeypatch.setattr(api_main, "get_nzb", fake_get_nzb)
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
+    resp = asyncio.run(api_main.api(req))
+    assert resp.status_code == 200
+    assert (
+        resp.headers["Content-Disposition"]
+        == 'attachment; filename="123.nzb"'
+    )
+    assert resp.headers["content-type"] == "application/x-nzb"
+
+
 def test_caps_xml_omits_adult_when_disabled(monkeypatch) -> None:
     """caps.xml should exclude adult categories when disabled."""
 
