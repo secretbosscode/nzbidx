@@ -43,6 +43,10 @@ from email.utils import parsedate_to_datetime
 
 logger = logging.getLogger(__name__)
 
+# Track consecutive failures per group to allow backoff or alerting.
+# This is reset on successful xover calls.
+_group_failures: dict[str, int] = {}
+
 
 class _AggregateMetrics:
     """Helper to accumulate metrics across groups during a poll cycle."""
@@ -114,7 +118,27 @@ def run_once() -> float:
             batch = min(remaining, INGEST_BATCH_MAX)
             batch = max(batch, min(remaining, INGEST_BATCH_MIN))
             end = start + batch - 1
-            headers = client.xover(group, start, end)
+            try:
+                headers = client.xover(group, start, end)
+                _group_failures[group] = 0
+            except Exception:
+                failures = _group_failures.get(group, 0) + 1
+                _group_failures[group] = failures
+                logger.exception(
+                    "ingest_xover_error",
+                    extra={
+                        "group": group,
+                        "start": start,
+                        "end": end,
+                        "failures": failures,
+                    },
+                )
+                if failures >= 3:
+                    logger.warning(
+                        "ingest_xover_consecutive_failures",
+                        extra={"group": group, "failures": failures},
+                    )
+                continue
         if not headers:
             logger.info(
                 "ingest_idle",
