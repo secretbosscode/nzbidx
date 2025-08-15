@@ -3,11 +3,11 @@
 import hashlib
 import json
 import logging
-import orjson
 import os
 import time
 import asyncio
 import inspect
+from types import SimpleNamespace
 from importlib import resources
 from pathlib import Path
 from typing import Optional, Callable
@@ -15,6 +15,16 @@ from typing import Optional, Callable
 from nzbidx_common.os import OS_RELEASES_ALIAS
 import threading
 from nzbidx_ingest.ingest_loop import run_forever
+
+if os.getenv("NZBIDX_USE_STD_JSON"):
+    orjson = SimpleNamespace(
+        dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
+        loads=lambda s, **kw: json.loads(
+            s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw
+        ),
+    )
+else:  # pragma: no cover - prefers orjson when available
+    import orjson  # type: ignore
 
 # Optional third party dependencies
 try:  # pragma: no cover - import guard
