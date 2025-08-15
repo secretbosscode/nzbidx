@@ -4,7 +4,8 @@ import json
 import os
 from types import SimpleNamespace
 
-if os.getenv("NZBIDX_USE_STD_JSON"):
+# Default to the standard library JSON module unless explicitly disabled
+if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
     orjson = SimpleNamespace(
         dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
         loads=lambda s, **kw: json.loads(

@@ -314,7 +314,7 @@ def run_once() -> float:
             time.sleep(sleep_ms / 1000)
 
     summary = aggregate.summary()
-    logger.info("ingest_summary", extra=summary)
+    logger.info("ingest_summary", extra={"event": "ingest_summary", **summary})
     remaining = summary.get("remaining", 0)
     processed = summary.get("processed", 0)
     if remaining <= 0:

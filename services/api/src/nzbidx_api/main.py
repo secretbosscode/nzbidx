@@ -16,7 +16,8 @@ from nzbidx_common.os import OS_RELEASES_ALIAS
 import threading
 from nzbidx_ingest.ingest_loop import run_forever
 
-if os.getenv("NZBIDX_USE_STD_JSON"):
+# Default to the standard library JSON module unless explicitly disabled
+if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
     orjson = SimpleNamespace(
         dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
         loads=lambda s, **kw: json.loads(
