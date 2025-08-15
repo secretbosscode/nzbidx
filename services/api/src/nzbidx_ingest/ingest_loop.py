@@ -129,10 +129,11 @@ def run_once() -> float:
         metrics = {"processed": 0, "inserted": 0, "indexed": 0}
         batch_start = time.monotonic()
         current = last
-        releases: list[
-            tuple[str, str | None, str | None, list[str] | None, str | None]
-        ] = []
-        docs: list[tuple[str, dict[str, object]]] = []
+        releases: dict[
+            str,
+            tuple[str, str | None, str | None, list[str] | None, str | None],
+        ] = {}
+        docs: dict[str, dict[str, object]] = {}
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
             subject = header.get("subject", "")
@@ -150,7 +151,7 @@ def run_once() -> float:
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
             size = int(header.get("bytes") or 0)
-            releases.append((dedupe_key, category, language, tags, group))
+            releases[dedupe_key] = (dedupe_key, category, language, tags, group)
             body: dict[str, object] = {"norm_title": dedupe_key}
             if category:
                 body["category"] = category
@@ -162,21 +163,21 @@ def run_once() -> float:
                 body["source_group"] = group
             if size > 0:
                 body["size_bytes"] = size
-            docs.append((dedupe_key, body))
+            docs[dedupe_key] = body
             current = idx
         db_latency = 0.0
         os_latency = 0.0
         inserted: set[str] = set()
         if releases:
             db_start = time.monotonic()
-            result = insert_release(db, releases=releases)
+            result = insert_release(db, releases=releases.values())
             db_latency = time.monotonic() - db_start
             if isinstance(result, set):
                 inserted = result
             elif result:
-                inserted = {r[0] for r in releases}
+                inserted = {r[0] for r in releases.values()}
             metrics["inserted"] = len(inserted)
-        to_index = [(doc_id, body) for doc_id, body in docs if doc_id in inserted]
+        to_index = [(doc_id, docs[doc_id]) for doc_id in inserted if doc_id in docs]
         if to_index:
             os_start = time.monotonic()
             bulk_index_releases(os_client, to_index)
