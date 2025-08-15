@@ -40,3 +40,12 @@ def setup_logging() -> None:
     root.addHandler(handler)
     level = os.getenv("LOG_LEVEL", "INFO").upper()
     root.setLevel(getattr(logging, level, logging.INFO))
+
+    # Quiet overly chatty third‑party libraries to keep logs focused.
+    for name in ("urllib3", "opensearchpy", "httpx"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+    # Ensure uvicorn access logs use the root JSON formatter for consistency.
+    access = logging.getLogger("uvicorn.access")
+    access.handlers.clear()
+    access.propagate = True
