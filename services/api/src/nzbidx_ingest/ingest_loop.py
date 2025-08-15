@@ -150,7 +150,7 @@ def run_once() -> float:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
-            size = int(header.get("bytes") or 0)
+            size = int(header.get("bytes") or header.get(":bytes") or 0)
             releases[dedupe_key] = (dedupe_key, category, language, tags, group)
             body: dict[str, object] = {"norm_title": dedupe_key}
             if category:
