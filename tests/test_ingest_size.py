@@ -30,7 +30,7 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
             return 1
 
         def xover(self, group: str, start: int, end: int):
-            return [{"subject": "Example", "bytes": "456"}]
+            return [{"subject": "Example", ":bytes": "456"}]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
