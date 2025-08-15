@@ -58,6 +58,8 @@ INGEST_SLEEP_MS: int = int(os.getenv("INGEST_SLEEP_MS", "1000"))
 INGEST_DB_LATENCY_MS: int = int(os.getenv("INGEST_DB_LATENCY_MS", "1200"))
 INGEST_OS_LATENCY_MS: int = int(os.getenv("INGEST_OS_LATENCY_MS", "1200"))
 INGEST_OS_BULK: int = int(os.getenv("INGEST_OS_BULK", "100"))
+# Emit ingest batch metrics at INFO level every N batches. Set to 0 to disable.
+INGEST_LOG_EVERY: int = int(os.getenv("INGEST_LOG_EVERY", "100"))
 
 
 def opensearch_timeout_seconds() -> int:

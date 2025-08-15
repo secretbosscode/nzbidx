@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 # This is reset on successful xover calls.
 _group_failures: dict[str, int] = {}
 
+# Counter used to throttle how often batch metrics are logged at INFO level.
+_log_counter = 0
+
 
 class _AggregateMetrics:
     """Helper to accumulate metrics across groups during a poll cycle."""
@@ -275,7 +278,15 @@ def run_once() -> float:
             rate = metrics["processed"] / duration_s
             metrics["eta_s"] = int(remaining / rate)
         metrics["group"] = group
-        logger.info("ingest_batch", extra=metrics)
+        global _log_counter
+        _log_counter += 1
+        log_fn = logger.debug
+        if metrics["inserted"] > 0 or (
+            config.INGEST_LOG_EVERY > 0
+            and _log_counter % config.INGEST_LOG_EVERY == 0
+        ):
+            log_fn = logger.info
+        log_fn("ingest_batch", extra=metrics)
         aggregate.add(metrics)
         if metrics["inserted"] == 0:
             cursors.mark_irrelevant(group)
