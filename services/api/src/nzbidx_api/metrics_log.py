@@ -29,7 +29,12 @@ def emit_metrics() -> None:
     changed = False
     for k, v in _counters.items():
         if _prev_counters.get(k) != v:
-            logger.info("metric", extra={"metric": k, "value": v})
+            logger.info(
+                "Metric %s=%s",
+                k,
+                v,
+                extra={"event": "metric", "metric": k, "value": v},
+            )
             changed = True
     if changed:
         _prev_counters.clear()

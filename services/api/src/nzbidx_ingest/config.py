@@ -15,13 +15,21 @@ def _load_groups() -> List[str]:
     env = os.getenv("NNTP_GROUPS", "")
     if env:
         groups = [g.strip() for g in env.split(",") if g.strip()]
-        logger.info("ingest_groups_config", extra={"groups": groups})
+        logger.info(
+            "Using configured NNTP groups: %s",
+            groups,
+            extra={"event": "ingest_groups_config", "groups": groups},
+        )
         return groups
 
     client = NNTPClient()
     groups = client.list_groups()
     if groups:
-        logger.info("ingest_groups_discovered", extra={"groups": groups})
+        logger.info(
+            "Discovered %d NNTP groups from server",
+            len(groups),
+            extra={"event": "ingest_groups_discovered", "groups": groups},
+        )
     else:
         host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
         logger.warning("ingest_groups_missing", extra={"host": host})
@@ -35,7 +43,11 @@ def _load_ignore_groups() -> List[str]:
     env = os.getenv("NNTP_IGNORE_GROUPS", "")
     if env:
         groups = [g.strip() for g in env.split(",") if g.strip()]
-        logger.info("ingest_ignore_groups_config", extra={"groups": groups})
+        logger.info(
+            "Ignoring NNTP groups per configuration: %s",
+            groups,
+            extra={"event": "ingest_ignore_groups_config", "groups": groups},
+        )
         return groups
     return []
 
