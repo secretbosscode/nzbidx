@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from contextlib import nullcontext
+import sqlite3
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
@@ -33,9 +34,12 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
             return [{"subject": "Example", ":bytes": "456"}]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    monkeypatch.setattr(loop, "connect_db", lambda: None)
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+    )
+    monkeypatch.setattr(loop, "connect_db", lambda: conn)
     monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
-    monkeypatch.setattr(loop, "insert_release", lambda _db, releases: {r[0] for r in releases})
 
     def fake_bulk(_client, docs):
         captured.extend(docs)
@@ -47,6 +51,10 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
     assert captured
     doc_id, body = captured[0]
     assert body.get("size_bytes") == 456
+    row = conn.execute(
+        "SELECT norm_title, size_bytes FROM release"
+    ).fetchone()
+    assert row == ("example", 456)
 
     class DummySearchClient:
         def search(self, **kwargs):

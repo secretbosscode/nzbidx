@@ -131,7 +131,14 @@ def run_once() -> float:
         current = last
         releases: dict[
             str,
-            tuple[str, str | None, str | None, list[str] | None, str | None],
+            tuple[
+                str,
+                str | None,
+                str | None,
+                list[str] | None,
+                str | None,
+                int | None,
+            ],
         ] = {}
         docs: dict[str, dict[str, object]] = {}
         for idx, header in enumerate(headers, start=start):
@@ -151,7 +158,7 @@ def run_once() -> float:
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
             size = int(header.get("bytes") or header.get(":bytes") or 0)
-            releases[dedupe_key] = (dedupe_key, category, language, tags, group)
+            releases[dedupe_key] = (dedupe_key, category, language, tags, group, size)
             body: dict[str, object] = {"norm_title": dedupe_key}
             if category:
                 body["category"] = category

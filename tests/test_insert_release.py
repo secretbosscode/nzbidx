@@ -15,7 +15,7 @@ from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
 def test_insert_release_filters_surrogates() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
     )
     inserted = insert_release(
         conn,
@@ -24,38 +24,41 @@ def test_insert_release_filters_surrogates() -> None:
         "en",
         ["tag\udc80"],
         "alt.binaries.example",
+        123,
     )
     assert inserted == {"foobar"}
     row = conn.execute(
-        "SELECT norm_title, category, language, tags, source_group FROM release",
+        "SELECT norm_title, category, language, tags, source_group, size_bytes FROM release",
     ).fetchone()
-    assert row == ("foobar", "cat", "en", "tag", "alt.binaries.example")
+    assert row == ("foobar", "cat", "en", "tag", "alt.binaries.example", 123)
 
 
 def test_insert_release_defaults() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
     )
-    inserted = insert_release(conn, "foo", None, None, None, None)
+    inserted = insert_release(conn, "foo", None, None, None, None, None)
     assert inserted == {"foo"}
     row = conn.execute(
-        "SELECT norm_title, category, language, tags, source_group FROM release",
+        "SELECT norm_title, category, language, tags, source_group, size_bytes FROM release",
     ).fetchone()
-    assert row == ("foo", CATEGORY_MAP["other"], "und", "", None)
+    assert row == ("foo", CATEGORY_MAP["other"], "und", "", None, None)
 
 
 def test_insert_release_batch() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
     )
     releases = [
-        ("foo", None, None, None, None),
-        ("bar", "cat", "en", ["tag"], "alt.binaries.example"),
-        ("foo", None, None, None, None),
+        ("foo", None, None, None, None, None),
+        ("bar", "cat", "en", ["tag"], "alt.binaries.example", 456),
+        ("foo", None, None, None, None, None),
     ]
     inserted = insert_release(conn, releases=releases)
     assert inserted == {"foo", "bar"}
-    rows = conn.execute("SELECT norm_title FROM release ORDER BY norm_title").fetchall()
-    assert rows == [("bar",), ("foo",)]
+    rows = conn.execute(
+        "SELECT norm_title, size_bytes FROM release ORDER BY norm_title"
+    ).fetchall()
+    assert rows == [("bar", 456), ("foo", None)]

@@ -182,14 +182,17 @@ def connect_db() -> Any:
                             category TEXT,
                             language TEXT NOT NULL DEFAULT 'und',
                             tags TEXT NOT NULL DEFAULT '',
-                            source_group TEXT
+                            source_group TEXT,
+                            size_bytes BIGINT
                         )
                         """
                     ),
                     "DROP INDEX IF EXISTS release_embedding_idx",
                     "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT",
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
+                    "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
                 ):
                     try:
                         conn.execute(text(stmt))
@@ -241,12 +244,16 @@ def connect_db() -> Any:
             category TEXT,
             language TEXT NOT NULL DEFAULT 'und',
             tags TEXT NOT NULL DEFAULT '',
-            source_group TEXT
+            source_group TEXT,
+            size_bytes BIGINT
         )
         """
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
     )
     return conn
 
@@ -270,10 +277,18 @@ def insert_release(
     language: Optional[str] = None,
     tags: Optional[list[str]] = None,
     group: Optional[str] = None,
+    size_bytes: Optional[int] = None,
     *,
     releases: Optional[
         Iterable[
-            tuple[str, Optional[str], Optional[str], Optional[list[str]], Optional[str]]
+            tuple[
+                str,
+                Optional[str],
+                Optional[str],
+                Optional[list[str]],
+                Optional[str],
+                Optional[int],
+            ]
         ]
     ] = None,
 ) -> set[str]:
@@ -286,25 +301,28 @@ def insert_release(
 
     cur = conn.cursor()
 
-    items: list[tuple[str, Optional[str], Optional[str], list[str], Optional[str]]] = []
+    items: list[
+        tuple[str, Optional[str], Optional[str], list[str], Optional[str], Optional[int]]
+    ] = []
     if releases is not None:
         for r in releases:
-            n, c, lang, t, g = r
-            items.append((n, c, lang, list(t or []), g))
+            n, c, lang, t, g, s = r
+            items.append((n, c, lang, list(t or []), g, s))
     elif norm_title is not None:
-        items.append((norm_title, category, language, list(tags or []), group))
+        items.append((norm_title, category, language, list(tags or []), group, size_bytes))
     else:
         return set()
 
-    cleaned: list[tuple[str, str, str, str, Optional[str]]] = []
+    cleaned: list[tuple[str, str, str, str, Optional[str], Optional[int]]] = []
     titles: list[str] = []
-    for n, c, lang, t, g in items:
+    for n, c, lang, t, g, s in items:
         cleaned_title = _clean(n) or ""
         titles.append(cleaned_title)
         cleaned_category = _clean(c) or CATEGORY_MAP["other"]
         cleaned_language = _clean(lang) or "und"
         cleaned_tags = ",".join(_clean(tag) or "" for tag in t)
         cleaned_group = _clean(g)
+        size_val = s if isinstance(s, int) and s > 0 else None
         cleaned.append(
             (
                 cleaned_title,
@@ -312,6 +330,7 @@ def insert_release(
                 cleaned_language,
                 cleaned_tags,
                 cleaned_group,
+                size_val,
             )
         )
 
@@ -334,12 +353,12 @@ def insert_release(
     if to_insert:
         if conn.__class__.__module__.startswith("sqlite3"):
             cur.executemany(
-                "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group) VALUES (?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group, size_bytes) VALUES (?, ?, ?, ?, ?, ?)",
                 to_insert,
             )
         else:
             cur.executemany(
-                "INSERT INTO release (norm_title, category, language, tags, source_group) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
+                "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
                 to_insert,
             )
     conn.commit()
