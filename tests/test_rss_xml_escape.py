@@ -37,6 +37,8 @@ def test_rss_xml_escapes_special_characters() -> None:
     assert parsed.findtext("title") == item["title"]
     assert parsed.findtext("guid") == item["guid"]
     assert parsed.findtext("link") == item["link"]
+    # ``size`` was not provided so no enclosure tag should be emitted
+    assert root.find("./channel/item/enclosure") is None
 
 
 def test_search_releases_encodes_link_id(monkeypatch) -> None:
