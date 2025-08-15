@@ -22,6 +22,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      NZBIDX_USE_STD_JSON: ${NZBIDX_USE_STD_JSON:-}
       DATABASE_URL: postgres://nzbidx:nzbidx@postgres:5432/nzbidx
       PGDATABASE: nzbidx
       PGUSER: nzbidx

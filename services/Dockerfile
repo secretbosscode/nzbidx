@@ -5,6 +5,9 @@ RUN addgroup --system --gid 1000 nzbidx && \
 
 WORKDIR /app
 
+ARG NZBIDX_USE_STD_JSON
+ENV NZBIDX_USE_STD_JSON=${NZBIDX_USE_STD_JSON}
+
 COPY services/api/ services/api/
 # Schema file required by the API when applying migrations
 COPY db/init/schema.sql services/api/src/db/init/schema.sql
