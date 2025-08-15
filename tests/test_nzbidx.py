@@ -131,6 +131,21 @@ def test_build_nzb_without_matches(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
+def test_build_nzb_connection_error(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    class BoomConnect(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            raise nzb_builder.nntplib.NNTPPermanentError("boom")
+
+    monkeypatch.setattr(nzb_builder.nntplib, "NNTP", BoomConnect)
+    monkeypatch.setattr(nzb_builder.nntplib, "NNTP_SSL", BoomConnect)
+
+    with pytest.raises(newznab.NzbFetchError):
+        nzb_builder.build_nzb_for_release("MyRelease")
+
+
 def test_build_nzb_bounds_xover_range(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")

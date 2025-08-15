@@ -34,6 +34,13 @@ spec.loader.exec_module(nntplib)
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
 MAX_SEGMENTS = 1000
 
+NNTPPermanentError = getattr(
+    nntplib, "NNTPPermanentError", type("NNTPPermanentError", (Exception,), {})
+)
+NNTPTemporaryError = getattr(
+    nntplib, "NNTPTemporaryError", type("NNTPTemporaryError", (Exception,), {})
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -142,6 +149,9 @@ def build_nzb_for_release(release_id: str) -> str:
             )
     except newznab.NzbFetchError:
         raise
+    except (NNTPPermanentError, NNTPTemporaryError, OSError) as exc:
+        log.warning("nntp connection failed for %s: %s", release_id, exc)
+        raise newznab.NzbFetchError("nntp connection failed") from exc
     except Exception as exc:
         log.exception("nzb build failed for %s: %s", release_id, exc)
         return newznab.nzb_xml_stub(release_id)
