@@ -627,8 +627,6 @@ def _params_key(params) -> str:
 
 async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
-    if cache is None:
-        await init_cache_async()
     params = request.query_params
     api_key = params.get("apikey")
     raw_qs = getattr(request, "query_string", None)
@@ -815,10 +813,9 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
-        start = time.monotonic()
         try:
             xml = await asyncio.wait_for(
-                asyncio.to_thread(get_nzb, release_id, cache),
+                asyncio.to_thread(get_nzb, release_id, None),
                 timeout=nzb_timeout_seconds(),
             )
         except CircuitOpenError:
@@ -826,8 +823,11 @@ async def api(request: Request) -> Response:
         except NzbFetchError:
             return nzb_unavailable()
         except asyncio.TimeoutError:
-            elapsed = time.monotonic() - start
-            logger.warning("nzb fetch timed out after %.2fs", elapsed)
+            logger.warning(
+                "nzb fetch timed out after %ss",
+                nzb_timeout_seconds(),
+                extra={"release_id": release_id},
+            )
             return nzb_unavailable("nzb fetch timed out")
         return Response(xml, media_type="application/x-nzb")
 
