@@ -68,7 +68,5 @@ def opensearch_timeout_seconds() -> int:
     try:
         return int(value)
     except ValueError:
-        logger.warning(
-            "Invalid OPENSEARCH_TIMEOUT_SECONDS=%r, using default 2", value
-        )
+        logger.warning("Invalid OPENSEARCH_TIMEOUT_SECONDS=%r, using default 2", value)
         return 2
