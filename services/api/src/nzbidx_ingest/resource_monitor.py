@@ -49,11 +49,27 @@ def _monitor(interval: int, root: Path) -> None:
                 pct = int(used / limit * 100)
                 extra.update({"limit": limit, "pct": pct})
                 if pct >= 90:
-                    logger.warning("memory_usage_high", extra=extra)
+                    logger.warning(
+                        "High memory usage: %d of %d bytes (%d%%)",
+                        used,
+                        limit,
+                        pct,
+                        extra={"event": "memory_usage_high", **extra},
+                    )
                 else:
-                    logger.info("memory_usage", extra=extra)
+                    logger.info(
+                        "Memory usage: %d of %d bytes (%d%%)",
+                        used,
+                        limit,
+                        pct,
+                        extra={"event": "memory_usage", **extra},
+                    )
             else:
-                logger.info("memory_usage", extra=extra)
+                logger.info(
+                    "Memory usage: %d bytes (limit unknown)",
+                    used,
+                    extra={"event": "memory_usage", **extra},
+                )
         time.sleep(interval)
 
 
