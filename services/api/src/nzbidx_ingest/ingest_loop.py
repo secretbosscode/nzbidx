@@ -67,11 +67,12 @@ class _AggregateMetrics:
         summary: dict[str, int] = {
             "processed": self._processed,
             "remaining": self._remaining,
-            "eta_s": 0,
+            "eta_seconds": 0,
         }
         if self._duration_s > 0 and self._processed > 0 and self._remaining > 0:
             rate = self._processed / self._duration_s
-            summary["eta_s"] = int(self._remaining / rate)
+            summary["eta_seconds"] = int(self._remaining / rate)
+        summary["eta_s"] = summary["eta_seconds"]
         return summary
 
 
@@ -244,15 +245,18 @@ def run_once() -> float:
             os_latency = time.monotonic() - os_start
             metrics["indexed"] = len(to_index)
         cursors.set_cursor(group, current)
-        metrics["deduped"] = metrics["processed"] - metrics["inserted"]
+        metrics["deduplicated"] = metrics["processed"] - metrics["inserted"]
+        metrics["deduped"] = metrics["deduplicated"]
         duration_s = time.monotonic() - batch_start
         metrics["duration_ms"] = int(duration_s * 1000)
-        metrics["avg_batch_ms"] = (
+        metrics["average_batch_ms"] = (
             round((duration_s * 1000) / metrics["processed"], 3)
             if metrics["processed"]
             else 0.0
         )
-        metrics["os_latency_ms"] = int(os_latency * 1000)
+        metrics["avg_batch_ms"] = metrics["average_batch_ms"]
+        metrics["opensearch_latency_ms"] = int(os_latency * 1000)
+        metrics["os_latency_ms"] = metrics["opensearch_latency_ms"]
         avg_db_ms = (
             round((db_latency * 1000) / metrics["processed"], 3)
             if metrics["processed"]
@@ -263,6 +267,8 @@ def run_once() -> float:
             if metrics["indexed"]
             else 0.0
         )
+        metrics["average_database_latency_ms"] = avg_db_ms
+        metrics["average_opensearch_latency_ms"] = avg_os_ms
         metrics["avg_db_ms"] = avg_db_ms
         metrics["avg_os_ms"] = avg_os_ms
         metrics["cursor"] = current
@@ -270,10 +276,12 @@ def run_once() -> float:
         remaining = max(high - current, 0)
         metrics["remaining"] = remaining
         if high > 0:
-            metrics["pct_complete"] = int(current / high * 100)
+            metrics["percent_complete"] = int(current / high * 100)
+            metrics["pct_complete"] = metrics["percent_complete"]
         if duration_s > 0 and metrics["processed"] > 0 and remaining > 0:
             rate = metrics["processed"] / duration_s
-            metrics["eta_s"] = int(remaining / rate)
+            metrics["eta_seconds"] = int(remaining / rate)
+            metrics["eta_s"] = metrics["eta_seconds"]
         metrics["group"] = group
         logger.info("ingest_batch", extra=metrics)
         aggregate.add(metrics)
