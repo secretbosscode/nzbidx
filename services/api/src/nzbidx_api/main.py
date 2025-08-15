@@ -839,9 +839,7 @@ async def api(request: Request) -> Response:
                 try:
                     with start_span("redis.setex"):
                         await _maybe_await(
-                            cache.setex(
-                                key, newznab.FAIL_TTL, newznab.FAIL_SENTINEL
-                            )
+                            cache.setex(key, newznab.FAIL_TTL, newznab.FAIL_SENTINEL)
                         )
                 except Exception as exc:  # pragma: no cover - cache failure
                     logger.warning("redis setex failed for %s: %s", release_id, exc)
@@ -849,9 +847,7 @@ async def api(request: Request) -> Response:
         return Response(
             xml,
             media_type="application/x-nzb",
-            headers={
-                "Content-Disposition": f"attachment; filename=\"{release_id}.nzb\""
-            },
+            headers={"Content-Disposition": f'attachment; filename="{release_id}.nzb"'},
         )
 
     return invalid_params("unsupported request")
