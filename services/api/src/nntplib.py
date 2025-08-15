@@ -78,7 +78,6 @@ else:
     _have_ssl = True
 
 from email.header import decode_header as _email_decode_header
-from socket import _GLOBAL_DEFAULT_TIMEOUT
 
 __all__ = [
     "NNTP",
@@ -144,6 +143,7 @@ class NNTPDataError(NNTPError):
 # Standard port used by NNTP servers
 NNTP_PORT = 119
 NNTP_SSL_PORT = 563
+DEFAULT_TIMEOUT = 30
 
 # Response numbers that are followed by additional text (e.g. article)
 _LONGRESP = {
@@ -346,7 +346,7 @@ class NNTP:
         password=None,
         readermode=None,
         usenetrc=False,
-        timeout=_GLOBAL_DEFAULT_TIMEOUT,
+        timeout: float = DEFAULT_TIMEOUT,
     ):
         """Initialize an instance.  Arguments:
         - host: hostname to connect to
@@ -358,6 +358,7 @@ class NNTP:
         - usenetrc: allow loading username and password from ~/.netrc file
                     if not specified explicitly
         - timeout: timeout (in seconds) used for socket connections
+                   (default: DEFAULT_TIMEOUT)
 
         readermode is sometimes necessary if you are connecting to an
         NNTP server on the local machine and intend to call
@@ -1068,10 +1069,11 @@ if _have_ssl:
             ssl_context=None,
             readermode=None,
             usenetrc=False,
-            timeout=_GLOBAL_DEFAULT_TIMEOUT,
+            timeout: float = DEFAULT_TIMEOUT,
         ):
             """This works identically to NNTP.__init__, except for the change
             in default port and the `ssl_context` argument for SSL connections.
+            The timeout defaults to DEFAULT_TIMEOUT seconds.
             """
             self.ssl_context = ssl_context
             super().__init__(host, port, user, password, readermode, usenetrc, timeout)
