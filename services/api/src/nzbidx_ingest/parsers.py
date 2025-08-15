@@ -228,6 +228,12 @@ def normalize_subject(
         rf"\b({'|'.join(map(re.escape, fillers))})\b", "", cleaned, flags=re.IGNORECASE
     )
 
+    # Strip trailing segment markers and archive extensions commonly found in
+    # multipart releases.  Subjects like ``Name.part01.rar`` or ``Name.part1``
+    # should normalize to ``Name`` so all segments dedupe to a single entry.
+    cleaned = re.sub(r"(?i)\bpart\s*\d+\b", "", cleaned)
+    cleaned = re.sub(r"(?i)\b(rar|par2|zip)\b", "", cleaned)
+
     # Collapse whitespace and trim leading/trailing separators or dashes.
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)

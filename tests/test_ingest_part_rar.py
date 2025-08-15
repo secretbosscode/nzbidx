@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+# ruff: noqa: E402 - path manipulation before imports
+import sys
+from pathlib import Path
+from contextlib import nullcontext
+import sqlite3
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
+
+import nzbidx_ingest.ingest_loop as loop  # type: ignore
+from nzbidx_ingest import config, cursors  # type: ignore
+import nzbidx_api.search as search_mod  # type: ignore
+from nzbidx_ingest.parsers import normalize_subject  # type: ignore
+
+
+def test_part_rar_segments_collapsed(monkeypatch) -> None:
+    captured: list[tuple[str, dict[str, object]]] = []
+
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
+    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
+    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+
+    class DummyClient:
+        def connect(self) -> None:
+            pass
+
+        def high_water_mark(self, group: str) -> int:
+            return 2
+
+        def xover(self, group: str, start: int, end: int):
+            return [
+                {"subject": "Release.part01.rar", ":bytes": "100"},
+                {"subject": "Release.part02.rar", ":bytes": "200"},
+            ]
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+    )
+    monkeypatch.setattr(loop, "connect_db", lambda: conn)
+    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
+
+    def fake_bulk(_client, docs):
+        captured.extend(docs)
+
+    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
+
+    loop.run_once()
+
+    assert len(captured) == 1
+    doc_id, body = captured[0]
+    assert body.get("size_bytes") == 300
+    rows = conn.execute("SELECT norm_title, size_bytes FROM release").fetchall()
+    assert rows == [("release", 300)]
+
+    class DummySearchClient:
+        def search(self, **kwargs):
+            return {"hits": {"hits": [{"_id": doc_id, "_source": body}]}}
+
+    def dummy_call_with_retry(_breaker, _dep, func, **kwargs):
+        return func(**kwargs)
+
+    monkeypatch.setattr(search_mod, "call_with_retry", dummy_call_with_retry)
+    monkeypatch.setattr(search_mod, "start_span", lambda name: nullcontext())
+
+    items = search_mod.search_releases(DummySearchClient(), {"must": []}, limit=1)
+    assert len(items) == 1
+    assert items[0]["size"] == "300"
+    assert items[0]["link"] == f"/api?t=getnzb&id={doc_id}"
+
+
+def test_normalize_subject_strips_parts() -> None:
+    assert normalize_subject("Example.part01.rar") == "Example"
+    assert normalize_subject("Example.part1 par2") == "Example"
+    assert normalize_subject("Example part02 zip") == "Example"
