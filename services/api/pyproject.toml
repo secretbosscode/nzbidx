@@ -9,7 +9,6 @@ authors = [{ name = "NZBidx Contributors" }]
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "orjson",
     "opensearch-py",
     "httpx",
     "sqlalchemy>=2",
@@ -21,6 +20,9 @@ dependencies = [
     "apscheduler",
     "langdetect",
 ]
+
+[project.optional-dependencies]
+orjson = ["orjson"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

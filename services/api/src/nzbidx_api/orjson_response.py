@@ -12,7 +12,15 @@ if os.getenv("NZBIDX_USE_STD_JSON"):
         ),
     )
 else:  # pragma: no cover - prefers orjson when available
-    import orjson  # type: ignore
+    try:  # pragma: no cover - import guard
+        import orjson  # type: ignore
+    except Exception:  # pragma: no cover - optional dependency
+        orjson = SimpleNamespace(
+            dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
+            loads=lambda s, **kw: json.loads(
+                s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw
+            ),
+        )
 
 try:  # pragma: no cover - optional dependency
     from starlette.responses import Response as StarletteResponse

@@ -1,4 +1,13 @@
-import orjson
+import json
+try:  # pragma: no cover - optional dependency
+    import orjson  # type: ignore
+except Exception:  # pragma: no cover - minimal fallback
+    class _OrjsonFallback:  # pragma: no cover - trivial
+        @staticmethod
+        def dumps(obj, *args, **kwargs):
+            return json.dumps(obj, **kwargs).encode("utf-8")
+
+    orjson = _OrjsonFallback()  # type: ignore
 
 
 class Response:  # pragma: no cover - trivial
