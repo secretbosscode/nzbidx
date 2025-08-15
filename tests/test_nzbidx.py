@@ -91,6 +91,31 @@ class AutoNNTP(DummyNNTP):
         return "", [("alt.binaries.example", "0", "0", "0")]
 
 
+class DummyNNTPTuple(DummyNNTP):
+    def xover(self, start, end):  # pragma: no cover - simple
+        return (
+            "",
+            [
+                (
+                    1,
+                    {
+                        "subject": 'MyRelease "testfile.bin" (1/2)',
+                        "message-id": "msg1@example.com",
+                        "bytes": 123,
+                    },
+                ),
+                (
+                    2,
+                    {
+                        "subject": 'MyRelease "testfile.bin" (2/2)',
+                        "message-id": "msg2@example.com",
+                        "bytes": 456,
+                    },
+                ),
+            ],
+        )
+
+
 def test_build_nzb_without_host(monkeypatch) -> None:
     monkeypatch.delenv("NNTP_HOST", raising=False)
     with pytest.raises(newznab.NzbFetchError):
@@ -167,6 +192,31 @@ def test_build_nzb_bounds_xover_range(monkeypatch) -> None:
     nzb_builder.build_nzb_for_release("MyRelease")
 
     assert called["range"] == (2, 2)
+
+
+def test_build_nzb_overview_tuple(monkeypatch) -> None:
+    """``build_nzb_for_release`` should handle dict and tuple overview entries."""
+
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    # Dict-style overview entries
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=DummyNNTP, NNTP_SSL=DummyNNTP, NNTP_SSL_PORT=563),
+    )
+    nzb_builder.build_nzb_for_release("MyRelease")
+
+    # Tuple-style overview entries
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(
+            NNTP=DummyNNTPTuple, NNTP_SSL=DummyNNTPTuple, NNTP_SSL_PORT=563
+        ),
+    )
+    nzb_builder.build_nzb_for_release("MyRelease")
 
 
 def test_basic_api_and_ingest(monkeypatch) -> None:
