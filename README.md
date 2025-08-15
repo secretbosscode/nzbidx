@@ -99,6 +99,7 @@ of variables are required to run the stack:
 | `ALLOW_XXX` | `true` enables the XXX category | `false` |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
+| `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing | `5` |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
 | `NNTP_PORT` | NNTP port | `119` |
 | `NNTP_SSL` | `1` enables SSL, `0` forces plaintext; auto when unset (SSL if port 563) | _(auto)_ |

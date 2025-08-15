@@ -67,6 +67,12 @@ def cors_origins() -> List[str]:
 
 
 @lru_cache()
+def nzb_timeout_seconds() -> int:
+    """Maximum seconds to wait for NZB generation."""
+    return _int_env("NZB_TIMEOUT_SECONDS", 5)
+
+
+@lru_cache()
 def search_timeout_ms() -> int:
     """Request timeout in milliseconds for OpenSearch calls."""
     return _int_env("SEARCH_TIMEOUT_MS", 2500)

@@ -599,6 +599,20 @@ def test_strips_adult_cats_when_disallowed(monkeypatch) -> None:
     assert captured["category"] == "2030"
 
 
+def test_getnzb_timeout(monkeypatch) -> None:
+    """Slow NZB generation should return 503 after timeout."""
+
+    def slow_get_nzb(_release_id, _cache):
+        time.sleep(0.1)
+        return "<nzb></nzb>"
+
+    monkeypatch.setattr(api_main, "get_nzb", slow_get_nzb)
+    monkeypatch.setattr(api_main, "nzb_timeout_seconds", lambda: 0.01)
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
+    resp = asyncio.run(api_main.api(req))
+    assert resp.status_code == 503
+
+
 def test_caps_xml_omits_adult_when_disabled(monkeypatch) -> None:
     """caps.xml should exclude adult categories when disabled."""
 
