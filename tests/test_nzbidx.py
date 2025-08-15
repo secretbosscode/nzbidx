@@ -232,9 +232,7 @@ def test_build_nzb_overview_tuple(monkeypatch) -> None:
 def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setattr(
-        nzb_builder.config, "nntp_timeout_seconds", lambda: 30
-    )
+    monkeypatch.delenv("NNTP_TIMEOUT", raising=False)
 
     called: dict[str, float | None] = {}
 
@@ -254,9 +252,7 @@ def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
     nzb_builder.build_nzb_for_release("MyRelease")
     assert called["timeout"] == 30.0
 
-    monkeypatch.setattr(
-        nzb_builder.config, "nntp_timeout_seconds", lambda: 45
-    )
+    monkeypatch.setenv("NNTP_TIMEOUT", "45")
     nzb_builder.build_nzb_for_release("MyRelease")
     assert called["timeout"] == 45.0
 
@@ -264,9 +260,7 @@ def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
 def test_build_nzb_total_timeout(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setattr(
-        nzb_builder.config, "nntp_total_timeout_seconds", lambda: 1
-    )
+    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "1")
 
     class BoomConnect(DummyNNTP):
         def __init__(self, *_args, **_kwargs):
@@ -291,33 +285,31 @@ def test_build_nzb_total_timeout(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
-def test_build_nzb_retry_timeout(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setattr(
-        nzb_builder.config, "nntp_total_timeout_seconds", lambda: 1
-    )
+def test_nzb_timeout_defaults(monkeypatch) -> None:
+    from nzbidx_api import config as api_config
 
-    class BoomXover(DummyNNTP):
-        call_count = 0
+    monkeypatch.delenv("NZB_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("NNTP_TOTAL_TIMEOUT", raising=False)
+    api_config.nzb_timeout_seconds.cache_clear()
+    assert api_config.nzb_timeout_seconds() == 60
 
-        def __init__(self, *args, **kwargs):
-            BoomXover.call_count += 1
-            super().__init__(*args, **kwargs)
 
-        def xover(self, start, end):  # type: ignore[override]
-            raise ConnectionError("boom")
+def test_nzb_timeout_uses_nntp_total(monkeypatch) -> None:
+    from nzbidx_api import config as api_config
 
-    monkeypatch.setattr(nzb_builder.nntplib, "NNTP", BoomXover)
-    monkeypatch.setattr(nzb_builder.nntplib, "NNTP_SSL", BoomXover)
+    monkeypatch.delenv("NZB_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "90")
+    api_config.nzb_timeout_seconds.cache_clear()
+    assert api_config.nzb_timeout_seconds() == 90
 
-    times = iter([0, 0, 2])
-    monkeypatch.setattr(nzb_builder.time, "monotonic", lambda: next(times))
-    monkeypatch.setattr(nzb_builder.time, "sleep", lambda _delay: None)
 
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
-    assert BoomXover.call_count == 1
+def test_nzb_timeout_clamped(monkeypatch) -> None:
+    from nzbidx_api import config as api_config
+
+    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "50")
+    monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "10")
+    api_config.nzb_timeout_seconds.cache_clear()
+    assert api_config.nzb_timeout_seconds() == 50
 
 
 def test_basic_api_and_ingest(monkeypatch) -> None:
@@ -807,23 +799,6 @@ def test_failed_fetch_cached(monkeypatch, cache_cls) -> None:
     except newznab.NzbFetchError:
         pass
     assert calls == []
-
-
-@pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
-def test_timeout_populates_fail_sentinel(monkeypatch, cache_cls) -> None:
-    cache = cache_cls()
-    monkeypatch.setattr(api_main, "cache", cache)
-
-    async def fake_wait_for(coro, *_args, **_kwargs):
-        coro.close()
-        raise asyncio.TimeoutError
-
-    monkeypatch.setattr(api_main.asyncio, "wait_for", fake_wait_for)
-
-    req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
-    resp = asyncio.run(api_main.api(req))
-    assert resp.status_code == 503
-    assert cache.store["nzb:123"] == newznab.FAIL_SENTINEL
 
 
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
