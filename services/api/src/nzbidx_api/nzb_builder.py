@@ -19,6 +19,8 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Tuple
 
+from . import config
+
 # Prefer the bundled ``nntplib`` implementation over the deprecated
 # standard library version.  Insert the local ``services/api/src`` path at
 # the start of ``sys.path`` so resolving the module picks up our copy.
@@ -77,7 +79,7 @@ def build_nzb_for_release(release_id: str) -> str:
     conn_cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
 
     start = time.monotonic()
-    max_secs = int(os.getenv("NNTP_TOTAL_TIMEOUT", "60"))
+    max_secs = config.nntp_total_timeout_seconds()
 
     try:
         delay = 1
@@ -92,7 +94,7 @@ def build_nzb_for_release(release_id: str) -> str:
                     user=user,
                     password=password,
                     readermode=True,
-                    timeout=float(os.getenv("NNTP_TIMEOUT", "30")),
+                    timeout=float(config.nntp_timeout_seconds()),
                 ) as server:
                     groups = [
                         g.strip()
@@ -120,8 +122,8 @@ def build_nzb_for_release(release_id: str) -> str:
                             _resp, _count, first, last, _name = server.group(group)
                             limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
                             first_num, last_num = int(first), int(last)
-                            start = max(last_num - limit + 1, first_num)
-                            _resp, overviews = server.xover(start, last_num)
+                            xover_start = max(last_num - limit + 1, first_num)
+                            _resp, overviews = server.xover(xover_start, last_num)
                         except Exception:
                             continue
                         for ov in overviews:
