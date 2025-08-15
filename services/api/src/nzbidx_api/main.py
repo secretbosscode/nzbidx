@@ -107,6 +107,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 from .orjson_response import ORJSONResponse, Response
 from .db import ping, apply_schema
+from . import newznab
 from .newznab import (
     adult_content_allowed,
     adult_disabled_xml,
@@ -130,7 +131,7 @@ from .search import search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker, redis_breaker
-from .otel import current_trace_id, setup_tracing
+from .otel import current_trace_id, setup_tracing, start_span
 from .errors import invalid_params, breaker_open, nzb_unavailable
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
@@ -833,6 +834,17 @@ async def api(request: Request) -> Response:
                 nzb_timeout_seconds(),
                 extra={"release_id": release_id},
             )
+            if cache:
+                key = f"nzb:{release_id}"
+                try:
+                    with start_span("redis.setex"):
+                        await _maybe_await(
+                            cache.setex(
+                                key, newznab.FAIL_TTL, newznab.FAIL_SENTINEL
+                            )
+                        )
+                except Exception as exc:  # pragma: no cover - cache failure
+                    logger.warning("redis setex failed for %s: %s", release_id, exc)
             return nzb_unavailable("nzb fetch timed out")
         return Response(
             xml,
