@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from typing import Any, Dict
 
@@ -37,4 +38,5 @@ def setup_logging() -> None:
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
-    root.setLevel(logging.DEBUG)
+    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    root.setLevel(getattr(logging, level, logging.INFO))
