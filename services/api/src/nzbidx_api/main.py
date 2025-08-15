@@ -146,6 +146,7 @@ from .config import (
     os_replicas,
 )
 from .metrics_log import start as start_metrics, inc_api_5xx
+from .access_log import AccessLogMiddleware
 
 _stop_metrics: Callable[[], None] | None = None
 _ingest_stop: threading.Event | None = None
@@ -868,6 +869,7 @@ middleware = [
     Middleware(RateLimitMiddleware),
     Middleware(SecurityMiddleware, max_request_bytes=max_request_bytes()),
     Middleware(TimingMiddleware),
+    Middleware(AccessLogMiddleware),
 ]
 origins = cors_origins()
 if origins:
@@ -899,4 +901,11 @@ def _set_stop(cb):
 if __name__ == "__main__":  # pragma: no cover - convenience for manual runs
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8080, loop="asyncio", http="h11")
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8080,
+        loop="asyncio",
+        http="h11",
+        access_log=False,
+    )
