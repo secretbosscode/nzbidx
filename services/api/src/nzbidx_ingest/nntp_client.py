@@ -6,6 +6,8 @@ import logging
 import os
 from typing import Optional
 
+from nzbidx_api import config
+
 try:  # pragma: no cover - nntplib is standard library but allow overriding
     import nntplib  # type: ignore
 except Exception:  # pragma: no cover - extremely unlikely
@@ -26,7 +28,7 @@ class NNTPClient:
         self.user = os.getenv("NNTP_USER")
         self.password = os.getenv("NNTP_PASS")
         # Default to a generous timeout to handle slow or flaky providers
-        self.timeout = float(os.getenv("NNTP_TIMEOUT") or "30")
+        self.timeout = float(config.nntp_timeout_seconds())
         self._server: Optional[nntplib.NNTP] = None
 
     # ------------------------------------------------------------------

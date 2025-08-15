@@ -232,7 +232,9 @@ def test_build_nzb_overview_tuple(monkeypatch) -> None:
 def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.delenv("NNTP_TIMEOUT", raising=False)
+    monkeypatch.setattr(
+        nzb_builder.config, "nntp_timeout_seconds", lambda: 30
+    )
 
     called: dict[str, float | None] = {}
 
@@ -252,7 +254,9 @@ def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
     nzb_builder.build_nzb_for_release("MyRelease")
     assert called["timeout"] == 30.0
 
-    monkeypatch.setenv("NNTP_TIMEOUT", "45")
+    monkeypatch.setattr(
+        nzb_builder.config, "nntp_timeout_seconds", lambda: 45
+    )
     nzb_builder.build_nzb_for_release("MyRelease")
     assert called["timeout"] == 45.0
 
@@ -260,7 +264,9 @@ def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
 def test_build_nzb_total_timeout(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "1")
+    monkeypatch.setattr(
+        nzb_builder.config, "nntp_total_timeout_seconds", lambda: 1
+    )
 
     class BoomConnect(DummyNNTP):
         def __init__(self, *_args, **_kwargs):
@@ -288,7 +294,9 @@ def test_build_nzb_total_timeout(monkeypatch) -> None:
 def test_build_nzb_retry_timeout(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "1")
+    monkeypatch.setattr(
+        nzb_builder.config, "nntp_total_timeout_seconds", lambda: 1
+    )
 
     class BoomXover(DummyNNTP):
         call_count = 0

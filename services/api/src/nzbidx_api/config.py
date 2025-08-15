@@ -73,6 +73,18 @@ def nzb_timeout_seconds() -> int:
 
 
 @lru_cache()
+def nntp_timeout_seconds() -> int:
+    """Connection timeout for NNTP operations."""
+    return _int_env("NNTP_TIMEOUT", 30)
+
+
+@lru_cache()
+def nntp_total_timeout_seconds() -> int:
+    """Total allowed time for NNTP operations across retries."""
+    return _int_env("NNTP_TOTAL_TIMEOUT", 60)
+
+
+@lru_cache()
 def search_timeout_ms() -> int:
     """Request timeout in milliseconds for OpenSearch calls."""
     return _int_env("SEARCH_TIMEOUT_MS", 2500)
