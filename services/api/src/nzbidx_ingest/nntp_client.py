@@ -120,7 +120,17 @@ class NNTPClient:
                     return []
                 server.group(group)
                 _resp, overviews = server.xover(start, end)
-                return [ov[1] if isinstance(ov, tuple) else ov for ov in overviews]
+                result = []
+                for ov in overviews:
+                    data = ov[1] if isinstance(ov, tuple) else ov
+                    data = dict(data)
+                    if ":bytes" in data and "bytes" not in data:
+                        # normalize byte count key for downstream consumers
+                        data["bytes"] = data.pop(":bytes")
+                    elif ":bytes" in data:
+                        data.pop(":bytes")
+                    result.append(data)
+                return result
             except Exception:  # pragma: no cover - network failure
                 self._reconnect()
         return []
