@@ -95,7 +95,11 @@ def build_nzb_for_release(release_id: str) -> str:
                         try:
                             _resp, listing = server.list()
                             groups = [
-                                g[0] if isinstance(g, (tuple, list)) else str(g).split()[0]
+                                (
+                                    g[0]
+                                    if isinstance(g, (tuple, list))
+                                    else str(g).split()[0]
+                                )
                                 for g in listing
                             ]
                         except Exception:
@@ -113,16 +117,19 @@ def build_nzb_for_release(release_id: str) -> str:
                         except Exception:
                             continue
                         for ov in overviews:
-                            subject = str(ov.get("subject", ""))
+                            fields = ov[1] if isinstance(ov, (tuple, list)) else ov
+                            subject = str(fields.get("subject", ""))
                             if release_id not in subject:
                                 continue
-                            message_id = str(ov.get("message-id") or "").strip()
+                            message_id = str(fields.get("message-id") or "").strip()
                             if not message_id:
-                                log.debug("skipping overview without message-id: %s", ov)
+                                log.debug(
+                                    "skipping overview without message-id: %s", fields
+                                )
                                 continue
                             seg_num = _extract_segment_number(subject)
                             filename = _extract_filename(subject) or release_id
-                            size = int(ov.get("bytes") or 0)
+                            size = int(fields.get("bytes") or 0)
                             if size == 0:
                                 try:
                                     _resp, _num, _mid, lines = server.body(
@@ -144,9 +151,9 @@ def build_nzb_for_release(release_id: str) -> str:
                         for g in groups:
                             ET.SubElement(groups_el, "group").text = g
                         segments_el = ET.SubElement(file_el, "segments")
-                        for number, size, msgid in sorted(
-                            segments, key=lambda s: s[0]
-                        )[:MAX_SEGMENTS]:
+                        for number, size, msgid in sorted(segments, key=lambda s: s[0])[
+                            :MAX_SEGMENTS
+                        ]:
                             seg_el = ET.SubElement(
                                 segments_el,
                                 "segment",
