@@ -817,7 +817,7 @@ async def api(request: Request) -> Response:
             await init_cache_async()
         try:
             xml = await asyncio.wait_for(
-                asyncio.to_thread(get_nzb, release_id, cache),
+                get_nzb(release_id, cache),
                 timeout=nzb_timeout_seconds(),
             )
         except CircuitOpenError:
