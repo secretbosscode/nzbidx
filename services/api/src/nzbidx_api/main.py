@@ -831,7 +831,13 @@ async def api(request: Request) -> Response:
                 extra={"release_id": release_id},
             )
             return nzb_unavailable("nzb fetch timed out")
-        return Response(xml, media_type="application/x-nzb")
+        return Response(
+            xml,
+            media_type="application/x-nzb",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{release_id}.nzb\""
+            },
+        )
 
     return invalid_params("unsupported request")
 
