@@ -56,7 +56,22 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
 
     class DummySearchClient:
         def search(self, **kwargs):
-            return {"hits": {"hits": [{"_id": doc_id, "_source": body}]}}
+            return {
+                "hits": {
+                    "hits": [
+                        {"_id": doc_id, "_source": body},
+                        {
+                            "_id": "ignored",
+                            "_source": {
+                                "norm_title": "ignored",
+                                "posted_at": "",
+                                "category": "",
+                                "size_bytes": 0,
+                            },
+                        },
+                    ]
+                }
+            }
 
     def dummy_call_with_retry(_breaker, _dep, func, **kwargs):
         return func(**kwargs)
@@ -64,7 +79,8 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
     monkeypatch.setattr(search_mod, "call_with_retry", dummy_call_with_retry)
     monkeypatch.setattr(search_mod, "start_span", lambda name: nullcontext())
 
-    items = search_mod.search_releases(DummySearchClient(), {"must": []}, limit=1)
+    items = search_mod.search_releases(DummySearchClient(), {"must": []}, limit=2)
+    assert len(items) == 1
     assert items[0]["size"] == "456"
 
 

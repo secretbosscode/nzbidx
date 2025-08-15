@@ -114,6 +114,10 @@ async def search_releases_async(
     items: List[Dict[str, str]] = []
     for hit in result.get("hits", {}).get("hits", []):
         src = hit.get("_source", {})
+        size = src.get("size_bytes")
+        if size is None or size <= 0:
+            continue
+
         release_id = hit.get("_id", "")
         link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
         if api_key:
@@ -125,7 +129,7 @@ async def search_releases_async(
                 "pubDate": _format_pubdate(src.get("posted_at", "")),
                 "category": src.get("category", ""),
                 "link": link,
-                "size": str(src.get("size_bytes", 0)),
+                "size": str(size),
             }
         )
     return items
