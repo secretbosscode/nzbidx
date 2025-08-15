@@ -83,19 +83,33 @@ def run_once() -> float:
     groups = config.NNTP_GROUPS or config._load_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
-        logger.info("ingest_ignore_groups", extra={"groups": list(ignored)})
+        logger.info(
+            "Ignoring configured groups: %s",
+            list(ignored),
+            extra={"event": "ingest_ignore_groups", "groups": list(ignored)},
+        )
     groups = [g for g in groups if g not in ignored]
     if not groups:
-        logger.info("ingest_no_groups")
+        logger.info(
+            "No NNTP groups available for ingestion",
+            extra={"event": "ingest_no_groups"},
+        )
         return INGEST_POLL_MAX_SECONDS
     skip = set(cursors.get_irrelevant_groups())
     if skip:
         groups = [g for g in groups if g not in skip]
     if not groups:
-        logger.info("ingest_no_groups")
+        logger.info(
+            "No NNTP groups available for ingestion",
+            extra={"event": "ingest_no_groups"},
+        )
         return INGEST_POLL_MAX_SECONDS
     config.NNTP_GROUPS = groups
-    logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
+    logger.info(
+        "Starting ingestion for %d groups",
+        len(groups),
+        extra={"event": "ingest_groups", "count": len(groups), "groups": groups},
+    )
 
     client = NNTPClient()
     client.connect()
@@ -141,8 +155,16 @@ def run_once() -> float:
                 continue
         if not headers:
             logger.info(
-                "ingest_idle",
-                extra={"group": group, "cursor": last, "high_water": high},
+                "No new articles in %s (cursor %d, high water %d)",
+                group,
+                last,
+                high,
+                extra={
+                    "event": "ingest_idle",
+                    "group": group,
+                    "cursor": last,
+                    "high_water": high,
+                },
             )
             # ``high`` is ``0`` when the NNTP server is unreachable.  Avoid
             # marking the group as irrelevant in that case so it will be
@@ -275,7 +297,16 @@ def run_once() -> float:
             rate = metrics["processed"] / duration_s
             metrics["eta_s"] = int(remaining / rate)
         metrics["group"] = group
-        logger.info("ingest_batch", extra=metrics)
+        logger.info(
+            "Processed %d articles for %s: %d inserted, %d duplicates; %d remaining (%d%% done)",
+            metrics["processed"],
+            group,
+            metrics["inserted"],
+            metrics["deduped"],
+            metrics["remaining"],
+            metrics.get("pct_complete", 0),
+            extra={**metrics, "event": "ingest_batch"},
+        )
         aggregate.add(metrics)
         if metrics["inserted"] == 0:
             cursors.mark_irrelevant(group)
@@ -295,7 +326,13 @@ def run_once() -> float:
             time.sleep(sleep_ms / 1000)
 
     summary = aggregate.summary()
-    logger.info("ingest_summary", extra=summary)
+    logger.info(
+        "Ingest summary: %d processed, %d remaining (ETA %ds)",
+        summary.get("processed", 0),
+        summary.get("remaining", 0),
+        summary.get("eta_s", 0),
+        extra={**summary, "event": "ingest_summary"},
+    )
     remaining = summary.get("remaining", 0)
     processed = summary.get("processed", 0)
     if remaining <= 0:
