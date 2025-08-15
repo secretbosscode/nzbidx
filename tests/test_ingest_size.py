@@ -68,6 +68,49 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
     assert items[0]["size"] == "456"
 
 
+def test_multi_part_release_size_summed(monkeypatch) -> None:
+    captured: list[tuple[str, dict[str, object]]] = []
+
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
+    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
+    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+
+    class DummyClient:
+        def connect(self) -> None:
+            pass
+
+        def high_water_mark(self, group: str) -> int:
+            return 2
+
+        def xover(self, group: str, start: int, end: int):
+            return [
+                {"subject": "Example (1/2)", ":bytes": "100"},
+                {"subject": "Example (2/2)", ":bytes": "200"},
+            ]
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+    )
+    monkeypatch.setattr(loop, "connect_db", lambda: conn)
+    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
+
+    def fake_bulk(_client, docs):
+        captured.extend(docs)
+
+    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
+
+    loop.run_once()
+
+    assert captured
+    doc_id, body = captured[0]
+    assert body.get("size_bytes") == 300
+    row = conn.execute("SELECT norm_title, size_bytes FROM release").fetchone()
+    assert row == ("example", 300)
+
 def test_zero_byte_release_skipped(monkeypatch) -> None:
     captured: list[tuple[str, dict[str, object]]] = []
 

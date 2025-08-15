@@ -161,19 +161,46 @@ def run_once() -> float:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
-            releases[dedupe_key] = (dedupe_key, category, language, tags, group, size)
-            body: dict[str, object] = {"norm_title": dedupe_key}
-            if category:
-                body["category"] = category
-            if language:
-                body["language"] = language
-            if tags:
-                body["tags"] = tags
-            if group:
-                body["source_group"] = group
-            if size > 0:
-                body["size_bytes"] = size
-            docs[dedupe_key] = body
+            existing = releases.get(dedupe_key)
+            if existing:
+                _, ex_cat, ex_lang, ex_tags, ex_group, ex_size = existing
+                combined_size = (ex_size or 0) + size
+                combined_tags = sorted(set(ex_tags or []).union(tags))
+                releases[dedupe_key] = (
+                    dedupe_key,
+                    ex_cat,
+                    ex_lang,
+                    combined_tags,
+                    ex_group,
+                    combined_size,
+                )
+                body = docs.get(dedupe_key, {"norm_title": dedupe_key})
+                if combined_tags:
+                    body["tags"] = combined_tags
+                if combined_size > 0:
+                    body["size_bytes"] = combined_size
+                docs[dedupe_key] = body
+            else:
+                releases[dedupe_key] = (
+                    dedupe_key,
+                    category,
+                    language,
+                    tags,
+                    group,
+                    size,
+                )
+                body: dict[str, object] = {"norm_title": dedupe_key}
+                if category:
+                    body["category"] = category
+                if language:
+                    body["language"] = language
+                if tags:
+                    body["tags"] = tags
+                if group:
+                    body["source_group"] = group
+                if size > 0:
+                    body["size_bytes"] = size
+                docs[dedupe_key] = body
         db_latency = 0.0
         os_latency = 0.0
         inserted: set[str] = set()
