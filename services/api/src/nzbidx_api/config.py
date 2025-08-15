@@ -69,7 +69,7 @@ def cors_origins() -> List[str]:
 @lru_cache()
 def nzb_timeout_seconds() -> int:
     """Maximum seconds to wait for NZB generation."""
-    return _int_env("NZB_TIMEOUT_SECONDS", 5)
+    return _int_env("NZB_TIMEOUT_SECONDS", 30)
 
 
 @lru_cache()

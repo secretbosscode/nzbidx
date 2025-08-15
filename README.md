@@ -106,7 +106,7 @@ to regain the faster serializer once compatible.
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
 | `NZBIDX_USE_STD_JSON` | `1` forces the standard library `json` module; unset or `0` uses `orjson` if installed | `1` |
-| `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing | `5` |
+| `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing | `30` |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
 | `NNTP_PORT` | NNTP port | `119` |
 | `NNTP_SSL` | `1` enables SSL, `0` forces plaintext; auto when unset (SSL if port 563) | _(auto)_ |
