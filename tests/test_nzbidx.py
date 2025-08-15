@@ -202,33 +202,31 @@ def test_os_search_multiple_categories(monkeypatch) -> None:
 
 
 def test_os_search_without_query(monkeypatch) -> None:
-    """Searches without parameters should return no results."""
-    called = False
+    """Searches without parameters should fall back to ``match_all``."""
+    captured: dict[str, object] = {}
 
-    def dummy_search(*args, **kwargs):  # pragma: no cover - should not be called
-        nonlocal called
-        called = True
+    def dummy_search(_client, query, *, limit, offset=0, sort=None, api_key=None):
+        captured["query"] = query
         return []
 
     monkeypatch.setattr(api_main, "search_releases", dummy_search)
     monkeypatch.setattr(api_main, "opensearch", object())
-    assert api_main._os_search(None, category="2040") == []
-    assert called is False
+    api_main._os_search(None, category="2040")
+    assert {"match_all": {}} in captured["query"].get("must", [])
 
 
 def test_os_search_ignores_whitespace_query(monkeypatch) -> None:
-    """Whitespace-only queries should be treated as missing."""
-    called = False
+    """Whitespace-only queries should also trigger ``match_all``."""
+    captured: dict[str, object] = {}
 
-    def dummy_search(*args, **kwargs):  # pragma: no cover - should not be called
-        nonlocal called
-        called = True
+    def dummy_search(_client, query, *, limit, offset=0, sort=None, api_key=None):
+        captured["query"] = query
         return []
 
     monkeypatch.setattr(api_main, "search_releases", dummy_search)
     monkeypatch.setattr(api_main, "opensearch", object())
-    assert api_main._os_search("   ", category="2040") == []
-    assert called is False
+    api_main._os_search("   ", category="2040")
+    assert {"match_all": {}} in captured["query"].get("must", [])
 
 
 def test_movie_defaults_to_all_movie_categories(monkeypatch) -> None:

@@ -489,9 +489,6 @@ def _os_search(
     """Run a search against OpenSearch and return RSS item dicts."""
     items: list[dict[str, str]] = []
     q = q.strip() if isinstance(q, str) else None
-    extra_has_value = any(v for v in (extra or {}).values())
-    if not (q or tag or extra_has_value):
-        return items
     if opensearch:
         try:
             must: list[dict[str, object]] = []
@@ -543,6 +540,9 @@ def _os_search(
                             must.append({"term": {"tags": str(v).lower()}})
                         else:
                             must.append({"match": {field: v}})
+
+            if not must:
+                must.append({"match_all": {}})
 
             if category:
                 categories = [c.strip() for c in category.split(",") if c.strip()]
