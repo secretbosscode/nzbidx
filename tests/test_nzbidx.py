@@ -285,6 +285,33 @@ def test_build_nzb_total_timeout(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
+def test_nzb_timeout_defaults(monkeypatch) -> None:
+    from nzbidx_api import config as api_config
+
+    monkeypatch.delenv("NZB_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("NNTP_TOTAL_TIMEOUT", raising=False)
+    api_config.nzb_timeout_seconds.cache_clear()
+    assert api_config.nzb_timeout_seconds() == 60
+
+
+def test_nzb_timeout_uses_nntp_total(monkeypatch) -> None:
+    from nzbidx_api import config as api_config
+
+    monkeypatch.delenv("NZB_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "90")
+    api_config.nzb_timeout_seconds.cache_clear()
+    assert api_config.nzb_timeout_seconds() == 90
+
+
+def test_nzb_timeout_clamped(monkeypatch) -> None:
+    from nzbidx_api import config as api_config
+
+    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "50")
+    monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "10")
+    api_config.nzb_timeout_seconds.cache_clear()
+    assert api_config.nzb_timeout_seconds() == 50
+
+
 def test_basic_api_and_ingest(monkeypatch) -> None:
     """Ensure search sort and ingest category inference work."""
     # Ingest: category inference

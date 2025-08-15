@@ -106,7 +106,7 @@ to regain the faster serializer once compatible.
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
 | `NZBIDX_USE_STD_JSON` | `1` forces the standard library `json` module; unset or `0` uses `orjson` if installed | `1` |
-| `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing | `30` |
+| `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing (≥ `NNTP_TOTAL_TIMEOUT`) | `NNTP_TOTAL_TIMEOUT` (`60`) |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
 | `NNTP_PORT` | NNTP port | `119` |
 | `NNTP_SSL` | `1` enables SSL, `0` forces plaintext; auto when unset (SSL if port 563) | _(auto)_ |
@@ -115,9 +115,12 @@ to regain the faster serializer once compatible.
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
-| `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries | `60` |
+| `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `60` |
 | `INGEST_OS_BULK` | Releases per OpenSearch bulk request | `100` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
+
+> **Note**: To avoid premature API timeouts during NZB generation, ensure
+> `NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT`.
 
 Redis persistence is enabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
 to a truthy value disables persistence. When disabled, the app issues
