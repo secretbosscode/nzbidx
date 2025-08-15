@@ -120,8 +120,8 @@ def build_nzb_for_release(release_id: str) -> str:
                             _resp, _count, first, last, _name = server.group(group)
                             limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
                             first_num, last_num = int(first), int(last)
-                            start = max(last_num - limit + 1, first_num)
-                            _resp, overviews = server.xover(start, last_num)
+                            xover_start = max(last_num - limit + 1, first_num)
+                            _resp, overviews = server.xover(xover_start, last_num)
                         except Exception:
                             continue
                         for ov in overviews:
