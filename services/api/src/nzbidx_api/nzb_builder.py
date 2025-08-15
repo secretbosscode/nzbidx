@@ -3,7 +3,8 @@
 This module exposes :func:`build_nzb_for_release` which connects to an NNTP
 server to build a real NZB document.  Missing configuration or empty results
 raise :class:`newznab.NzbFetchError` while unexpected failures fall back to a
-stub NZB document for compatibility.
+stub NZB document for compatibility.  The overall runtime is capped by the
+``NNTP_TOTAL_TIMEOUT`` environment variable.
 """
 
 from __future__ import annotations
@@ -53,7 +54,9 @@ def build_nzb_for_release(release_id: str) -> str:
     ``NNTP_GROUPS``).  All articles whose subject contains ``release_id`` are
     collected and stitched into NZB ``<file>`` and ``<segment>`` elements.  The
     NNTP ``XOVER`` range is capped to the most recent ``NNTP_XOVER_LIMIT``
-    articles (default ``1000``) to avoid fetching unbounded history.
+    articles (default ``1000``) to avoid fetching unbounded history.  Total
+    runtime across retries is bounded by ``NNTP_TOTAL_TIMEOUT`` (default
+    ``60`` seconds).
 
     When mandatory configuration is missing or no matching articles are found
     an :class:`newznab.NzbFetchError` is raised.  Other unexpected errors are
@@ -73,9 +76,14 @@ def build_nzb_for_release(release_id: str) -> str:
     use_ssl = (ssl_env == "1") if ssl_env is not None else port == nntplib.NNTP_SSL_PORT
     conn_cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
 
+    start = time.monotonic()
+    max_secs = int(os.getenv("NNTP_TOTAL_TIMEOUT", "60"))
+
     try:
         delay = 1
         for attempt in range(1, 4):
+            if time.monotonic() - start > max_secs:
+                raise newznab.NzbFetchError("nntp timeout exceeded")
             try:
                 log.info("NNTP connection attempt %d", attempt)
                 with conn_cls(
