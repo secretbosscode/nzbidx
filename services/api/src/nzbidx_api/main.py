@@ -627,6 +627,8 @@ def _params_key(params) -> str:
 
 async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
+    if cache is None:
+        await init_cache_async()
     params = request.query_params
     api_key = params.get("apikey")
     raw_qs = getattr(request, "query_string", None)
@@ -815,7 +817,7 @@ async def api(request: Request) -> Response:
             return invalid_params("missing id")
         try:
             xml = await asyncio.wait_for(
-                asyncio.to_thread(get_nzb, release_id, None),
+                asyncio.to_thread(get_nzb, release_id, cache),
                 timeout=nzb_timeout_seconds(),
             )
         except CircuitOpenError:

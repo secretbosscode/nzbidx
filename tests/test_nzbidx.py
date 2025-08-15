@@ -718,6 +718,39 @@ def test_failed_fetch_cached(monkeypatch) -> None:
     assert calls == []
 
 
+def test_cached_nzb_served(monkeypatch) -> None:
+    """A cached NZB should be returned without rebuilding."""
+
+    cache = DummyCache()
+    init_calls: list[int] = []
+
+    async def fake_init_cache_async() -> None:
+        init_calls.append(1)
+        api_main.cache = cache
+
+    monkeypatch.setattr(api_main, "init_cache_async", fake_init_cache_async)
+    api_main.cache = None
+
+    build_calls: list[str] = []
+
+    def fake_build(release_id: str) -> str:
+        build_calls.append(release_id)
+        return "<nzb></nzb>"
+
+    monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", fake_build)
+
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
+    resp1 = asyncio.run(api_main.api(req))
+    assert resp1.status_code == 200
+    assert build_calls == ["123"]
+
+    build_calls.clear()
+    resp2 = asyncio.run(api_main.api(req))
+    assert resp2.status_code == 200
+    assert build_calls == []
+    assert len(init_calls) == 1
+
+
 def test_builds_nzb(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
