@@ -68,7 +68,9 @@ def test_high_water_mark_auth(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_USER", "user")
     monkeypatch.setenv("NNTP_PASS", "pass")
-    monkeypatch.setenv("NNTP_TIMEOUT", "60")
+    monkeypatch.setattr(
+        nntp_client.config, "nntp_timeout_seconds", lambda: 60
+    )
     monkeypatch.setattr(
         nntp_client,
         "nntplib",
