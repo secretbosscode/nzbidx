@@ -708,6 +708,7 @@ def test_ignores_overview_without_message_id(monkeypatch) -> None:
     assert "msg1@example.com" in xml
     assert "456" not in xml
 
+
 def test_builds_nzb_auto_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
@@ -1173,7 +1174,7 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
             return 1
 
         def xover(self, group: str, start: int, end: int):
-            return [{"subject": "Example"}]
+            return [{"subject": "Example", ":bytes": "123"}]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)

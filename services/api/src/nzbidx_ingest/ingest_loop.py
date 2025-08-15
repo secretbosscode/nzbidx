@@ -143,6 +143,10 @@ def run_once() -> float:
         docs: dict[str, dict[str, object]] = {}
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
+            size = int(header.get("bytes") or header.get(":bytes") or 0)
+            current = idx
+            if size <= 0:
+                continue
             subject = header.get("subject", "")
             norm_title, tags = normalize_subject(subject, with_tags=True)
             norm_title = norm_title.lower()
@@ -157,7 +161,6 @@ def run_once() -> float:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
-            size = int(header.get("bytes") or header.get(":bytes") or 0)
             releases[dedupe_key] = (dedupe_key, category, language, tags, group, size)
             body: dict[str, object] = {"norm_title": dedupe_key}
             if category:
@@ -171,7 +174,6 @@ def run_once() -> float:
             if size > 0:
                 body["size_bytes"] = size
             docs[dedupe_key] = body
-            current = idx
         db_latency = 0.0
         os_latency = 0.0
         inserted: set[str] = set()
