@@ -266,7 +266,11 @@ def connect_opensearch() -> Optional[object]:
 
         return OpenSearch(url, timeout=opensearch_timeout_seconds())
     except Exception as exc:  # pragma: no cover - optional dependency
-        logger.info("opensearch_unavailable", extra={"error": str(exc)})
+        logger.info(
+            "OpenSearch unavailable: %s",
+            str(exc),
+            extra={"event": "opensearch_unavailable", "error": str(exc)},
+        )
         return None
 
 

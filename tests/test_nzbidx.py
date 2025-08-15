@@ -249,18 +249,26 @@ def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
         ),
     )
 
+    from nzbidx_api import config as api_config
+
+    api_config.nntp_timeout_seconds.cache_clear()
     nzb_builder.build_nzb_for_release("MyRelease")
     assert called["timeout"] == 30.0
 
     monkeypatch.setenv("NNTP_TIMEOUT", "45")
+    api_config.nntp_timeout_seconds.cache_clear()
     nzb_builder.build_nzb_for_release("MyRelease")
     assert called["timeout"] == 45.0
+    api_config.nntp_timeout_seconds.cache_clear()
 
 
 def test_build_nzb_total_timeout(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
     monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "1")
+    from nzbidx_api import config as api_config
+
+    api_config.nntp_total_timeout_seconds.cache_clear()
 
     class BoomConnect(DummyNNTP):
         def __init__(self, *_args, **_kwargs):
@@ -283,6 +291,7 @@ def test_build_nzb_total_timeout(monkeypatch) -> None:
 
     with pytest.raises(newznab.NzbFetchError):
         nzb_builder.build_nzb_for_release("MyRelease")
+    api_config.nntp_total_timeout_seconds.cache_clear()
 
 
 def test_nzb_timeout_defaults(monkeypatch) -> None:
@@ -716,10 +725,7 @@ def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 200
-    assert (
-        resp.headers["Content-Disposition"]
-        == 'attachment; filename="123.nzb"'
-    )
+    assert resp.headers["Content-Disposition"] == 'attachment; filename="123.nzb"'
     assert resp.headers["content-type"] == "application/x-nzb"
 
 
@@ -1365,11 +1371,12 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
         loop.run_once()
 
     assert processed == ["alt.good.group"]
-    assert (
-        "nzbidx_ingest.ingest_loop",
-        logging.INFO,
-        "ingest_summary",
-    ) in caplog.record_tuples
+    assert any(
+        r.name == "nzbidx_ingest.ingest_loop"
+        and r.levelno == logging.INFO
+        and getattr(r, "event", "") == "ingest_summary"
+        for r in caplog.records
+    )
 
 
 def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None:
