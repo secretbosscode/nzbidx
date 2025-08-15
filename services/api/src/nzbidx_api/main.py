@@ -822,7 +822,8 @@ async def api(request: Request) -> Response:
             )
         except CircuitOpenError:
             return breaker_open()
-        except NzbFetchError:
+        except NzbFetchError as exc:
+            logger.warning("nzb fetch failed: %s", exc, extra={"release_id": release_id})
             return nzb_unavailable()
         except asyncio.TimeoutError:
             logger.warning(
