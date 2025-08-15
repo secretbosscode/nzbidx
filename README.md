@@ -97,6 +97,7 @@ to regain the faster serializer once compatible.
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Superuser applied to `schema.sql` during init | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
 | `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
+| `OPENSEARCH_TIMEOUT_SECONDS` | Timeout in seconds for OpenSearch connections | `2` |
 | `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
 | `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup (avoids writes to `/data`) | _(unset)_ |
 | `REDIS_DATA_DIR` | Directory Redis uses for persistence (bind-mounted) | `/data` |
