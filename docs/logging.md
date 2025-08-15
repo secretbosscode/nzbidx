@@ -1,38 +1,35 @@
 # Logging
 
-The API and ingest worker emit structured JSON logs. Each entry contains a timestamp,
-log level, message, and contextual fields such as the request identifier so that
-clients can trace a request across services.
+The API emits structured logs to aid diagnostics. Timeout errors during NZB
+retrieval log a message similar to:
 
-## Log levels
-
-Logging verbosity is controlled by the `LOG_LEVEL` environment variable. The
-value is case-insensitive and defaults to `INFO` when unset. Setting
-`LOG_LEVEL=DEBUG` enables verbose output for troubleshooting.
-
-```bash
-LOG_LEVEL=DEBUG uvicorn nzbidx_api.main:app
+```
+"nzb fetch timed out after 30s"
 ```
 
-## Ingest log throttling
+Each timeout log includes the `release_id` and `request_id` fields so that
+clients can correlate the entry with a specific request.
 
-The ingest worker aggregates per-group metrics and emits a single
-`ingest_summary` entry each poll cycle to avoid flooding the logs. Per-group
-`ingest_batch` messages are also logged with runtime metrics.
+## Ingest Metrics
 
-## Library loggers
+The ingestion loop emits an `ingest_batch` log after processing each NNTP group.
+Fields included in the log are described below. Legacy keys are still emitted
+for backward compatibility.
 
-Third‑party libraries propagate to the root logger and therefore respect the
-configured `LOG_LEVEL`. Noisy libraries can be tuned individually; for example,
-`logging.getLogger("uvicorn.access").setLevel("WARNING")` silences access logs
-while retaining other messages.
-
-## Health check noise
-
-Health check requests (`/health` and `/api/health`) can generate a large number
-of access log entries. To reduce this noise, either raise the global log level
-(e.g. `LOG_LEVEL=WARNING`) or disable Uvicorn's access log:
-
-```bash
-uvicorn nzbidx_api.main:app --no-access-log
-```
+| Field | Legacy Key | Description |
+| --- | --- | --- |
+| `processed` | – | Headers processed in the batch. |
+| `inserted` | – | Releases written to the database. |
+| `indexed` | – | Releases indexed into OpenSearch. |
+| `deduplicated` | `deduped` | Releases skipped due to duplicate detection. |
+| `duration_ms` | – | Total processing time for the batch. |
+| `average_batch_ms` | `avg_batch_ms` | Average processing time per header. |
+| `opensearch_latency_ms` | `os_latency_ms` | Time spent bulk indexing into OpenSearch. |
+| `average_database_latency_ms` | `avg_db_ms` | Average database write latency per header. |
+| `average_opensearch_latency_ms` | `avg_os_ms` | Average OpenSearch indexing latency per document. |
+| `cursor` | – | Last article number processed. |
+| `high_water` | – | Highest article number available on the server. |
+| `remaining` | – | Articles still pending processing. |
+| `percent_complete` | `pct_complete` | Progress relative to the high-water mark. |
+| `eta_seconds` | `eta_s` | Estimated time to ingest remaining articles. |
+| `group` | – | NNTP group associated with the batch. |
