@@ -1,32 +1,20 @@
 # Logging
 
-The API emits human‑readable messages combined with structured fields to aid
-diagnostics. Timeout errors during NZB retrieval log a message similar to:
+The API emits structured logs to aid diagnostics. Timeout errors during NZB
+retrieval log a message similar to:
 
 ```
-nzb fetch timed out after 30s
+"nzb fetch timed out after 30s"
 ```
 
 Each timeout log includes the `release_id` and `request_id` fields so that
 clients can correlate the entry with a specific request.
 
-### Example
+## Ingest worker
 
-The ingest worker records per‑batch progress using descriptive sentences while
-still providing machine‑parsable fields:
-
-```
-Processed 50 articles for alt.binaries.example: 20 inserted, 30 duplicates; 100 remaining (67% done)
-{
-  'event': 'ingest_batch',
-  'group': 'alt.binaries.example',
-  'processed': 50,
-  'inserted': 20,
-  'deduped': 30,
-  'remaining': 100,
-  'pct_complete': 67
-}
-```
-
-The text portion is intended for humans. The accompanying dictionary contains
-stable keys such as `event` for downstream parsing and analytics.
+The ingest process emits an `ingest_batch` log for each group processed. These
+entries are written at the `DEBUG` level by default. Set the
+`INGEST_LOG_EVERY` environment variable to a positive integer to emit an INFO
+level `ingest_batch` log every N batches. INFO logs are also emitted whenever
+new releases are inserted. Setting `INGEST_LOG_EVERY=0` disables periodic INFO
+logs.
