@@ -132,6 +132,7 @@ from .config import (
     max_query_bytes,
     max_param_bytes,
     search_ttl_seconds,
+    nzb_timeout_seconds,
     os_primary_shards,
     os_replicas,
 )
@@ -805,11 +806,16 @@ async def api(request: Request) -> Response:
         if not release_id:
             return invalid_params("missing id")
         try:
-            xml = await asyncio.to_thread(get_nzb, release_id, None)
+            xml = await asyncio.wait_for(
+                asyncio.to_thread(get_nzb, release_id, None),
+                timeout=nzb_timeout_seconds(),
+            )
         except CircuitOpenError:
             return breaker_open()
         except NzbFetchError:
             return nzb_unavailable()
+        except asyncio.TimeoutError:
+            return nzb_unavailable("nzb fetch timed out")
         return Response(xml, media_type="application/x-nzb")
 
     return invalid_params("unsupported request")
