@@ -302,14 +302,18 @@ def insert_release(
     cur = conn.cursor()
 
     items: list[
-        tuple[str, Optional[str], Optional[str], list[str], Optional[str], Optional[int]]
+        tuple[
+            str, Optional[str], Optional[str], list[str], Optional[str], Optional[int]
+        ]
     ] = []
     if releases is not None:
         for r in releases:
             n, c, lang, t, g, s = r
             items.append((n, c, lang, list(t or []), g, s))
     elif norm_title is not None:
-        items.append((norm_title, category, language, list(tags or []), group, size_bytes))
+        items.append(
+            (norm_title, category, language, list(tags or []), group, size_bytes)
+        )
     else:
         return set()
 
