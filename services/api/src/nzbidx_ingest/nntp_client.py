@@ -86,7 +86,7 @@ class NNTPClient:
     def group(self, name: str):
         """Select ``name`` and return the server response."""
         last_exc: Exception | None = None
-        for attempt in range(2):
+        for _ in range(2):
             try:
                 server = self._ensure_connection()
                 if server is None:
@@ -94,9 +94,18 @@ class NNTPClient:
                 return server.group(name)
             except Exception as exc:  # pragma: no cover - network failure
                 last_exc = exc
-                self._reconnect()
+                try:
+                    self._reconnect()
+                except Exception as reconnect_exc:  # pragma: no cover - network failure
+                    logger.warning(
+                        "reconnect_failed",
+                        extra={"host": self.host, "error": str(reconnect_exc)},
+                    )
+                    return "", 0, "0", "0", name
         if last_exc:
-            raise last_exc
+            logger.warning(
+                "group_failed", extra={"group": name, "error": str(last_exc)}
+            )
         return "", 0, "0", "0", name
 
     def high_water_mark(self, group: str) -> int:
@@ -113,7 +122,7 @@ class NNTPClient:
         """Return header dicts for articles in ``group`` between ``start`` and ``end``."""
         if not self.host:
             return []
-        for attempt in range(2):
+        for _ in range(2):
             try:
                 server = self._ensure_connection()
                 if server is None:
@@ -132,7 +141,14 @@ class NNTPClient:
                     result.append(data)
                 return result
             except Exception:  # pragma: no cover - network failure
-                self._reconnect()
+                try:
+                    self._reconnect()
+                except Exception as reconnect_exc:  # pragma: no cover - network failure
+                    logger.warning(
+                        "reconnect_failed",
+                        extra={"host": self.host, "error": str(reconnect_exc)},
+                    )
+                    return []
         return []
 
     # ------------------------------------------------------------------
