@@ -655,6 +655,34 @@ def test_enforces_segment_limit(monkeypatch) -> None:
     assert "msg6@example.com" not in xml
 
 
+def test_ignores_overview_without_message_id(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    class MissingIdNNTP(DummyNNTP):
+        def xover(self, start, end):
+            return "", [
+                {
+                    "subject": 'MyRelease "testfile.bin" (1/2)',
+                    "message-id": "msg1@example.com",
+                    "bytes": 123,
+                },
+                {
+                    "subject": 'MyRelease "testfile.bin" (2/2)',
+                    "bytes": 456,
+                },
+            ]
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=MissingIdNNTP, NNTP_SSL=MissingIdNNTP, NNTP_SSL_PORT=563),
+    )
+    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert xml.count("<segment ") == 1
+    assert "msg1@example.com" in xml
+    assert "456" not in xml
+
 def test_builds_nzb_auto_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)

@@ -102,11 +102,14 @@ def build_nzb_for_release(release_id: str) -> str:
                     subject = str(ov.get("subject", ""))
                     if release_id not in subject:
                         continue
-                    message_id = str(ov.get("message-id", ""))
+                    message_id = str(ov.get("message-id") or "").strip()
+                    if not message_id:
+                        log.debug("skipping overview without message-id: %s", ov)
+                        continue
                     seg_num = _extract_segment_number(subject)
                     filename = _extract_filename(subject) or release_id
                     size = int(ov.get("bytes") or 0)
-                    if size == 0 and message_id:
+                    if size == 0:
                         try:
                             _resp, _num, _mid, lines = server.body(
                                 message_id, decode=False
