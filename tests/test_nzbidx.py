@@ -604,6 +604,31 @@ def test_builds_nzb(monkeypatch) -> None:
     assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
 
 
+def test_builds_nzb_strips_brackets(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    class BracketNNTP(DummyNNTP):
+        def xover(self, start, end):
+            return "", [
+                {
+                    "subject": 'MyRelease "testfile.bin" (1/1)',
+                    "message-id": "<msg1@example.com>",
+                    "bytes": 123,
+                }
+            ]
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=BracketNNTP, NNTP_SSL=BracketNNTP, NNTP_SSL_PORT=563),
+    )
+    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert "<msg1@example.com>" not in xml
+    assert "&lt;msg1@example.com&gt;" not in xml
+    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
+
+
 def test_enforces_segment_limit(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")

@@ -128,7 +128,7 @@ def build_nzb_for_release(release_id: str) -> str:
                         "segment",
                         {"bytes": str(size), "number": str(number)},
                     )
-                    seg_el.text = msgid
+                    seg_el.text = msgid.strip("<>")
             return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
                 root, encoding="unicode"
             )
