@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import sys
+import time
 from importlib import util
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -66,80 +67,104 @@ def build_nzb_for_release(release_id: str) -> str:
     conn_cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
 
     try:
-        with conn_cls(
-            host,
-            port,
-            user=user,
-            password=password,
-            readermode=True,
-            timeout=10,
-        ) as server:
-            groups = [
-                g.strip() for g in os.getenv("NNTP_GROUPS", "").split(",") if g.strip()
-            ]
-            if not groups:
-                try:
-                    _resp, listing = server.list()
+        delay = 1
+        for attempt in range(1, 4):
+            try:
+                log.info("NNTP connection attempt %d", attempt)
+                with conn_cls(
+                    host,
+                    port,
+                    user=user,
+                    password=password,
+                    readermode=True,
+                    timeout=10,
+                ) as server:
                     groups = [
-                        g[0] if isinstance(g, (tuple, list)) else str(g).split()[0]
-                        for g in listing
+                        g.strip()
+                        for g in os.getenv("NNTP_GROUPS", "").split(",")
+                        if g.strip()
                     ]
-                except Exception:
-                    groups = []
-            if not groups:
-                raise newznab.NzbFetchError("no NNTP groups configured")
-            files: Dict[str, List[Tuple[int, int, str]]] = {}
-            for group in groups:
-                try:
-                    _resp, _count, first, last, _name = server.group(group)
-                    limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
-                    first_num, last_num = int(first), int(last)
-                    start = max(last_num - limit + 1, first_num)
-                    _resp, overviews = server.xover(start, last_num)
-                except Exception:
-                    continue
-                for ov in overviews:
-                    subject = str(ov.get("subject", ""))
-                    if release_id not in subject:
-                        continue
-                    message_id = str(ov.get("message-id") or "").strip()
-                    if not message_id:
-                        log.debug("skipping overview without message-id: %s", ov)
-                        continue
-                    seg_num = _extract_segment_number(subject)
-                    filename = _extract_filename(subject) or release_id
-                    size = int(ov.get("bytes") or 0)
-                    if size == 0:
+                    if not groups:
                         try:
-                            _resp, _num, _mid, lines = server.body(
-                                message_id, decode=False
-                            )
-                            size = sum(len(line) for line in lines)
+                            _resp, listing = server.list()
+                            groups = [
+                                g[0] if isinstance(g, (tuple, list)) else str(g).split()[0]
+                                for g in listing
+                            ]
                         except Exception:
-                            pass
-                    files.setdefault(filename, []).append((seg_num, size, message_id))
-            if not files:
-                raise newznab.NzbFetchError("no matching articles found")
+                            groups = []
+                    if not groups:
+                        raise newznab.NzbFetchError("no NNTP groups configured")
+                    files: Dict[str, List[Tuple[int, int, str]]] = {}
+                    for group in groups:
+                        try:
+                            _resp, _count, first, last, _name = server.group(group)
+                            limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
+                            first_num, last_num = int(first), int(last)
+                            start = max(last_num - limit + 1, first_num)
+                            _resp, overviews = server.xover(start, last_num)
+                        except Exception:
+                            continue
+                        for ov in overviews:
+                            subject = str(ov.get("subject", ""))
+                            if release_id not in subject:
+                                continue
+                            message_id = str(ov.get("message-id") or "").strip()
+                            if not message_id:
+                                log.debug("skipping overview without message-id: %s", ov)
+                                continue
+                            seg_num = _extract_segment_number(subject)
+                            filename = _extract_filename(subject) or release_id
+                            size = int(ov.get("bytes") or 0)
+                            if size == 0:
+                                try:
+                                    _resp, _num, _mid, lines = server.body(
+                                        message_id, decode=False
+                                    )
+                                    size = sum(len(line) for line in lines)
+                                except Exception:
+                                    pass
+                            files.setdefault(filename, []).append(
+                                (seg_num, size, message_id)
+                            )
+                    if not files:
+                        raise newznab.NzbFetchError("no matching articles found")
 
-            root = ET.Element("nzb", xmlns=NZB_XMLNS)
-            for filename, segments in files.items():
-                file_el = ET.SubElement(root, "file", {"subject": filename})
-                groups_el = ET.SubElement(file_el, "groups")
-                for g in groups:
-                    ET.SubElement(groups_el, "group").text = g
-                segments_el = ET.SubElement(file_el, "segments")
-                for number, size, msgid in sorted(segments, key=lambda s: s[0])[
-                    :MAX_SEGMENTS
-                ]:
-                    seg_el = ET.SubElement(
-                        segments_el,
-                        "segment",
-                        {"bytes": str(size), "number": str(number)},
+                    root = ET.Element("nzb", xmlns=NZB_XMLNS)
+                    for filename, segments in files.items():
+                        file_el = ET.SubElement(root, "file", {"subject": filename})
+                        groups_el = ET.SubElement(file_el, "groups")
+                        for g in groups:
+                            ET.SubElement(groups_el, "group").text = g
+                        segments_el = ET.SubElement(file_el, "segments")
+                        for number, size, msgid in sorted(
+                            segments, key=lambda s: s[0]
+                        )[:MAX_SEGMENTS]:
+                            seg_el = ET.SubElement(
+                                segments_el,
+                                "segment",
+                                {"bytes": str(size), "number": str(number)},
+                            )
+                            seg_el.text = msgid.strip("<>")
+                    return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
+                        root, encoding="unicode"
                     )
-                    seg_el.text = msgid.strip("<>")
-            return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
-                root, encoding="unicode"
-            )
+            except newznab.NzbFetchError:
+                raise
+            except nntplib.NNTPPermanentError as exc:
+                log.error("NNTP permanent error on attempt %d: %s", attempt, exc)
+                raise newznab.NzbFetchError(str(exc)) from exc
+            except Exception as exc:
+                if attempt == 3:
+                    raise
+                log.warning(
+                    "NNTP connection attempt %d failed: %s; retrying in %s seconds",
+                    attempt,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+                delay *= 2
     except newznab.NzbFetchError:
         raise
     except Exception as exc:
