@@ -8,7 +8,12 @@ from typing import Optional
 from datetime import datetime, timezone
 from email.utils import format_datetime
 
-from .middleware_circuit import CircuitOpenError, call_with_retry, redis_breaker
+from .middleware_circuit import (
+    CircuitOpenError,
+    call_with_retry,
+    call_with_retry_async,
+    redis_breaker,
+)
 from .metrics_log import inc_nzb_cache_hit, inc_nzb_cache_miss
 from .otel import start_span
 
@@ -246,22 +251,36 @@ def nzb_xml_stub(release_id: str) -> str:
     )
 
 
-def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
+async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     """Return an NZB document for ``release_id`` using ``cache``.
 
-    The actual NZB building is delegated to :func:`nzb_builder.build_nzb_for_release`.
-    When ``cache`` is provided the result is stored under ``nzb:<release_id>`` with
-    a TTL of ``SUCCESS_TTL`` and retrieved from there on subsequent calls. Failed
-    fetch attempts are cached under the same key using ``FAIL_SENTINEL`` for
-    ``FAIL_TTL`` seconds to reduce hammering of upstream resources. Any
-    :class:`NzbFetchError` raised by the builder is re-raised so callers can
-    handle it explicitly.
+    The actual NZB building is delegated to
+    :func:`nzb_builder.build_nzb_for_release`. When ``cache`` is provided the
+    result is stored under ``nzb:<release_id>`` with a TTL of ``SUCCESS_TTL`` and
+    retrieved from there on subsequent calls. Failed fetch attempts are cached
+    under the same key using ``FAIL_SENTINEL`` for ``FAIL_TTL`` seconds to reduce
+    hammering of upstream resources. Any :class:`NzbFetchError` raised by the
+    builder is re-raised so callers can handle it explicitly.
     """
+
+    import inspect
+
+    async def _maybe_await(value):
+        if inspect.isawaitable(value):
+            return await value
+        return value
+
+    async def _cache_call(func, *args):
+        if inspect.iscoroutinefunction(func):
+            return await call_with_retry_async(redis_breaker, "redis", func, *args)
+        result = call_with_retry(redis_breaker, "redis", func, *args)
+        return await _maybe_await(result)
+
     key = f"nzb:{release_id}"
     if cache:
         try:
             with start_span("redis.get"):
-                cached = call_with_retry(redis_breaker, "redis", cache.get, key)
+                cached = await _cache_call(cache.get, key)
         except CircuitOpenError:
             inc_nzb_cache_miss()
             raise
@@ -274,20 +293,14 @@ def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
                     raise NzbFetchError("previous fetch failed")
                 return cached.decode("utf-8")
             inc_nzb_cache_miss()
+
     try:
         xml = nzb_builder.build_nzb_for_release(release_id)
     except NzbFetchError:
         if cache:
             try:
                 with start_span("redis.setex"):
-                    call_with_retry(
-                        redis_breaker,
-                        "redis",
-                        cache.setex,
-                        key,
-                        FAIL_TTL,
-                        FAIL_SENTINEL,
-                    )
+                    await _cache_call(cache.setex, key, FAIL_TTL, FAIL_SENTINEL)
             except Exception:
                 pass
         raise
@@ -295,25 +308,18 @@ def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
         if cache:
             try:
                 with start_span("redis.setex"):
-                    call_with_retry(
-                        redis_breaker,
-                        "redis",
-                        cache.setex,
-                        key,
-                        FAIL_TTL,
-                        FAIL_SENTINEL,
-                    )
+                    await _cache_call(cache.setex, key, FAIL_TTL, FAIL_SENTINEL)
             except Exception:
                 pass
         raise NzbFetchError("failed to fetch nzb") from exc
+
     if cache:
         try:
             with start_span("redis.setex"):
-                call_with_retry(
-                    redis_breaker, "redis", cache.setex, key, SUCCESS_TTL, xml
-                )
+                await _cache_call(cache.setex, key, SUCCESS_TTL, xml)
         except Exception:
             pass
+
     return xml
 
 

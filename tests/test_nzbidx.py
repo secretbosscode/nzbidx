@@ -47,6 +47,16 @@ class DummyCache:
         self.store[key] = value
 
 
+class DummyAsyncCache(DummyCache):
+    async def get(self, key: str) -> bytes | None:  # type: ignore[override]
+        return self.store.get(key)
+
+    async def setex(self, key: str, _ttl: int, value: bytes | str) -> None:  # type: ignore[override]
+        if isinstance(value, str):
+            value = value.encode("utf-8")
+        self.store[key] = value
+
+
 class DummyNNTP:
     instance: "DummyNNTP | None" = None
 
@@ -630,8 +640,8 @@ def test_strips_adult_cats_when_disallowed(monkeypatch) -> None:
 def test_getnzb_timeout(monkeypatch) -> None:
     """Slow NZB generation should return 503 after timeout."""
 
-    def slow_get_nzb(_release_id, _cache):
-        time.sleep(0.1)
+    async def slow_get_nzb(_release_id, _cache):
+        await asyncio.sleep(0.1)
         return "<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", slow_get_nzb)
@@ -690,8 +700,9 @@ def test_caps_xml_defaults(monkeypatch) -> None:
     assert '<category id="6090" name="XXX/WEB-DL"/>' in xml
 
 
-def test_failed_fetch_cached(monkeypatch) -> None:
-    cache = DummyCache()
+@pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
+def test_failed_fetch_cached(monkeypatch, cache_cls) -> None:
+    cache = cache_cls()
     calls: list[str] = []
 
     def boom(release_id: str) -> str:
@@ -703,7 +714,7 @@ def test_failed_fetch_cached(monkeypatch) -> None:
     key = "nzb:123"
     # first call populates failure sentinel
     try:
-        newznab.get_nzb("123", cache)
+        asyncio.run(newznab.get_nzb("123", cache))
     except newznab.NzbFetchError:
         pass
     assert cache.store[key] == newznab.FAIL_SENTINEL
@@ -712,16 +723,17 @@ def test_failed_fetch_cached(monkeypatch) -> None:
     calls.clear()
     # second call should hit cache and not invoke builder
     try:
-        newznab.get_nzb("123", cache)
+        asyncio.run(newznab.get_nzb("123", cache))
     except newznab.NzbFetchError:
         pass
     assert calls == []
 
 
-def test_cached_nzb_served(monkeypatch) -> None:
+@pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
+def test_cached_nzb_served(monkeypatch, cache_cls) -> None:
     """A cached NZB should be returned without rebuilding."""
 
-    cache = DummyCache()
+    cache = cache_cls()
     init_calls: list[int] = []
 
     async def fake_init_cache_async() -> None:
