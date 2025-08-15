@@ -43,6 +43,10 @@ from email.utils import parsedate_to_datetime
 
 logger = logging.getLogger(__name__)
 
+# Track consecutive failures per group to allow backoff or alerting.
+# This is reset on successful xover calls.
+_group_failures: dict[str, int] = {}
+
 
 class _AggregateMetrics:
     """Helper to accumulate metrics across groups during a poll cycle."""
@@ -114,7 +118,27 @@ def run_once() -> float:
             batch = min(remaining, INGEST_BATCH_MAX)
             batch = max(batch, min(remaining, INGEST_BATCH_MIN))
             end = start + batch - 1
-            headers = client.xover(group, start, end)
+            try:
+                headers = client.xover(group, start, end)
+                _group_failures[group] = 0
+            except Exception:
+                failures = _group_failures.get(group, 0) + 1
+                _group_failures[group] = failures
+                logger.exception(
+                    "ingest_xover_error",
+                    extra={
+                        "group": group,
+                        "start": start,
+                        "end": end,
+                        "failures": failures,
+                    },
+                )
+                if failures >= 3:
+                    logger.warning(
+                        "ingest_xover_consecutive_failures",
+                        extra={"group": group, "failures": failures},
+                    )
+                continue
         if not headers:
             logger.info(
                 "ingest_idle",
@@ -161,19 +185,46 @@ def run_once() -> float:
             language = detect_language(subject) or "und"
             category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
-            releases[dedupe_key] = (dedupe_key, category, language, tags, group, size)
-            body: dict[str, object] = {"norm_title": dedupe_key}
-            if category:
-                body["category"] = category
-            if language:
-                body["language"] = language
-            if tags:
-                body["tags"] = tags
-            if group:
-                body["source_group"] = group
-            if size > 0:
-                body["size_bytes"] = size
-            docs[dedupe_key] = body
+            existing = releases.get(dedupe_key)
+            if existing:
+                _, ex_cat, ex_lang, ex_tags, ex_group, ex_size = existing
+                combined_size = (ex_size or 0) + size
+                combined_tags = sorted(set(ex_tags or []).union(tags))
+                releases[dedupe_key] = (
+                    dedupe_key,
+                    ex_cat,
+                    ex_lang,
+                    combined_tags,
+                    ex_group,
+                    combined_size,
+                )
+                body = docs.get(dedupe_key, {"norm_title": dedupe_key})
+                if combined_tags:
+                    body["tags"] = combined_tags
+                if combined_size > 0:
+                    body["size_bytes"] = combined_size
+                docs[dedupe_key] = body
+            else:
+                releases[dedupe_key] = (
+                    dedupe_key,
+                    category,
+                    language,
+                    tags,
+                    group,
+                    size,
+                )
+                body: dict[str, object] = {"norm_title": dedupe_key}
+                if category:
+                    body["category"] = category
+                if language:
+                    body["language"] = language
+                if tags:
+                    body["tags"] = tags
+                if group:
+                    body["source_group"] = group
+                if size > 0:
+                    body["size_bytes"] = size
+                docs[dedupe_key] = body
         db_latency = 0.0
         os_latency = 0.0
         inserted: set[str] = set()
@@ -261,7 +312,11 @@ def run_once() -> float:
 def run_forever(stop_event: Event | None = None) -> None:
     """Continuously poll groups until ``stop_event`` is set."""
     while not (stop_event and stop_event.is_set()):
-        delay = run_once()
+        try:
+            delay = run_once()
+        except Exception:
+            logger.exception("ingest_loop_failure")
+            delay = INGEST_POLL_MAX_SECONDS
         delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
         if stop_event:
             if stop_event.wait(delay):

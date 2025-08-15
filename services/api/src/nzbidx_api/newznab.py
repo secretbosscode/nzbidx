@@ -193,8 +193,8 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     """Return a simple RSS feed with the provided items.
 
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
-    ``category``, ``link`` and ``size`` keys. ``size`` is used for the
-    enclosure length and defaults to ``0`` when missing. No escaping is
+    ``category`` and ``link`` keys. ``size`` is optional and used for the
+    enclosure length when it is present and greater than ``0``. No escaping is
     performed as the values are expected to be safe for XML. Adult items are
     stripped when not allowed.
     """
@@ -203,17 +203,25 @@ def rss_xml(items: list[dict[str, str]]) -> str:
         i for i in items if allow_adult or not is_adult_category(i.get("category"))
     ]
     channel_date = format_datetime(datetime.now(timezone.utc))
-    items_xml = "".join(
-        "<item>"
-        f"<title>{html.escape(i['title'])}</title>"
-        f"<guid>{html.escape(i['guid'])}</guid>"
-        f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
-        f"<category>{html.escape(i['category'])}</category>"
-        f"<link>{html.escape(i['link'])}</link>"
-        f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"{html.escape(str(i.get('size', '0')))}\"/>"
-        "</item>"
-        for i in safe_items
-    )
+    item_parts = []
+    for i in safe_items:
+        size = str(i.get("size", ""))
+        enclosure = (
+            f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"{html.escape(size)}\"/>"
+            if size.isdigit() and int(size) > 0
+            else ""
+        )
+        item_parts.append(
+            "<item>"
+            f"<title>{html.escape(i['title'])}</title>"
+            f"<guid>{html.escape(i['guid'])}</guid>"
+            f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
+            f"<category>{html.escape(i['category'])}</category>"
+            f"<link>{html.escape(i['link'])}</link>"
+            f"{enclosure}"
+            "</item>"
+        )
+    items_xml = "".join(item_parts)
     return (
         '<rss version="2.0">'
         "<channel>"

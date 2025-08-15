@@ -24,6 +24,7 @@ def test_search_releases_includes_apikey(monkeypatch) -> None:
                                 "norm_title": "",
                                 "posted_at": "",
                                 "category": "",
+                                "size_bytes": 1,
                             },
                         }
                     ]
