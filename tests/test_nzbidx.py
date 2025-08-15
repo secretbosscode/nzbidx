@@ -131,6 +131,29 @@ def test_build_nzb_without_matches(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
+def test_build_nzb_bounds_xover_range(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+    monkeypatch.setenv("NNTP_XOVER_LIMIT", "1")
+
+    called: dict[str, tuple[int, int]] = {}
+
+    class CaptureRange(DummyNNTP):
+        def xover(self, start, end):  # pragma: no cover - simple
+            called["range"] = (start, end)
+            return super().xover(start, end)
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=CaptureRange, NNTP_SSL=CaptureRange, NNTP_SSL_PORT=563),
+    )
+
+    nzb_builder.build_nzb_for_release("MyRelease")
+
+    assert called["range"] == (2, 2)
+
+
 def test_basic_api_and_ingest(monkeypatch) -> None:
     """Ensure search sort and ingest category inference work."""
     # Ingest: category inference

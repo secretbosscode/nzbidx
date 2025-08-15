@@ -43,7 +43,9 @@ def build_nzb_for_release(release_id: str) -> str:
     The function connects to the NNTP server configured via environment
     variables (``NNTP_HOST``, ``NNTP_PORT``, ``NNTP_USER``, ``NNTP_PASS`` and
     ``NNTP_GROUPS``).  All articles whose subject contains ``release_id`` are
-    collected and stitched into NZB ``<file>`` and ``<segment>`` elements.
+    collected and stitched into NZB ``<file>`` and ``<segment>`` elements.  The
+    NNTP ``XOVER`` range is capped to the most recent ``NNTP_XOVER_LIMIT``
+    articles (default ``1000``) to avoid fetching unbounded history.
 
     When mandatory configuration is missing or no matching articles are found
     an :class:`newznab.NzbFetchError` is raised.  Other unexpected errors are
@@ -90,7 +92,10 @@ def build_nzb_for_release(release_id: str) -> str:
             for group in groups:
                 try:
                     _resp, _count, first, last, _name = server.group(group)
-                    _resp, overviews = server.xover(first, last)
+                    limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
+                    first_num, last_num = int(first), int(last)
+                    start = max(last_num - limit + 1, first_num)
+                    _resp, overviews = server.xover(start, last_num)
                 except Exception:
                     continue
                 for ov in overviews:
