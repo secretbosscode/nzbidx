@@ -3,6 +3,7 @@
 import json
 import os
 import html
+import logging
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
@@ -24,6 +25,8 @@ except Exception:  # pragma: no cover - optional dependency
     Redis = None  # type: ignore
 
 from . import nzb_builder
+
+log = logging.getLogger(__name__)
 
 ADULT_CATEGORY_ID = 6000
 
@@ -284,7 +287,8 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
         except CircuitOpenError:
             inc_nzb_cache_miss()
             raise
-        except Exception:
+        except Exception as exc:
+            log.warning("redis get failed for %s: %s", release_id, exc)
             inc_nzb_cache_miss()
         else:
             if cached:
@@ -301,24 +305,24 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
             try:
                 with start_span("redis.setex"):
                     await _cache_call(cache.setex, key, FAIL_TTL, FAIL_SENTINEL)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("redis setex failed for %s: %s", release_id, exc)
         raise
     except Exception as exc:  # pragma: no cover - future real implementation
         if cache:
             try:
                 with start_span("redis.setex"):
                     await _cache_call(cache.setex, key, FAIL_TTL, FAIL_SENTINEL)
-            except Exception:
-                pass
+            except Exception as exc2:
+                log.warning("redis setex failed for %s: %s", release_id, exc2)
         raise NzbFetchError("failed to fetch nzb") from exc
 
     if cache:
         try:
             with start_span("redis.setex"):
                 await _cache_call(cache.setex, key, SUCCESS_TTL, xml)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("redis setex failed for %s: %s", release_id, exc)
 
     return xml
 
