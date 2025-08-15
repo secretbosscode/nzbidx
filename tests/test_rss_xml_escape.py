@@ -51,7 +51,7 @@ def test_search_releases_encodes_link_id(monkeypatch) -> None:
                                 "norm_title": "",
                                 "posted_at": "",
                                 "category": "",
-                                "size_bytes": 0,
+                                "size_bytes": 1,
                             },
                         }
                     ]
