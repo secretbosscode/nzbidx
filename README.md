@@ -115,6 +115,7 @@ to regain the faster serializer once compatible.
 | `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
+| `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries | `60` |
 | `INGEST_OS_BULK` | Releases per OpenSearch bulk request | `100` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
 
@@ -152,7 +153,8 @@ The API container also runs an ingest worker which polls NNTP groups and stores
 release metadata. Set the required NNTP environment variables and start the
 stack. When `NNTP_GROUPS` is omitted all available `alt.binaries.*` groups are
 discovered automatically. Use `NNTP_TIMEOUT` to adjust the socket timeout for
-slow or flaky providers. To invoke a one-off ingest loop manually:
+slow or flaky providers and `NNTP_TOTAL_TIMEOUT` to cap overall retry time. To
+invoke a one-off ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username

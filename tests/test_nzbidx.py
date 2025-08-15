@@ -257,6 +257,34 @@ def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
     assert called["timeout"] == 45.0
 
 
+def test_build_nzb_total_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "1")
+
+    class BoomConnect(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            raise ConnectionError("boom")
+
+    monkeypatch.setattr(
+        nzb_builder.nntplib,
+        "NNTP",
+        BoomConnect,
+    )
+    monkeypatch.setattr(
+        nzb_builder.nntplib,
+        "NNTP_SSL",
+        BoomConnect,
+    )
+
+    times = iter([0, 0, 2])
+    monkeypatch.setattr(nzb_builder.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(nzb_builder.time, "sleep", lambda _delay: None)
+
+    with pytest.raises(newznab.NzbFetchError):
+        nzb_builder.build_nzb_for_release("MyRelease")
+
+
 def test_basic_api_and_ingest(monkeypatch) -> None:
     """Ensure search sort and ingest category inference work."""
     # Ingest: category inference
