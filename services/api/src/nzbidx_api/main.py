@@ -823,6 +823,11 @@ async def api(request: Request) -> Response:
         except NzbFetchError:
             return nzb_unavailable()
         except asyncio.TimeoutError:
+            logger.warning(
+                "nzb fetch timed out after %ss",
+                nzb_timeout_seconds(),
+                extra={"release_id": release_id},
+            )
             return nzb_unavailable("nzb fetch timed out")
         return Response(xml, media_type="application/x-nzb")
 
