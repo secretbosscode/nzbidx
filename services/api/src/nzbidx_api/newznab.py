@@ -249,20 +249,6 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     )
 
 
-def nzb_xml_stub(release_id: str) -> str:
-    """Return a minimal NZB document for the given ``release_id``."""
-    return (
-        '<?xml version="1.0" encoding="utf-8"?>'
-        '<nzb xmlns="http://www.newzbin.com/DTD/2003/nzb">'
-        "<file>"
-        "<segments>"
-        '<segment bytes="0" number="1">dummy@message.id</segment>'
-        "</segments>"
-        "</file>"
-        "</nzb>"
-    )
-
-
 async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     """Return an NZB document for ``release_id`` using ``cache``.
 
