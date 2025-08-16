@@ -60,6 +60,38 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             pass
 
 
+def _source_groups_from_db(release_id: str) -> List[str]:
+    try:
+        from nzbidx_ingest.main import connect_db  # type: ignore
+    except Exception:
+        return []
+    try:
+        conn = connect_db()
+    except Exception:
+        return []
+    try:
+        cur = conn.cursor()
+        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+        cur.execute(
+            f"SELECT source_group FROM release WHERE norm_title = {placeholder}",
+            (release_id,),
+        )
+        row = cur.fetchone()
+        if not row or not row[0]:
+            return []
+        groups = row[0]
+        if isinstance(groups, str):
+            return [g.strip() for g in groups.split(",") if g.strip()]
+        return []
+    except Exception:
+        return []
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _build_xml_from_segments(
     release_id: str, segments: List[Tuple[int, str, str, int]]
 ) -> str:
@@ -143,6 +175,8 @@ def build_nzb_for_release(release_id: str) -> str:
     if segments:
         return _build_xml_from_segments(release_id, segments)
 
+    source_groups = _source_groups_from_db(release_id)
+
     host = os.getenv("NNTP_HOST")
     if not host:
         raise newznab.NzbFetchError(
@@ -163,7 +197,12 @@ def build_nzb_for_release(release_id: str) -> str:
         group_limit = 0
 
     entries: list[str] = []
-    if group_env.strip():
+    if source_groups:
+        static_groups = list(source_groups)
+        patterns = []
+        if group_limit and len(static_groups) > group_limit:
+            static_groups = static_groups[:group_limit]
+    elif group_env.strip():
         entries = [g.strip() for g in group_env.split(",") if g.strip()]
         static_groups = [g for g in entries if "*" not in g and "?" not in g]
         patterns = [g for g in entries if "*" in g or "?" in g]
@@ -211,7 +250,7 @@ def build_nzb_for_release(release_id: str) -> str:
                         release_id,
                     )
                     groups = list(static_groups)
-                    if not group_env.strip():
+                    if not group_env.strip() and not source_groups:
                         global _discovered_groups
                         if _discovered_groups is None:
                             try:
