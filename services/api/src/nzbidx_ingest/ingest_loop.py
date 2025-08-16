@@ -420,4 +420,8 @@ def run_forever(stop_event: Event | None = None) -> None:
             if stop_event.wait(delay):
                 break
         else:
-            time.sleep(delay)
+            try:
+                time.sleep(delay)
+            except ValueError:
+                logger.exception("ingest_sleep_failure", extra={"delay": delay})
+                time.sleep(INGEST_POLL_MIN_SECONDS)
