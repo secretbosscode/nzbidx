@@ -531,13 +531,6 @@ async def status(request: Request) -> ORJSONResponse:
     return ORJSONResponse(payload)
 
 
-async def config_endpoint(request: Request) -> ORJSONResponse:
-    return ORJSONResponse({
-        "nzb_timeout_seconds": nzb_timeout_seconds(),
-        "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
-    })
-
-
 async def admin_backfill(request: Request) -> ORJSONResponse:
     """Trigger or query a background backfill of release parts."""
     global _backfill_thread
@@ -941,7 +934,15 @@ routes = [
     Route("/health", health),
     Route("/api/health", health),
     Route("/api/status", status),
-    Route("/api/config", config_endpoint),
+    Route(
+        "/api/config",
+        lambda request: ORJSONResponse(
+            {
+                "nzb_timeout_seconds": nzb_timeout_seconds(),
+                "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
+            }
+        ),
+    ),
     Route("/api/admin/backfill", admin_backfill, methods=["POST"]),
     Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
