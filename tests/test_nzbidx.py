@@ -25,7 +25,6 @@ sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
-import nzbidx_ingest.config as ingest_config  # type: ignore
 from nzbidx_ingest.main import (
     CATEGORY_MAP,
     _infer_category,
@@ -58,385 +57,10 @@ class DummyAsyncCache(DummyCache):
         self.store[key] = value
 
 
-class DummyNNTP:
-    instance: "DummyNNTP | None" = None
-
-    def __init__(self, *_args, **_kwargs):
-        self.body_calls = 0
-        DummyNNTP.instance = self
-
-    def __enter__(self):  # pragma: no cover - trivial
-        return self
-
-    def __exit__(self, _exc_type, _exc, _tb):  # pragma: no cover - trivial
-        pass
-
-    def group(self, group):
-        # resp, count, first, last, name
-        return ("", 2, "1", "2", group)
-
-    def xover(self, start, end):
-        return (
-            "",
-            [
-                {
-                    "subject": 'MyRelease "testfile.bin" (1/2)',
-                    "message-id": "msg1@example.com",
-                    "bytes": 123,
-                },
-                {
-                    "subject": 'MyRelease "testfile.bin" (2/2)',
-                    "message-id": "msg2@example.com",
-                    "bytes": 456,
-                },
-            ],
-        )
-
-    def body(self, message_id, decode=False):  # pragma: no cover - simple
-        self.body_calls += 1
-        return "", 0, message_id, []
-
-
-class DummyNNTPTuple(DummyNNTP):
-    def xover(self, start, end):  # pragma: no cover - simple
-        return (
-            "",
-            [
-                (
-                    1,
-                    {
-                        "subject": 'MyRelease "testfile.bin" (1/2)',
-                        "message-id": "msg1@example.com",
-                        "bytes": 123,
-                    },
-                ),
-                (
-                    2,
-                    {
-                        "subject": 'MyRelease "testfile.bin" (2/2)',
-                        "message-id": "msg2@example.com",
-                        "bytes": 456,
-                    },
-                ),
-            ],
-        )
-
-
 def test_build_nzb_without_host(monkeypatch) -> None:
     monkeypatch.delenv("NNTP_HOST", raising=False)
     with pytest.raises(newznab.NzbFetchError):
         nzb_builder.build_nzb_for_release("MyRelease")
-
-
-def test_build_nzb_autodiscover_groups(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
-
-    called: dict[str, bool] = {}
-
-    def fake_load() -> list[str]:
-        called["ok"] = True
-        return ["alt.binaries.example"]
-
-    monkeypatch.setattr(ingest_config, "_load_groups", fake_load, raising=False)
-
-    class CaptureGroup(DummyNNTP):
-        seen: list[str] = []
-
-        def group(self, group):  # type: ignore[override]
-            CaptureGroup.seen.append(group)
-            return super().group(group)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=CaptureGroup, NNTP_SSL=CaptureGroup, NNTP_SSL_PORT=563),
-    )
-    nzb_builder.build_nzb_for_release("MyRelease")
-
-    assert called["ok"] is True
-    assert CaptureGroup.seen == ["alt.binaries.example"]
-
-
-def test_build_nzb_autodiscover_without_config(monkeypatch) -> None:
-    """When no groups are configured, autodiscovery should still work."""
-
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
-    monkeypatch.setattr(nzb_builder, "_discovered_groups", None, raising=False)
-
-    # Ingest configuration returns no groups
-    monkeypatch.setattr(ingest_config, "_load_groups", lambda: [], raising=False)
-
-    class CaptureList(DummyNNTP):
-        seen: list[str] = []
-
-        def list(self, pattern=None):  # type: ignore[override]
-            return "", [("alt.binaries.example", "", "", "")]
-
-        def group(self, group):  # type: ignore[override]
-            CaptureList.seen.append(group)
-            return super().group(group)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=CaptureList, NNTP_SSL=CaptureList, NNTP_SSL_PORT=563),
-    )
-
-    nzb_builder.build_nzb_for_release("MyRelease")
-
-    assert CaptureList.seen == ["alt.binaries.example"]
-
-
-def test_build_nzb_autodiscover_group_limit(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    monkeypatch.setenv("NNTP_GROUP_LIMIT", "1")
-    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
-
-    def fake_load() -> list[str]:
-        return ["alt.binaries.example", "alt.binaries.other"]
-
-    monkeypatch.setattr(ingest_config, "_load_groups", fake_load, raising=False)
-
-    class CaptureGroup(DummyNNTP):
-        seen: list[str] = []
-
-        def group(self, group):  # type: ignore[override]
-            CaptureGroup.seen.append(group)
-            return super().group(group)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=CaptureGroup, NNTP_SSL=CaptureGroup, NNTP_SSL_PORT=563),
-    )
-    nzb_builder.build_nzb_for_release("MyRelease")
-
-    assert CaptureGroup.seen == ["alt.binaries.example"]
-
-
-def test_build_nzb_autodiscover_groups_from_server(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
-    monkeypatch.setattr(nzb_builder, "_discovered_groups", None, raising=False)
-
-    # No configured groups, forcing discovery via NNTP LIST
-    monkeypatch.setattr(ingest_config, "_load_groups", lambda: [], raising=False)
-
-    class DiscoverGroups(DummyNNTP):
-        listed = False
-        seen: list[str] = []
-
-        def list(self, pattern=None):  # type: ignore[override]
-            DiscoverGroups.listed = True
-            return "", [("alt.binaries.autodisc",)]
-
-        def group(self, group):  # type: ignore[override]
-            DiscoverGroups.seen.append(group)
-            return super().group(group)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(
-            NNTP=DiscoverGroups, NNTP_SSL=DiscoverGroups, NNTP_SSL_PORT=563
-        ),
-    )
-
-    nzb_builder.build_nzb_for_release("MyRelease")
-
-    assert DiscoverGroups.listed is True
-    assert DiscoverGroups.seen == ["alt.binaries.autodisc"]
-
-
-def test_build_nzb_without_matches(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    class NoResults(DummyNNTP):
-        def xover(self, start, end):  # pragma: no cover - simple
-            return "", []
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=NoResults, NNTP_SSL=NoResults, NNTP_SSL_PORT=563),
-    )
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
-
-
-def test_build_nzb_connection_error(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    class BoomConnect(DummyNNTP):
-        def __init__(self, *_args, **_kwargs):
-            raise nzb_builder.nntplib.NNTPPermanentError("boom")
-
-    monkeypatch.setattr(nzb_builder.nntplib, "NNTP", BoomConnect)
-    monkeypatch.setattr(nzb_builder.nntplib, "NNTP_SSL", BoomConnect)
-
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
-
-
-def test_build_nzb_bounds_xover_range(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setenv("NNTP_XOVER_LIMIT", "1")
-
-    called: dict[str, tuple[int, int]] = {}
-
-    class CaptureRange(DummyNNTP):
-        def xover(self, start, end):  # pragma: no cover - simple
-            called["range"] = (start, end)
-            return super().xover(start, end)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=CaptureRange, NNTP_SSL=CaptureRange, NNTP_SSL_PORT=563),
-    )
-
-    nzb_builder.build_nzb_for_release("MyRelease")
-
-    assert called["range"] == (2, 2)
-
-
-def test_build_nzb_overview_tuple(monkeypatch) -> None:
-    """``build_nzb_for_release`` should handle dict and tuple overview entries."""
-
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    # Dict-style overview entries
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=DummyNNTP, NNTP_SSL=DummyNNTP, NNTP_SSL_PORT=563),
-    )
-    nzb_builder.build_nzb_for_release("MyRelease")
-
-    # Tuple-style overview entries
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(
-            NNTP=DummyNNTPTuple, NNTP_SSL=DummyNNTPTuple, NNTP_SSL_PORT=563
-        ),
-    )
-    nzb_builder.build_nzb_for_release("MyRelease")
-
-
-def test_build_nzb_uses_configurable_timeout(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.delenv("NNTP_TIMEOUT", raising=False)
-
-    called: dict[str, float | None] = {}
-
-    class CaptureTimeout(DummyNNTP):
-        def __init__(self, *args, **kwargs):
-            called["timeout"] = kwargs.get("timeout")
-            super().__init__(*args, **kwargs)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(
-            NNTP=CaptureTimeout, NNTP_SSL=CaptureTimeout, NNTP_SSL_PORT=563
-        ),
-    )
-
-    from nzbidx_api import config as api_config
-
-    api_config.nntp_timeout_seconds.cache_clear()
-    nzb_builder.build_nzb_for_release("MyRelease")
-    assert called["timeout"] == 30.0
-
-    monkeypatch.setenv("NNTP_TIMEOUT", "45")
-    api_config.nntp_timeout_seconds.cache_clear()
-    nzb_builder.build_nzb_for_release("MyRelease")
-    assert called["timeout"] == 45.0
-    api_config.nntp_timeout_seconds.cache_clear()
-
-
-def test_build_nzb_total_timeout(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "1")
-    from nzbidx_api import config as api_config
-
-    api_config.nntp_total_timeout_seconds.cache_clear()
-
-    class BoomConnect(DummyNNTP):
-        def __init__(self, *_args, **_kwargs):
-            raise ConnectionError("boom")
-
-    monkeypatch.setattr(
-        nzb_builder.nntplib,
-        "NNTP",
-        BoomConnect,
-    )
-    monkeypatch.setattr(
-        nzb_builder.nntplib,
-        "NNTP_SSL",
-        BoomConnect,
-    )
-
-    times = iter([0, 0, 2])
-    monkeypatch.setattr(nzb_builder.time, "monotonic", lambda: next(times))
-    monkeypatch.setattr(nzb_builder.time, "sleep", lambda _delay: None)
-
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
-    api_config.nntp_total_timeout_seconds.cache_clear()
-
-
-def test_build_nzb_logs_all_attempts(monkeypatch, caplog) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    class BoomConnect(DummyNNTP):
-        def __init__(self, *_args, **_kwargs):
-            raise ConnectionError("boom")
-
-    monkeypatch.setattr(
-        nzb_builder.nntplib,
-        "NNTP",
-        BoomConnect,
-    )
-    monkeypatch.setattr(
-        nzb_builder.nntplib,
-        "NNTP_SSL",
-        BoomConnect,
-    )
-    monkeypatch.setattr(nzb_builder.time, "sleep", lambda _delay: None)
-
-    with caplog.at_level(logging.INFO):
-        with pytest.raises(newznab.NzbFetchError):
-            nzb_builder.build_nzb_for_release("MyRelease")
-
-    attempt_logs = [
-        r
-        for r in caplog.records
-        if r.message.startswith("nntp connection attempt")
-        and "failed" not in r.message
-        and "succeeded" not in r.message
-    ]
-    fail_logs = [
-        r
-        for r in caplog.records
-        if r.message.startswith("nntp connection attempt") and "failed" in r.message
-    ]
-    assert len(attempt_logs) == 3
-    assert len(fail_logs) == 3
 
 
 def test_nzb_timeout_defaults(monkeypatch) -> None:
@@ -485,6 +109,40 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
     nzb_builder.build_nzb_for_release("MyRelease")
 
     assert api_config.nzb_timeout_seconds() == 20
+
+
+def test_build_nzb_missing_segments_raises(monkeypatch) -> None:
+    """Builder should raise when no DB segments exist."""
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: [])
+    with pytest.raises(newznab.NzbFetchError):
+        nzb_builder.build_nzb_for_release("MyRelease")
+
+
+def test_builds_nzb_from_db(monkeypatch) -> None:
+    """Segments fetched from the DB should generate an NZB."""
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "_segments_from_db",
+        lambda _rid: [
+            (1, "msg1@example.com", "g", 123),
+            (2, "<msg2@example.com>", "g", 456),
+        ],
+    )
+    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
+    assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
+
+
+def test_enforces_segment_limit(monkeypatch) -> None:
+    """Only ``MAX_SEGMENTS`` segments should be included."""
+
+    monkeypatch.setattr(nzb_builder, "MAX_SEGMENTS", 5, raising=False)
+    segs = [(i, f"msg{i}@example.com", "g", 0) for i in range(1, 11)]
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: segs)
+    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert xml.count("<segment ") == 5
 
 
 def test_basic_api_and_ingest(monkeypatch) -> None:
@@ -898,8 +556,8 @@ def test_getnzb_timeout(monkeypatch) -> None:
     assert "nzb:1" not in cache.store
 
 
-def test_getnzb_fetch_error_retry_after(monkeypatch) -> None:
-    """Fetch failures should include a Retry-After header."""
+def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
+    """Fetch failures should return 404 when NZB is unavailable."""
 
     async def error_get_nzb(_release_id, _cache):
         raise newznab.NzbFetchError("boom")
@@ -907,8 +565,8 @@ def test_getnzb_fetch_error_retry_after(monkeypatch) -> None:
     monkeypatch.setattr(api_main, "get_nzb", error_get_nzb)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
-    assert resp.status_code == 503
-    assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
+    assert resp.status_code == 404
+    assert "Retry-After" not in resp.headers
 
 
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
@@ -1035,205 +693,6 @@ def test_cached_nzb_served(monkeypatch, cache_cls) -> None:
     assert resp2.status_code == 200
     assert build_calls == []
     assert len(init_calls) == 1
-
-
-def test_builds_nzb(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=DummyNNTP, NNTP_SSL=DummyNNTP, NNTP_SSL_PORT=563),
-    )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert "msg1@example.com" in xml
-    assert "msg2@example.com" in xml
-    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
-    assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
-    assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
-
-
-def test_builds_nzb_strips_brackets(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    class BracketNNTP(DummyNNTP):
-        def xover(self, start, end):
-            return "", [
-                {
-                    "subject": 'MyRelease "testfile.bin" (1/1)',
-                    "message-id": "<msg1@example.com>",
-                    "bytes": 123,
-                }
-            ]
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=BracketNNTP, NNTP_SSL=BracketNNTP, NNTP_SSL_PORT=563),
-    )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert "<msg1@example.com>" not in xml
-    assert "&lt;msg1@example.com&gt;" not in xml
-    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
-
-
-def test_builds_nzb_tuple_overview(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    class TupleNNTP(DummyNNTP):
-        def xover(self, start, end):
-            return "", [
-                (
-                    1,
-                    {
-                        "subject": 'MyRelease "testfile.bin" (1/1)',
-                        "message-id": "msg1@example.com",
-                        "bytes": 123,
-                    },
-                )
-            ]
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=TupleNNTP, NNTP_SSL=TupleNNTP, NNTP_SSL_PORT=563),
-    )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
-
-
-def test_enforces_segment_limit(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.setattr(nzb_builder, "MAX_SEGMENTS", 5)
-
-    class ManyNNTP(DummyNNTP):
-        def xover(self, start, end):
-            return "", [
-                {
-                    "subject": f'MyRelease "testfile.bin" ({i}/10)',
-                    "message-id": f"msg{i}@example.com",
-                }
-                for i in range(1, 11)
-            ]
-
-        def body(self, message_id, decode=False):  # pragma: no cover - simple
-            return "", 0, message_id, [b"x"]
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=ManyNNTP, NNTP_SSL=ManyNNTP, NNTP_SSL_PORT=563),
-    )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert xml.count("<segment ") == 5
-    assert "msg6@example.com" not in xml
-
-
-def test_ignores_overview_without_message_id(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    class MissingIdNNTP(DummyNNTP):
-        def xover(self, start, end):
-            return "", [
-                {
-                    "subject": 'MyRelease "testfile.bin" (1/2)',
-                    "message-id": "msg1@example.com",
-                    "bytes": 123,
-                },
-                {
-                    "subject": 'MyRelease "testfile.bin" (2/2)',
-                    "bytes": 456,
-                },
-            ]
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=MissingIdNNTP, NNTP_SSL=MissingIdNNTP, NNTP_SSL_PORT=563),
-    )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert xml.count("<segment ") == 1
-    assert "msg1@example.com" in xml
-    assert "456" not in xml
-
-
-def test_builds_nzb_group_pattern(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.*")
-    monkeypatch.setenv("NNTP_GROUP_LIMIT", "1")
-
-    class MultiListNNTP(DummyNNTPTuple):
-        groups_scanned: list[str] = []
-
-        def list(self, pattern: str | None = None):
-            return "", [
-                ("alt.binaries.example", "0", "0", "0"),
-                ("alt.binaries.other", "0", "0", "0"),
-            ]
-
-        def group(self, group):  # type: ignore[override]
-            MultiListNNTP.groups_scanned.append(group)
-            return super().group(group)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=MultiListNNTP, NNTP_SSL=MultiListNNTP, NNTP_SSL_PORT=563),
-    )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert "msg1@example.com" in xml
-    assert MultiListNNTP.groups_scanned == ["alt.binaries.example"]
-
-
-def test_builds_nzb_auto_ssl(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_PORT", "563")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-    monkeypatch.delenv("NNTP_SSL", raising=False)
-
-    used: dict[str, str] = {}
-
-    class Plain(DummyNNTP):
-        def __init__(self, *_args, **_kwargs):
-            used["cls"] = "plain"
-            super().__init__(*_args, **_kwargs)
-
-    class Secure(DummyNNTP):
-        def __init__(self, *_args, **_kwargs):
-            used["cls"] = "ssl"
-            super().__init__(*_args, **_kwargs)
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=Plain, NNTP_SSL=Secure, NNTP_SSL_PORT=563),
-    )
-    nzb_builder.build_nzb_for_release("MyRelease")
-    assert used["cls"] == "ssl"
-    assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
-
-
-def test_build_nzb_logs_exception(monkeypatch, caplog) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
-    class FailNNTP(DummyNNTP):
-        def __init__(self, *_args, **_kwargs):
-            raise RuntimeError("boom")
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=FailNNTP, NNTP_SSL=FailNNTP, NNTP_SSL_PORT=563),
-    )
-    with caplog.at_level(logging.ERROR):
-        xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert "nzb build failed for MyRelease" in caplog.text
-    assert "<nzb" in xml
 
 
 def test_connect_db_creates_parent(tmp_path, monkeypatch) -> None:

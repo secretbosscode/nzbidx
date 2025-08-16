@@ -1,26 +1,19 @@
-"""Thin NZB builder interface.
+"""NZB builder utilities.
 
-This module exposes :func:`build_nzb_for_release` which connects to an NNTP
-server to build a real NZB document.  Missing configuration or empty results
-raise :class:`newznab.NzbFetchError` while unexpected failures fall back to a
-stub NZB document for compatibility.  The overall runtime is capped by the
-``NNTP_TOTAL_TIMEOUT`` environment variable.
+This module exposes :func:`build_nzb_for_release` which returns an NZB XML
+document for a release using segments stored in the database. If no segments
+exist the function raises :class:`newznab.NzbFetchError`.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
-import re
-import sys
-import time
-from importlib import util
-from pathlib import Path
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 from . import config
+
+log = logging.getLogger(__name__)
 
 
 def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
@@ -63,38 +56,6 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             pass
 
 
-def _source_groups_from_db(release_id: str) -> List[str]:
-    try:
-        from nzbidx_ingest.main import connect_db  # type: ignore
-    except Exception:
-        return []
-    try:
-        conn = connect_db()
-    except Exception:
-        return []
-    try:
-        cur = conn.cursor()
-        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-        cur.execute(
-            f"SELECT source_group FROM release WHERE norm_title = {placeholder}",
-            (release_id,),
-        )
-        row = cur.fetchone()
-        if not row or not row[0]:
-            return []
-        groups = row[0]
-        if isinstance(groups, str):
-            return [g.strip() for g in groups.split(",") if g.strip()]
-        return []
-    except Exception:
-        return []
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-
 def _build_xml_from_segments(
     release_id: str, segments: List[Tuple[int, str, str, int]]
 ) -> str:
@@ -105,7 +66,7 @@ def _build_xml_from_segments(
         if g:
             ET.SubElement(groups_el, "group").text = g
     segs_el = ET.SubElement(file_el, "segments")
-    for number, msgid, group, size in sorted(segments, key=lambda s: s[0])[
+    for number, msgid, _group, size in sorted(segments, key=lambda s: s[0])[
         :MAX_SEGMENTS
     ]:
         seg_el = ET.SubElement(
@@ -117,72 +78,15 @@ def _build_xml_from_segments(
     )
 
 
-# Prefer the bundled ``nntplib`` implementation over the deprecated
-# standard library version.  Insert the local ``services/api/src`` path at
-# the start of ``sys.path`` so resolving the module picks up our copy.
-_local_path = Path(__file__).resolve().parents[1]
-if str(_local_path) not in sys.path:
-    sys.path.insert(0, str(_local_path))
-
-_nntplib_file = _local_path / "nntplib.py"
-spec = util.spec_from_file_location("nntplib_local", _nntplib_file)
-assert spec and spec.loader  # narrow types for mypy-like checks
-nntplib = util.module_from_spec(spec)
-spec.loader.exec_module(nntplib)
-
-
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
 MAX_SEGMENTS = 1000
-
-NNTPPermanentError = getattr(
-    nntplib, "NNTPPermanentError", type("NNTPPermanentError", (Exception,), {})
-)
-NNTPTemporaryError = getattr(
-    nntplib, "NNTPTemporaryError", type("NNTPTemporaryError", (Exception,), {})
-)
-
-log = logging.getLogger(__name__)
-
-
-_group_list_cache: dict[str, List[str]] = {}
-# Cache for autodiscovered groups when NNTP_GROUPS is unset.  The full list
-# is cached so per-request limits can be applied without re-listing groups.
-_discovered_groups: List[str] | None = None
-
-
-async def _fetch_group(server, group: str, sem: asyncio.Semaphore):
-    async with sem:
-        try:
-            _resp, _count, first, last, _name = await asyncio.to_thread(
-                server.group, group
-            )
-            limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
-            first_num, last_num = int(first), int(last)
-            xover_start = max(last_num - limit + 1, first_num)
-            _resp, overviews = await asyncio.to_thread(
-                server.xover, xover_start, last_num
-            )
-            return group, overviews
-        except Exception as exc:
-            log.debug("group %s fetch failed: %s", group, exc)
-            return None
 
 
 def build_nzb_for_release(release_id: str) -> str:
     """Return an NZB XML document for ``release_id``.
 
-    The function connects to the NNTP server configured via environment
-    variables (``NNTP_HOST``, ``NNTP_PORT``, ``NNTP_USER``, ``NNTP_PASS`` and
-    ``NNTP_GROUPS``).  All articles whose subject contains ``release_id`` are
-    collected and stitched into NZB ``<file>`` and ``<segment>`` elements.  The
-    NNTP ``XOVER`` range is capped to the most recent ``NNTP_XOVER_LIMIT``
-    articles (default ``1000``) to avoid fetching unbounded history.  Total
-    runtime across retries is bounded by ``NNTP_TOTAL_TIMEOUT`` (default
-    ``600`` seconds).
-
-    When mandatory configuration is missing or no matching articles are found
-    an :class:`newznab.NzbFetchError` is raised.  Other unexpected errors are
-    logged and a minimal stub NZB is returned for compatibility.
+    Segment information is retrieved from the database. When no segments are
+    found a :class:`newznab.NzbFetchError` is raised.
     """
 
     from . import newznab
@@ -193,256 +97,6 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nzb_timeout_seconds.cache_clear()
     log.info("starting nzb build for release %s", release_id)
     segments = _segments_from_db(release_id)
-    if segments:
-        return _build_xml_from_segments(release_id, segments)
-
-    source_groups = _source_groups_from_db(release_id)
-
-    host = os.getenv("NNTP_HOST")
-    if not host:
-        raise newznab.NzbFetchError(
-            "NNTP_HOST not configured; set the NNTP_HOST environment variable"
-        )
-
-    port = int(os.getenv("NNTP_PORT", "119"))
-    user = os.getenv("NNTP_USER")
-    password = os.getenv("NNTP_PASS")
-    ssl_env = os.getenv("NNTP_SSL")
-    use_ssl = (ssl_env == "1") if ssl_env is not None else port == nntplib.NNTP_SSL_PORT
-    conn_cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
-
-    group_env = os.getenv("NNTP_GROUPS", "")
-    try:
-        group_limit = int(os.getenv("NNTP_GROUP_LIMIT", "0"))
-    except ValueError:
-        group_limit = 0
-
-    entries: list[str] = []
-    if source_groups:
-        static_groups = list(source_groups)
-        patterns = []
-        if group_limit and len(static_groups) > group_limit:
-            static_groups = static_groups[:group_limit]
-    elif group_env.strip():
-        entries = [g.strip() for g in group_env.split(",") if g.strip()]
-        static_groups = [g for g in entries if "*" not in g and "?" not in g]
-        patterns = [g for g in entries if "*" in g or "?" in g]
-    else:
-        entries = []
-        patterns = []
-        groups = _group_list_cache.get("__all__")
-        if groups is None:
-            try:
-                from nzbidx_ingest.config import _load_groups as ingest_load_groups
-
-                groups = ingest_load_groups()
-            except Exception:
-                groups = []
-            _group_list_cache["__all__"] = groups
-        static_groups = list(groups)
-        if group_limit and len(static_groups) > group_limit:
-            static_groups = static_groups[:group_limit]
-
-    start = time.monotonic()
-    max_secs = config.nntp_total_timeout_seconds()
-
-    try:
-        delay = 1
-        for attempt in range(1, 4):
-            if time.monotonic() - start > max_secs:
-                raise newznab.NzbFetchError("nntp timeout exceeded")
-            try:
-                log.info(
-                    "nntp connection attempt %d for release %s",
-                    attempt,
-                    release_id,
-                )
-                with conn_cls(
-                    host,
-                    port,
-                    user=user,
-                    password=password,
-                    readermode=True,
-                    timeout=float(config.nntp_timeout_seconds()),
-                ) as server:
-                    log.info(
-                        "nntp connection attempt %d succeeded for release %s",
-                        attempt,
-                        release_id,
-                    )
-                    groups = list(static_groups)
-                    if not group_env.strip() and not source_groups:
-                        global _discovered_groups
-                        if _discovered_groups is None:
-                            try:
-                                _resp, listing = server.list()
-                                _discovered_groups = [
-                                    (
-                                        g[0]
-                                        if isinstance(g, (tuple, list))
-                                        else str(g).split()[0]
-                                    )
-                                    for g in listing
-                                ]
-                            except Exception:
-                                _discovered_groups = []
-                        groups.extend(_discovered_groups)
-                    elif patterns and not (group_limit and len(groups) >= group_limit):
-                        for pattern in patterns:
-                            cached = _group_list_cache.get(pattern)
-                            if cached is None:
-                                try:
-                                    _resp, listing = server.list(pattern)
-                                    cached = [
-                                        (
-                                            g[0]
-                                            if isinstance(g, (tuple, list))
-                                            else str(g).split()[0]
-                                        )
-                                        for g in listing
-                                    ]
-                                except Exception:
-                                    cached = []
-                                _group_list_cache[pattern] = cached
-                            groups.extend(cached)
-                            if group_limit and len(groups) >= group_limit:
-                                groups = groups[:group_limit]
-                                break
-                    if group_limit and len(groups) > group_limit:
-                        groups = groups[:group_limit]
-                    if not groups:
-                        raise newznab.NzbFetchError(
-                            "no NNTP groups configured; check NNTP_GROUPS"
-                        )
-                    log.info(
-                        "release %s processing %d groups",
-                        release_id,
-                        len(groups),
-                    )
-                    try:
-                        concurrency = int(os.getenv("NNTP_CONCURRENCY", "5"))
-                    except ValueError:
-                        concurrency = 5
-                    sem = asyncio.Semaphore(concurrency)
-
-                    async def _gather():
-                        tasks = [
-                            asyncio.create_task(_fetch_group(server, g, sem))
-                            for g in groups
-                        ]
-                        return await asyncio.gather(*tasks)
-
-                    results = asyncio.run(_gather())
-
-                    files: Dict[str, List[Tuple[int, int, str]]] = {}
-                    for result in results:
-                        if not result:
-                            continue
-                        group, overviews = result
-                        for ov in overviews:
-                            fields = ov[1] if isinstance(ov, (tuple, list)) else ov
-                            subject = str(fields.get("subject", ""))
-                            if release_id not in subject:
-                                continue
-                            message_id = str(fields.get("message-id") or "").strip()
-                            if not message_id:
-                                log.debug(
-                                    "skipping overview without message-id: %s", fields
-                                )
-                                continue
-                            seg_num = _extract_segment_number(subject)
-                            filename = _extract_filename(subject) or release_id
-                            size = int(fields.get("bytes") or 0)
-                            if size == 0:
-                                try:
-                                    _resp, _num, _mid, lines = server.body(
-                                        message_id, decode=False
-                                    )
-                                    size = sum(len(line) for line in lines)
-                                except Exception:
-                                    pass
-                            files.setdefault(filename, []).append(
-                                (seg_num, size, message_id)
-                            )
-                    if not files:
-                        raise newznab.NzbFetchError("no matching articles found")
-                    segment_count = sum(len(segs) for segs in files.values())
-                    log.info(
-                        "release %s processed %d segments across %d groups",
-                        release_id,
-                        segment_count,
-                        len(groups),
-                    )
-
-                    root = ET.Element("nzb", xmlns=NZB_XMLNS)
-                    for filename, segments in files.items():
-                        file_el = ET.SubElement(root, "file", {"subject": filename})
-                        groups_el = ET.SubElement(file_el, "groups")
-                        for g in groups:
-                            ET.SubElement(groups_el, "group").text = g
-                        segments_el = ET.SubElement(file_el, "segments")
-                        for number, size, msgid in sorted(segments, key=lambda s: s[0])[
-                            :MAX_SEGMENTS
-                        ]:
-                            seg_el = ET.SubElement(
-                                segments_el,
-                                "segment",
-                                {"bytes": str(size), "number": str(number)},
-                            )
-                            seg_el.text = msgid.strip("<>")
-                    return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
-                        root, encoding="unicode"
-                    )
-            except newznab.NzbFetchError:
-                raise
-            except nntplib.NNTPPermanentError as exc:
-                log.error(
-                    "nntp permanent error on attempt %d for release %s: %s",
-                    attempt,
-                    release_id,
-                    exc,
-                )
-                raise newznab.NzbFetchError(str(exc)) from exc
-            except Exception as exc:
-                log.info(
-                    "nntp connection attempt %d failed for release %s: %s",
-                    attempt,
-                    release_id,
-                    exc,
-                )
-                if attempt == 3:
-                    raise
-                log.info(
-                    "retrying nntp connection for release %s in %s seconds",
-                    release_id,
-                    delay,
-                )
-                time.sleep(delay)
-                delay *= 2
-    except newznab.NzbFetchError:
-        raise
-    except (NNTPPermanentError, NNTPTemporaryError, OSError) as exc:
-        log.warning("nntp connection failed for %s: %s", release_id, exc)
-        raise newznab.NzbFetchError("nntp connection failed") from exc
-    except Exception as exc:
-        log.exception("nzb build failed for %s: %s", release_id, exc)
-        return newznab.nzb_xml_stub(release_id)
-
-
-def _extract_filename(subject: str) -> str | None:
-    """Return filename from a ``subject`` if present."""
-
-    match = re.search(r'"(.+?)"', subject)
-    return match.group(1) if match else None
-
-
-def _extract_segment_number(subject: str) -> int:
-    """Return the segment number parsed from ``subject`` if possible."""
-
-    match = re.search(r"\((\d+)/", subject)
-    if match:
-        try:
-            return int(match.group(1))
-        except ValueError:
-            pass
-    return 1
+    if not segments:
+        raise newznab.NzbFetchError("no segments for release")
+    return _build_xml_from_segments(release_id, segments)
