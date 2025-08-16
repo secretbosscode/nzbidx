@@ -883,7 +883,7 @@ async def api(request: Request) -> Response:
             logger.warning(
                 "nzb fetch failed: %s",
                 exc,
-                extra={"release_id": release_id, "error": str(exc)},
+                extra={"release_id": release_id, "detail": str(exc)},
             )
             resp = nzb_unavailable(str(exc))
             resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
