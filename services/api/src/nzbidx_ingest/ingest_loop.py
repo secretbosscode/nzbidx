@@ -233,22 +233,37 @@ def _process_groups(
             elif result:
                 inserted = {r[0] for r in releases.values()}
             metrics["inserted"] = len(inserted)
-        if inserted and db is not None:
+        if db is not None:
             try:
                 cur = db.cursor()
                 placeholder = (
                     "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
                 )
-                placeholders = ",".join([placeholder] * len(inserted))
-                cur.execute(
-                    f"SELECT id, norm_title FROM release WHERE norm_title IN ({placeholders})",
-                    list(inserted),
-                )
-                id_map = {row[1]: row[0] for row in cur.fetchall()}
+                titles_with_parts = [t for t, v in parts.items() if v]
+                id_map: dict[str, int] = {}
+                if titles_with_parts:
+                    placeholders = ",".join([placeholder] * len(titles_with_parts))
+                    cur.execute(
+                        f"SELECT id, norm_title FROM release WHERE norm_title IN ({placeholders})",
+                        titles_with_parts,
+                    )
+                    id_map = {row[1]: row[0] for row in cur.fetchall()}
+                existing_titles = set(titles_with_parts) - inserted
+                existing_ids = [id_map[t] for t in existing_titles if t in id_map]
+                have_parts: set[int] = set()
+                if existing_ids:
+                    placeholders = ",".join([placeholder] * len(existing_ids))
+                    cur.execute(
+                        f"SELECT DISTINCT release_id FROM release_part WHERE release_id IN ({placeholders})",
+                        existing_ids,
+                    )
+                    have_parts = {row[0] for row in cur.fetchall()}
                 rows = []
-                for title in inserted:
+                for title in titles_with_parts:
                     rid = id_map.get(title)
                     if rid is None:
+                        continue
+                    if title not in inserted and rid in have_parts:
                         continue
                     for seg_num, msgid, grp, size in parts.get(title, []):
                         rows.append((rid, seg_num, msgid, grp, size))
@@ -263,7 +278,7 @@ def _process_groups(
                             "INSERT INTO release_part (release_id, segment_number, message_id, group_name, size_bytes) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
                             rows,
                         )
-                    db.commit()
+                db.commit()
                 prune_release_parts(db)
             except Exception:
                 pass
