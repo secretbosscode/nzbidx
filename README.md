@@ -85,10 +85,10 @@ there or set them via the environment before running the stack. Only a small set
 of variables are required to run the stack:
 
 The compose files and Docker image default to the standard library `json`
-module (`NZBIDX_USE_STD_JSON=1`) because `orjson` may not support the latest
-Python release. Install the optional `orjson` extra with
-`pip install "nzbidx-api[orjson]"` and set `NZBIDX_USE_STD_JSON=0` (or unset it)
-to regain the faster serializer once compatible.
+module (`NZBIDX_USE_STD_JSON=1`) for maximum compatibility because `orjson`
+may not support the latest Python release. Install the optional `orjson` extra with
+`pip install "nzbidx-api[orjson]"` and set `NZBIDX_USE_STD_JSON=0` to enable the
+faster serializer once compatible.
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ to regain the faster serializer once compatible.
 | `ALLOW_XXX` | `true` enables the XXX category | `false` |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
-| `NZBIDX_USE_STD_JSON` | `1` forces the standard library `json` module; unset or `0` uses `orjson` if installed | `1` |
+| `NZBIDX_USE_STD_JSON` | `0` uses `orjson` if installed; `1` or unset uses the standard library `json` module | `1` |
 | `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing (≥ `NNTP_TOTAL_TIMEOUT`) | `NNTP_TOTAL_TIMEOUT` (`60`) |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
 | `NNTP_PORT` | NNTP port | `119` |

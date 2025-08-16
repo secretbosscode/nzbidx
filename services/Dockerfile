@@ -5,6 +5,7 @@ RUN addgroup --system --gid 1000 nzbidx && \
 
 WORKDIR /app
 
+# Use stdlib json by default for compatibility; set to 0 to enable orjson
 ARG NZBIDX_USE_STD_JSON=1
 ENV NZBIDX_USE_STD_JSON=${NZBIDX_USE_STD_JSON}
 
