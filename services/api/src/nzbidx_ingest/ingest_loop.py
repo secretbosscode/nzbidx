@@ -267,6 +267,13 @@ def _process_groups(
                 prune_release_parts(db)
             except Exception:
                 pass
+        for title in inserted:
+            doc = docs.get(title)
+            if doc is None:
+                continue
+            count = len(parts.get(title, []))
+            doc["part_count"] = count
+            doc["has_parts"] = count > 0
         to_index = [(doc_id, docs[doc_id]) for doc_id in inserted if doc_id in docs]
         if to_index:
             os_start = time.monotonic()
