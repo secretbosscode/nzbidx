@@ -146,3 +146,53 @@ def test_quit_closes_connection(monkeypatch) -> None:
     client.quit()
 
     assert called["quit"] == 1
+
+
+def test_aio_nntp_fallback(monkeypatch) -> None:
+    """When the standard library module is missing use ``aio_nntp`` wrapper."""
+
+    # Simulate absence of the stdlib ``nntplib``
+    monkeypatch.setitem(sys.modules, "nntplib", None)
+
+    class AsyncDummy:
+        def __init__(self, host, port=119, user=None, password=None, timeout=None):
+            self.args = (host, port, user, password, timeout)
+
+        async def reader(self):  # pragma: no cover - trivial
+            return None
+
+        async def quit(self):  # pragma: no cover - trivial
+            return None
+
+        async def group(self, name):  # pragma: no cover - simple
+            return "", 0, "1", "2", name
+
+    aio_stub = SimpleNamespace(NNTP=AsyncDummy)
+    monkeypatch.setitem(sys.modules, "aio_nntp", SimpleNamespace(client=aio_stub))
+    monkeypatch.setitem(sys.modules, "aio_nntp.client", aio_stub)
+
+    import importlib
+
+    # Reload compatibility layer and client to pick up the fake modules
+    import nzbidx_ingest.nntp_compat as nntp_compat
+    importlib.reload(nntp_compat)
+    import nzbidx_ingest.nntp_client as nntp_client_reload
+    importlib.reload(nntp_client_reload)
+
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+
+    client = nntp_client_reload.NNTPClient()
+    high = client.high_water_mark("alt.binaries.example")
+
+    assert high == 2
+    assert getattr(client._server._client, "args") == (
+        "example.com",
+        119,
+        None,
+        None,
+        30.0,
+    )
+
+    # Restore original modules for other tests
+    importlib.reload(nntp_compat)
+    importlib.reload(nntp_client)
