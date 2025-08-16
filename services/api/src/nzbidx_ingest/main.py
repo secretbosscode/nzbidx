@@ -181,7 +181,7 @@ def connect_db() -> Any:
                     (
                         """
                         CREATE TABLE IF NOT EXISTS release (
-                            id SERIAL PRIMARY KEY,
+                            id BIGSERIAL PRIMARY KEY,
                             norm_title TEXT UNIQUE,
                             category TEXT,
                             language TEXT NOT NULL DEFAULT 'und',
