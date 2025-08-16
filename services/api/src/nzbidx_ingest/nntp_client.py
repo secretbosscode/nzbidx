@@ -8,10 +8,10 @@ from typing import Optional
 
 from nzbidx_api import config
 
-try:  # pragma: no cover - nntplib is standard library but allow overriding
-    import nntplib  # type: ignore
-except Exception:  # pragma: no cover - extremely unlikely
-    nntplib = None  # type: ignore
+# ``nntplib`` is scheduled for removal in Python 3.13.  Import it via a
+# compatibility layer that can fall back to third-party implementations when
+# the standard library module is absent.
+from .nntp_compat import nntplib
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,8 @@ class NNTPClient:
     # ------------------------------------------------------------------
     # Connection helpers
     def _create_server(self) -> nntplib.NNTP:
+        if nntplib is None:  # pragma: no cover - no compatible library
+            raise RuntimeError("No NNTP library available")
         cls = nntplib.NNTP_SSL if self.use_ssl else nntplib.NNTP
         return cls(
             self.host,
