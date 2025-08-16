@@ -848,11 +848,9 @@ async def api(request: Request) -> Response:
             logger.warning(
                 "nzb fetch failed: %s", exc, extra={"release_id": release_id}
             )
-            if "timeout" in str(exc).lower():
-                resp = nzb_timeout(str(exc))
-                resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
-                return resp
-            return nzb_unavailable(str(exc))
+            resp = nzb_unavailable(str(exc))
+            resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
+            return resp
         except asyncio.TimeoutError:
             logger.warning(
                 "nzb fetch timed out after %ss",
