@@ -66,6 +66,10 @@ async def search_releases_async(
     api_key:
         Optional API key appended to the item link.
     """
+    query = dict(query)
+    filters = list(query.get("filter") or [])
+    filters.append({"term": {"has_parts": True}})
+    query["filter"] = filters
     body: Dict[str, Any] = {
         "query": {"bool": query},
         "size": limit,
