@@ -9,6 +9,7 @@ stub NZB document for compatibility.  The overall runtime is capped by the
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -108,6 +109,24 @@ _group_list_cache: dict[str, List[str]] = {}
 # Cache for autodiscovered groups when NNTP_GROUPS is unset.  The full list
 # is cached so per-request limits can be applied without re-listing groups.
 _discovered_groups: List[str] | None = None
+
+
+async def _fetch_group(server, group: str, sem: asyncio.Semaphore):
+    async with sem:
+        try:
+            _resp, _count, first, last, _name = await asyncio.to_thread(
+                server.group, group
+            )
+            limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
+            first_num, last_num = int(first), int(last)
+            xover_start = max(last_num - limit + 1, first_num)
+            _resp, overviews = await asyncio.to_thread(
+                server.xover, xover_start, last_num
+            )
+            return group, overviews
+        except Exception as exc:
+            log.debug("group %s fetch failed: %s", group, exc)
+            return None
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -254,16 +273,26 @@ def build_nzb_for_release(release_id: str) -> str:
                         release_id,
                         len(groups),
                     )
+                    try:
+                        concurrency = int(os.getenv("NNTP_CONCURRENCY", "5"))
+                    except ValueError:
+                        concurrency = 5
+                    sem = asyncio.Semaphore(concurrency)
+
+                    async def _gather():
+                        tasks = [
+                            asyncio.create_task(_fetch_group(server, g, sem))
+                            for g in groups
+                        ]
+                        return await asyncio.gather(*tasks)
+
+                    results = asyncio.run(_gather())
+
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
-                    for group in groups:
-                        try:
-                            _resp, _count, first, last, _name = server.group(group)
-                            limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
-                            first_num, last_num = int(first), int(last)
-                            xover_start = max(last_num - limit + 1, first_num)
-                            _resp, overviews = server.xover(xover_start, last_num)
-                        except Exception:
+                    for result in results:
+                        if not result:
                             continue
+                        group, overviews = result
                         for ov in overviews:
                             fields = ov[1] if isinstance(ov, (tuple, list)) else ov
                             subject = str(fields.get("subject", ""))
