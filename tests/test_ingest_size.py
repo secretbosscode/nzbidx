@@ -14,7 +14,7 @@ from nzbidx_ingest import config, cursors  # type: ignore
 import nzbidx_api.search as search_mod  # type: ignore
 
 
-def test_ingested_releases_include_size(monkeypatch) -> None:
+def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
     captured: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
@@ -34,11 +34,16 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
             return [{"subject": "Example", ":bytes": "456"}]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    conn = sqlite3.connect(":memory:")
-    conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
-    )
-    monkeypatch.setattr(loop, "connect_db", lambda: conn)
+    db_path = tmp_path / "db.sqlite"
+
+    def _connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        )
+        return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
     monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
 
     def fake_bulk(_client, docs):
@@ -51,7 +56,8 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
     assert captured
     doc_id, body = captured[0]
     assert body.get("size_bytes") == 456
-    row = conn.execute("SELECT norm_title, size_bytes FROM release").fetchone()
+    with sqlite3.connect(db_path) as check:
+        row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
     assert row == ("example", 456)
 
     class DummySearchClient:
@@ -84,7 +90,7 @@ def test_ingested_releases_include_size(monkeypatch) -> None:
     assert items[0]["size"] == "456"
 
 
-def test_multi_part_release_size_summed(monkeypatch) -> None:
+def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
     captured: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
@@ -107,11 +113,16 @@ def test_multi_part_release_size_summed(monkeypatch) -> None:
             ]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    conn = sqlite3.connect(":memory:")
-    conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
-    )
-    monkeypatch.setattr(loop, "connect_db", lambda: conn)
+    db_path = tmp_path / "db.sqlite"
+
+    def _connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        )
+        return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
     monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
 
     def fake_bulk(_client, docs):
@@ -124,10 +135,12 @@ def test_multi_part_release_size_summed(monkeypatch) -> None:
     assert captured
     doc_id, body = captured[0]
     assert body.get("size_bytes") == 300
-    row = conn.execute("SELECT norm_title, size_bytes FROM release").fetchone()
+    with sqlite3.connect(db_path) as check:
+        row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
     assert row == ("example", 300)
 
-def test_zero_byte_release_skipped(monkeypatch) -> None:
+
+def test_zero_byte_release_skipped(monkeypatch, tmp_path) -> None:
     captured: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
@@ -147,11 +160,16 @@ def test_zero_byte_release_skipped(monkeypatch) -> None:
             return [{"subject": "Example", ":bytes": "0"}]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    conn = sqlite3.connect(":memory:")
-    conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
-    )
-    monkeypatch.setattr(loop, "connect_db", lambda: conn)
+    db_path = tmp_path / "db.sqlite"
+
+    def _connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        )
+        return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
     monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
 
     def fake_bulk(_client, docs):
@@ -162,5 +180,6 @@ def test_zero_byte_release_skipped(monkeypatch) -> None:
     loop.run_once()
 
     assert not captured
-    row = conn.execute("SELECT * FROM release").fetchone()
+    with sqlite3.connect(db_path) as check:
+        row = check.execute("SELECT * FROM release").fetchone()
     assert row is None

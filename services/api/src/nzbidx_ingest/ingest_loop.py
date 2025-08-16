@@ -79,33 +79,13 @@ class _AggregateMetrics:
         return summary
 
 
-def run_once() -> float:
-    """Process a single batch for each configured NNTP group.
-
-    Returns the suggested delay before the next poll.
-    """
-    groups = config.NNTP_GROUPS or config._load_groups()
-    ignored = set(config.IGNORE_GROUPS or [])
-    if ignored:
-        logger.info("ingest_ignore_groups", extra={"groups": list(ignored)})
-    groups = [g for g in groups if g not in ignored]
-    if not groups:
-        logger.info("ingest_no_groups")
-        return INGEST_POLL_MAX_SECONDS
-    skip = set(cursors.get_irrelevant_groups())
-    if skip:
-        groups = [g for g in groups if g not in skip]
-    if not groups:
-        logger.info("ingest_no_groups")
-        return INGEST_POLL_MAX_SECONDS
-    config.NNTP_GROUPS = groups
-    logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
-
-    client = NNTPClient()
-    client.connect()
-    db = connect_db()
-    os_client = connect_opensearch()
-
+def _process_groups(
+    client: NNTPClient,
+    db: object,
+    os_client: object | None,
+    groups: list[str],
+    ignored: set[str],
+) -> float:
     aggregate = _AggregateMetrics()
 
     for ig in ignored:
@@ -290,8 +270,7 @@ def run_once() -> float:
         _log_counter += 1
         log_fn = logger.debug
         if metrics["inserted"] > 0 or (
-            config.INGEST_LOG_EVERY > 0
-            and _log_counter % config.INGEST_LOG_EVERY == 0
+            config.INGEST_LOG_EVERY > 0 and _log_counter % config.INGEST_LOG_EVERY == 0
         ):
             log_fn = logger.info
         log_fn("ingest_batch", extra=metrics)
@@ -326,6 +305,61 @@ def run_once() -> float:
         INGEST_POLL_MAX_SECONDS - INGEST_POLL_MIN_SECONDS
     ) * (1 - ratio)
     return delay
+
+
+def run_once() -> float:
+    """Process a single batch for each configured NNTP group.
+
+    Returns the suggested delay before the next poll.
+    """
+    groups = config.NNTP_GROUPS or config._load_groups()
+    ignored = set(config.IGNORE_GROUPS or [])
+    if ignored:
+        logger.info("ingest_ignore_groups", extra={"groups": list(ignored)})
+    groups = [g for g in groups if g not in ignored]
+    if not groups:
+        logger.info("ingest_no_groups")
+        return INGEST_POLL_MAX_SECONDS
+    skip = set(cursors.get_irrelevant_groups())
+    if skip:
+        groups = [g for g in groups if g not in skip]
+    if not groups:
+        logger.info("ingest_no_groups")
+        return INGEST_POLL_MAX_SECONDS
+    config.NNTP_GROUPS = groups
+    logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
+
+    client = NNTPClient()
+    db = None
+    os_client: object | None = None
+    try:
+        client.connect()
+        db = connect_db()
+        os_client = connect_opensearch()
+        return _process_groups(client, db, os_client, groups, ignored)
+    finally:
+        try:
+            client.quit()
+        except Exception:
+            pass
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
+        if os_client is not None:
+            try:
+                close = getattr(os_client, "close", None)
+                if callable(close):
+                    close()
+                else:
+                    transport = getattr(os_client, "transport", None)
+                    if transport is not None:
+                        tclose = getattr(transport, "close", None)
+                        if callable(tclose):
+                            tclose()
+            except Exception:
+                pass
 
 
 def run_forever(stop_event: Event | None = None) -> None:
