@@ -120,7 +120,7 @@ def build_nzb_for_release(release_id: str) -> str:
     NNTP ``XOVER`` range is capped to the most recent ``NNTP_XOVER_LIMIT``
     articles (default ``1000``) to avoid fetching unbounded history.  Total
     runtime across retries is bounded by ``NNTP_TOTAL_TIMEOUT`` (default
-    ``60`` seconds).
+    ``600`` seconds).
 
     When mandatory configuration is missing or no matching articles are found
     an :class:`newznab.NzbFetchError` is raised.  Other unexpected errors are

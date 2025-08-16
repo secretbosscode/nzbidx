@@ -70,14 +70,14 @@ def cors_origins() -> List[str]:
 def nzb_timeout_seconds() -> int:
     """Maximum seconds to wait for NZB generation.
 
-    Defaults to ``NNTP_TOTAL_TIMEOUT`` (``60`` seconds) and guarantees the
+    Defaults to ``NNTP_TOTAL_TIMEOUT`` (``600`` seconds) and guarantees the
     returned timeout is at least as long as the NNTP total timeout. This
     avoids the API request timing out before the underlying NNTP operations
     complete. To override, set ``NZB_TIMEOUT_SECONDS`` to a value greater than
     or equal to ``NNTP_TOTAL_TIMEOUT``.
     """
 
-    nntp_total = _int_env("NNTP_TOTAL_TIMEOUT", 60)
+    nntp_total = _int_env("NNTP_TOTAL_TIMEOUT", 600)
     timeout = _int_env("NZB_TIMEOUT_SECONDS", nntp_total)
     if timeout < nntp_total:
         logger.warning(
@@ -98,7 +98,7 @@ def nntp_timeout_seconds() -> int:
 @lru_cache()
 def nntp_total_timeout_seconds() -> int:
     """Total allowed time for NNTP operations across retries."""
-    return _int_env("NNTP_TOTAL_TIMEOUT", 60)
+    return _int_env("NNTP_TOTAL_TIMEOUT", 600)
 
 
 @lru_cache()
