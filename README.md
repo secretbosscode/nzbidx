@@ -113,7 +113,8 @@ faster serializer once compatible.
 | `NNTP_SSL` | `1` enables SSL, `0` forces plaintext; auto when unset (SSL if port 563) | _(auto)_ |
 | `NNTP_USER` | NNTP username | _(required for ingest worker)_ |
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
-| `NNTP_GROUPS` | Groups to ingest (comma separated) | _(auto-discovered if unset)_ |
+| `NNTP_GROUPS` | NNTP groups to scan (comma separated, wildcards allowed) | _(none)_ |
+| `NNTP_GROUP_LIMIT` | Maximum groups to enumerate when using wildcards | _(unlimited)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `60` |
@@ -161,19 +162,26 @@ existing releases:
 The script inserts segment metadata for each release and drops entries that no
 longer resolve via NNTP.
 
+An authenticated admin endpoint can also trigger the job asynchronously:
+
+    curl -X POST -H 'X-Api-Key: dev' http://localhost:8080/api/admin/backfill
+
+Repeat requests report the current progress while the backfill runs.
+
 ## Ingest
 
 The API container also runs an ingest worker which polls NNTP groups and stores
 release metadata. Set the required NNTP environment variables and start the
-stack. When `NNTP_GROUPS` is omitted all available `alt.binaries.*` groups are
-discovered automatically. Use `NNTP_TIMEOUT` to adjust the socket timeout for
-slow or flaky providers and `NNTP_TOTAL_TIMEOUT` to cap overall retry time. To
-invoke a one-off ingest loop manually:
+stack. Supply `NNTP_GROUPS` with a curated comma-separated list for better
+performance. Wildcard patterns like `alt.binaries.*` are expanded via
+`server.list`; set `NNTP_GROUP_LIMIT` to cap enumeration. Use `NNTP_TIMEOUT` to
+adjust the socket timeout for slow or flaky providers and `NNTP_TOTAL_TIMEOUT`
+to cap overall retry time. To invoke a one-off ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username
     export NNTP_PASS=secret
-    export NNTP_GROUPS=alt.binaries.example  # optional; auto-discovered if unset
+    export NNTP_GROUPS=alt.binaries.example  # recommended to set explicitly
     docker compose exec api python -m nzbidx_ingest
 
 ## Auth & Rate Limit

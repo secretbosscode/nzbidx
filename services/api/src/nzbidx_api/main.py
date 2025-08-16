@@ -115,6 +115,8 @@ from .newznab import (
     caps_xml,
     get_nzb,
     NzbFetchError,
+    NntpConfigError,
+    NntpNoArticlesError,
     is_adult_category,
     rss_xml,
     MOVIE_CATEGORY_IDS,
@@ -143,19 +145,45 @@ from .config import (
     max_param_bytes,
     search_ttl_seconds,
     nzb_timeout_seconds,
-    nntp_total_timeout_seconds,
     os_primary_shards,
     os_replicas,
-    validate_nntp_config,
 )
 from .metrics_log import start as start_metrics, inc_api_5xx
 from .access_log import AccessLogMiddleware
+from .backfill_release_parts import backfill_release_parts
 
 _stop_metrics: Callable[[], None] | None = None
 _ingest_stop: threading.Event | None = None
 _ingest_thread: threading.Thread | None = None
+_backfill_thread: threading.Thread | None = None
+_backfill_status: dict[str, object] = {"status": "idle", "processed": 0}
 
 logger = logging.getLogger(__name__)
+
+NNTP_ERROR_MESSAGES = {
+    NntpConfigError: (
+        "NNTP configuration missing; set NNTP_HOST, NNTP_PORT, NNTP_USER, "
+        "NNTP_PASS and NNTP_GROUPS environment variables."
+    ),
+    NntpNoArticlesError: (
+        "No NNTP articles found for release; verify NNTP_GROUPS and the "
+        "release identifier."
+    ),
+}
+
+
+def _backfill_progress(count: int) -> None:
+    _backfill_status["processed"] = count
+
+
+def _run_backfill() -> None:
+    try:
+        processed = backfill_release_parts(progress_cb=_backfill_progress)
+        _backfill_status.update({"status": "complete", "processed": processed})
+        logger.info("backfill_complete", extra={"processed": processed})
+    except Exception as exc:  # pragma: no cover - defensive
+        _backfill_status.update({"status": "error", "error": str(exc)})
+        logger.exception("backfill_failed", exc_info=exc)
 
 
 class JsonFormatter(logging.Formatter):
@@ -418,13 +446,6 @@ def init_cache() -> None:
     asyncio.run(init_cache_async())
 
 
-def log_timeout_settings() -> None:
-    """Log effective timeout configuration on startup."""
-    nzb = nzb_timeout_seconds()  # triggers warning if misconfigured
-    nntp_total = nntp_total_timeout_seconds()
-    logger.info("NZB_TIMEOUT_SECONDS=%s NNTP_TOTAL_TIMEOUT=%s", nzb, nntp_total)
-
-
 async def shutdown() -> None:
     """Close global connections on shutdown."""
     global opensearch, cache
@@ -509,13 +530,20 @@ async def status(request: Request) -> ORJSONResponse:
     return ORJSONResponse(payload)
 
 
-async def config_info(request: Request) -> ORJSONResponse:
-    """Expose effective timeout configuration for diagnostics."""
-    payload = {
-        "nzb_timeout_seconds": nzb_timeout_seconds(),
-        "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
-    }
-    return ORJSONResponse(payload)
+async def admin_backfill(request: Request) -> ORJSONResponse:
+    """Trigger or query a background backfill of release parts."""
+    global _backfill_thread
+    if _backfill_thread and _backfill_thread.is_alive():
+        return ORJSONResponse(
+            {"status": "running", "processed": _backfill_status.get("processed", 0)}
+        )
+    if _backfill_status["status"] in {"complete", "error"}:
+        return ORJSONResponse(_backfill_status)
+    _backfill_status.update({"status": "running", "processed": 0})
+    logger.info("backfill_started")
+    _backfill_thread = threading.Thread(target=_run_backfill, daemon=True)
+    _backfill_thread.start()
+    return ORJSONResponse({"status": "started"})
 
 
 async def admin_takedown(request: Request) -> ORJSONResponse:
@@ -857,12 +885,6 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
-        missing = validate_nntp_config()
-        if missing:
-            msg = "missing NNTP config: " + ", ".join(missing)
-            resp = nzb_unavailable(msg)
-            resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
-            return resp
         if cache is None:
             await init_cache_async()
         logger.info("fetching nzb", extra={"release_id": release_id})
@@ -880,12 +902,13 @@ async def api(request: Request) -> Response:
         except CircuitOpenError:
             return breaker_open()
         except NzbFetchError as exc:
+            msg = NNTP_ERROR_MESSAGES.get(type(exc), str(exc))
             logger.warning(
                 "nzb fetch failed: %s",
-                exc,
-                extra={"release_id": release_id, "detail": str(exc)},
+                msg,
+                extra={"release_id": release_id, "error": str(exc)},
             )
-            resp = nzb_unavailable(str(exc))
+            resp = nzb_unavailable(msg)
             resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
             return resp
         except asyncio.TimeoutError:
@@ -910,7 +933,7 @@ routes = [
     Route("/health", health),
     Route("/api/health", health),
     Route("/api/status", status),
-    Route("/api/config", config_info),
+    Route("/api/admin/backfill", admin_backfill, methods=["POST"]),
     Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
     Route("/openapi.json", openapi_json),
@@ -931,7 +954,6 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[
-        log_timeout_settings,
         apply_schema,
         init_opensearch,
         init_cache_async,
