@@ -31,7 +31,9 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
     try:
         conn = connect_db()
     except Exception:
-        log.warning("database connection failed for release %s", release_id, exc_info=True)
+        log.warning(
+            "database connection failed for release %s", release_id, exc_info=True
+        )
         return []
     try:
         cur = conn.cursor()
