@@ -127,21 +127,79 @@ def test_build_nzb_without_host(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
-def test_build_nzb_without_groups(monkeypatch) -> None:
+def test_build_nzb_autodiscovers_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.delenv("NNTP_GROUP_LIMIT", raising=False)
 
-    class Boom(DummyNNTP):
+    class AutoDummy(DummyNNTP):
         def __init__(self, *_args, **_kwargs):
-            raise RuntimeError("should not connect")
+            super().__init__(*_args, **_kwargs)
+            self.list_called = 0
+            self.group_calls: list[str] = []
+
+        def list(self, _pattern=None):
+            self.list_called += 1
+            return "", [
+                ("alt.binaries.example", "", "", ""),
+                ("alt.binaries.other", "", "", ""),
+            ]
+
+        def group(self, group):
+            self.group_calls.append(group)
+            return super().group(group)
 
     monkeypatch.setattr(
         nzb_builder,
         "nntplib",
-        SimpleNamespace(NNTP=Boom, NNTP_SSL=Boom, NNTP_SSL_PORT=563),
+        SimpleNamespace(NNTP=AutoDummy, NNTP_SSL=AutoDummy, NNTP_SSL_PORT=563),
     )
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
+    monkeypatch.setattr(nzb_builder, "_discovered_groups", None)
+
+    nzb_builder.build_nzb_for_release("MyRelease")
+    inst = AutoDummy.instance
+    assert inst is not None
+    assert inst.list_called == 1
+    assert inst.group_calls == [
+        "alt.binaries.example",
+        "alt.binaries.other",
+    ]
+
+
+def test_build_nzb_autodiscovers_group_limit(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setenv("NNTP_GROUP_LIMIT", "1")
+
+    class AutoDummy(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            super().__init__(*_args, **_kwargs)
+            self.list_called = 0
+            self.group_calls: list[str] = []
+
+        def list(self, _pattern=None):
+            self.list_called += 1
+            return "", [
+                ("alt.binaries.example", "", "", ""),
+                ("alt.binaries.other", "", "", ""),
+            ]
+
+        def group(self, group):
+            self.group_calls.append(group)
+            return super().group(group)
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=AutoDummy, NNTP_SSL=AutoDummy, NNTP_SSL_PORT=563),
+    )
+    monkeypatch.setattr(nzb_builder, "_discovered_groups", None)
+
+    nzb_builder.build_nzb_for_release("MyRelease")
+    inst = AutoDummy.instance
+    assert inst is not None
+    assert inst.list_called == 1
+    assert inst.group_calls == ["alt.binaries.example"]
 
 
 def test_build_nzb_without_matches(monkeypatch) -> None:
