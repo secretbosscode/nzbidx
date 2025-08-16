@@ -12,3 +12,8 @@ Set `NNTP_GROUPS` to the relevant groups to avoid scanning the entire server.
 Alternatively, increase `NNTP_TOTAL_TIMEOUT` and `NZB_TIMEOUT_SECONDS` to allow
 more time for the NZB build to complete.
 
+## Diagnostics
+
+Use `/api/config` to retrieve the effective `NNTP_TOTAL_TIMEOUT` and
+`NZB_TIMEOUT_SECONDS` values for troubleshooting.
+

@@ -111,6 +111,27 @@ def test_status_endpoint() -> None:
         assert data["breaker"]["redis"] == "closed"
 
 
+def test_config_endpoint(monkeypatch) -> None:
+    """Config endpoint exposes effective timeout settings."""
+    monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "77")
+    monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "80")
+    from nzbidx_api import config as cfg
+
+    cfg.nzb_timeout_seconds.cache_clear()
+    cfg.nntp_total_timeout_seconds.cache_clear()
+    with TestClient(app) as client:
+        response = client.get("/api/config", params={"apikey": "secret"})
+        assert response.status_code == 200
+        if hasattr(response, "json"):
+            data = response.json()
+        else:
+            data = json.loads(response.body)
+        assert data["nzb_timeout_seconds"] == 80
+        assert data["nntp_total_timeout_seconds"] == 77
+    cfg.nzb_timeout_seconds.cache_clear()
+    cfg.nntp_total_timeout_seconds.cache_clear()
+
+
 def test_takedown_deletes_release(monkeypatch) -> None:
     class DummyOS:
         def __init__(self) -> None:

@@ -24,6 +24,7 @@ sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
+import nzbidx_api.config as api_config  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
 from nzbidx_ingest.main import (
     CATEGORY_MAP,
@@ -96,14 +97,6 @@ class DummyNNTP:
         return "", 0, message_id, []
 
 
-class AutoNNTP(DummyNNTP):
-    list_calls = 0
-
-    def list(self, _pattern: str | None = None):
-        AutoNNTP.list_calls += 1
-        return "", [("alt.binaries.example", "0", "0", "0")]
-
-
 class DummyNNTPTuple(DummyNNTP):
     def xover(self, start, end):  # pragma: no cover - simple
         return (
@@ -128,29 +121,30 @@ class DummyNNTPTuple(DummyNNTP):
             ],
         )
 
+def test_validate_nntp_config_missing(monkeypatch) -> None:
+    for var in ("NNTP_HOST", "NNTP_PORT", "NNTP_USER", "NNTP_PASS", "NNTP_GROUPS"):
+        monkeypatch.delenv(var, raising=False)
+    missing = api_config.validate_nntp_config()
+    assert set(missing) == {
+        "NNTP_HOST",
+        "NNTP_PORT",
+        "NNTP_USER",
+        "NNTP_PASS",
+        "NNTP_GROUPS",
+    }
 
-def test_build_nzb_without_host(monkeypatch) -> None:
-    monkeypatch.delenv("NNTP_HOST", raising=False)
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
 
+def test_getnzb_missing_nntp_config(monkeypatch) -> None:
+    async def boom_get_nzb(_release_id, _cache):
+        raise AssertionError("should not be called")
 
-def test_build_nzb_without_groups(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    nzb_builder._group_list_cache = None
-
-    class EmptyList(DummyNNTP):
-        def list(self, _pattern: str | None = None):
-            return "", []
-
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=EmptyList, NNTP_SSL=EmptyList, NNTP_SSL_PORT=563),
-    )
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
+    monkeypatch.setattr(api_main, "get_nzb", boom_get_nzb)
+    monkeypatch.setattr(api_main, "validate_nntp_config", lambda: ["NNTP_HOST"])
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
+    resp = asyncio.run(api_main.api(req))
+    assert resp.status_code == 503
+    body = json.loads(resp.body)
+    assert body["error"]["code"] == "nzb_unavailable"
 
 
 def test_build_nzb_without_matches(monkeypatch) -> None:
@@ -750,6 +744,7 @@ def test_getnzb_timeout(monkeypatch) -> None:
     monkeypatch.setattr(api_main, "nzb_timeout_seconds", lambda: 0.01)
     cache = DummyAsyncCache()
     monkeypatch.setattr(api_main, "cache", cache)
+    monkeypatch.setattr(api_main, "validate_nntp_config", lambda: [])
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 504
@@ -764,6 +759,7 @@ def test_getnzb_fetch_error_retry_after(monkeypatch) -> None:
         raise newznab.NzbFetchError("boom")
 
     monkeypatch.setattr(api_main, "get_nzb", error_get_nzb)
+    monkeypatch.setattr(api_main, "validate_nntp_config", lambda: [])
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 503
@@ -777,6 +773,7 @@ def test_getnzb_sets_content_disposition(monkeypatch) -> None:
         return "<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", fake_get_nzb)
+    monkeypatch.setattr(api_main, "validate_nntp_config", lambda: [])
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 200
@@ -884,6 +881,7 @@ def test_cached_nzb_served(monkeypatch, cache_cls) -> None:
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", fake_build)
 
+    monkeypatch.setattr(api_main, "validate_nntp_config", lambda: [])
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
     resp1 = asyncio.run(api_main.api(req))
     assert resp1.status_code == 200
@@ -1019,23 +1017,6 @@ def test_ignores_overview_without_message_id(monkeypatch) -> None:
     assert "msg1@example.com" in xml
     assert "456" not in xml
 
-
-def test_builds_nzb_auto_groups(monkeypatch) -> None:
-    monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    nzb_builder._group_list_cache = None
-    AutoNNTP.list_calls = 0
-    monkeypatch.setattr(
-        nzb_builder,
-        "nntplib",
-        SimpleNamespace(NNTP=AutoNNTP, NNTP_SSL=AutoNNTP, NNTP_SSL_PORT=563),
-    )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert "msg1@example.com" in xml
-    assert "msg2@example.com" in xml
-    assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
-    nzb_builder.build_nzb_for_release("MyRelease")
-    assert AutoNNTP.list_calls == 1
 
 
 def test_builds_nzb_auto_ssl(monkeypatch) -> None:
