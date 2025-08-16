@@ -30,6 +30,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
     try:
         conn = connect_db()
     except Exception:
+        log.warning("database connection failed for release %s", release_id, exc_info=True)
         return []
     try:
         cur = conn.cursor()
@@ -45,7 +46,11 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             f"SELECT segment_number, message_id, group_name, size_bytes FROM release_part WHERE release_id = {placeholder} ORDER BY segment_number",
             (rid,),
         )
-        return [(int(a), str(b), str(c), int(d or 0)) for a, b, c, d in cur.fetchall()]
+        rows = cur.fetchall()
+        if not rows:
+            log.debug("release %s has no release_part rows", release_id)
+            return []
+        return [(int(a), str(b), str(c), int(d or 0)) for a, b, c, d in rows]
     except Exception:
         return []
     finally:
