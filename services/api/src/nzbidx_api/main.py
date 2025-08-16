@@ -143,6 +143,7 @@ from .config import (
     max_param_bytes,
     search_ttl_seconds,
     nzb_timeout_seconds,
+    nntp_total_timeout_seconds,
     os_primary_shards,
     os_replicas,
 )
@@ -416,6 +417,13 @@ def init_cache() -> None:
     asyncio.run(init_cache_async())
 
 
+def log_timeout_settings() -> None:
+    """Log effective timeout configuration on startup."""
+    nzb = nzb_timeout_seconds()  # triggers warning if misconfigured
+    nntp_total = nntp_total_timeout_seconds()
+    logger.info("NZB_TIMEOUT_SECONDS=%s NNTP_TOTAL_TIMEOUT=%s", nzb, nntp_total)
+
+
 async def shutdown() -> None:
     """Close global connections on shutdown."""
     global opensearch, cache
@@ -497,6 +505,15 @@ async def status(request: Request) -> ORJSONResponse:
         payload["redis"] = "down"
     payload["breaker"]["os"] = os_breaker.state()
     payload["breaker"]["redis"] = redis_breaker.state()
+    return ORJSONResponse(payload)
+
+
+async def config_info(request: Request) -> ORJSONResponse:
+    """Expose effective timeout configuration for diagnostics."""
+    payload = {
+        "nzb_timeout_seconds": nzb_timeout_seconds(),
+        "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
+    }
     return ORJSONResponse(payload)
 
 
@@ -886,6 +903,7 @@ routes = [
     Route("/health", health),
     Route("/api/health", health),
     Route("/api/status", status),
+    Route("/api/config", config_info),
     Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
     Route("/openapi.json", openapi_json),
@@ -906,6 +924,7 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[
+        log_timeout_settings,
         apply_schema,
         init_opensearch,
         init_cache_async,
