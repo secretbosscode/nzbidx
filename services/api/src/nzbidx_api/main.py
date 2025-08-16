@@ -14,7 +14,7 @@ from typing import Optional, Callable
 
 from nzbidx_common.os import OS_RELEASES_ALIAS
 import threading
-from nzbidx_ingest.ingest_loop import run_forever
+from nzbidx_ingest import ingest_loop
 
 # Default to the standard library JSON module unless explicitly disabled
 if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
@@ -197,13 +197,14 @@ setup_logging()
 setup_tracing()
 
 _START_TIME = time.monotonic()
+INGEST_STALE_SECONDS = int(os.getenv("INGEST_STALE_SECONDS", "600"))
 
 
 def start_ingest() -> None:
     global _ingest_stop, _ingest_thread
     _ingest_stop = threading.Event()
     _ingest_thread = threading.Thread(
-        target=run_forever, args=(_ingest_stop,), daemon=True
+        target=ingest_loop.run_forever, args=(_ingest_stop,), daemon=True
     )
     _ingest_thread.start()
 
@@ -455,6 +456,15 @@ async def health(request: Request) -> ORJSONResponse:
     else:
         payload["redis"] = "down"
         payload["redis_latency_ms"] = 0
+    last = getattr(ingest_loop, "last_run", 0.0)
+    payload["ingest_last_run"] = int(last)
+    age = time.time() - last if last else None
+    payload["ingest_age_seconds"] = int(age) if age is not None else None
+    if age is None or age > INGEST_STALE_SECONDS:
+        payload["ingest"] = "stale"
+        payload["status"] = "warn"
+    else:
+        payload["ingest"] = "ok"
     payload["version"] = VERSION or "dev"
     payload["uptime_ms"] = int((time.monotonic() - _START_TIME) * 1000)
     payload["build"] = BUILD

@@ -7,10 +7,12 @@ import inspect
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
 os.environ["API_KEYS"] = "secret"
+os.environ["INGEST_STALE_SECONDS"] = "5"
 
 # Ensure local packages are importable
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +73,29 @@ def test_health_endpoint() -> None:
     with TestClient(app) as client:
         response = client.get("/api/health", params={"apikey": "secret"})
         assert response.status_code == 200
+
+
+def test_health_ingest_warning() -> None:
+    """Health endpoint warns when ingest is stale."""
+    with TestClient(app) as client:
+        # Simulate stale ingest
+        main.ingest_loop.last_run = time.time() - 10
+        response = client.get("/api/health", params={"apikey": "secret"})
+        if hasattr(response, "json"):
+            data = response.json()
+        else:
+            data = json.loads(response.body)
+        assert data["status"] == "warn"
+        assert data["ingest"] == "stale"
+
+        # Now simulate recent ingest
+        main.ingest_loop.last_run = time.time()
+        response = client.get("/api/health", params={"apikey": "secret"})
+        if hasattr(response, "json"):
+            data = response.json()
+        else:
+            data = json.loads(response.body)
+        assert data["ingest"] == "ok"
 
 
 def test_status_endpoint() -> None:

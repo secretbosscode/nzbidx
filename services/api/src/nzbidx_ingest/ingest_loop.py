@@ -51,6 +51,9 @@ _group_failures: dict[str, int] = {}
 # Counter used to throttle how often batch metrics are logged at INFO level.
 _log_counter = 0
 
+# Timestamp of the last successful ingest iteration (seconds since epoch).
+last_run: float = 0.0
+
 
 class _AggregateMetrics:
     """Helper to accumulate metrics across groups during a poll cycle."""
@@ -357,6 +360,7 @@ def run_once() -> float:
 
     Returns the suggested delay before the next poll.
     """
+    global last_run
     groups = config.NNTP_GROUPS or config._load_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
@@ -364,12 +368,14 @@ def run_once() -> float:
     groups = [g for g in groups if g not in ignored]
     if not groups:
         logger.info("ingest_no_groups")
+        last_run = time.time()
         return INGEST_POLL_MAX_SECONDS
     skip = set(cursors.get_irrelevant_groups())
     if skip:
         groups = [g for g in groups if g not in skip]
     if not groups:
         logger.info("ingest_no_groups")
+        last_run = time.time()
         return INGEST_POLL_MAX_SECONDS
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
@@ -381,7 +387,9 @@ def run_once() -> float:
         client.connect()
         db = connect_db()
         os_client = connect_opensearch()
-        return _process_groups(client, db, os_client, groups, ignored)
+        delay = _process_groups(client, db, os_client, groups, ignored)
+        last_run = time.time()
+        return delay
     finally:
         try:
             client.quit()
