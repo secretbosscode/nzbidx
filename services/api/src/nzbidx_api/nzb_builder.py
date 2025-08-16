@@ -136,7 +136,9 @@ def build_nzb_for_release(release_id: str) -> str:
 
     host = os.getenv("NNTP_HOST")
     if not host:
-        raise newznab.NzbFetchError("NNTP_HOST not configured")
+        raise newznab.NzbFetchError(
+            "NNTP_HOST not configured; set the NNTP_HOST environment variable"
+        )
 
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
@@ -187,7 +189,9 @@ def build_nzb_for_release(release_id: str) -> str:
                             except Exception:
                                 groups = []
                     if not groups:
-                        raise newznab.NzbFetchError("no NNTP groups configured")
+                        raise newznab.NzbFetchError(
+                            "no NNTP groups configured or discovered; check NNTP_GROUPS or server list"
+                        )
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
                     for group in groups:
                         try:
