@@ -159,6 +159,38 @@ def test_build_nzb_autodiscover_groups(monkeypatch) -> None:
     assert CaptureGroup.seen == ["alt.binaries.example"]
 
 
+def test_build_nzb_autodiscover_without_config(monkeypatch) -> None:
+    """When no groups are configured, autodiscovery should still work."""
+
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
+    monkeypatch.setattr(nzb_builder, "_discovered_groups", None, raising=False)
+
+    # Ingest configuration returns no groups
+    monkeypatch.setattr(ingest_config, "_load_groups", lambda: [], raising=False)
+
+    class CaptureList(DummyNNTP):
+        seen: list[str] = []
+
+        def list(self, pattern=None):  # type: ignore[override]
+            return "", [("alt.binaries.example", "", "", "")]
+
+        def group(self, group):  # type: ignore[override]
+            CaptureList.seen.append(group)
+            return super().group(group)
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=CaptureList, NNTP_SSL=CaptureList, NNTP_SSL_PORT=563),
+    )
+
+    nzb_builder.build_nzb_for_release("MyRelease")
+
+    assert CaptureList.seen == ["alt.binaries.example"]
+
+
 def test_build_nzb_autodiscover_group_limit(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)

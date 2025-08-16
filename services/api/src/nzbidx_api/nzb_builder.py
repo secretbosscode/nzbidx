@@ -195,7 +195,7 @@ def build_nzb_for_release(release_id: str) -> str:
                     timeout=float(config.nntp_timeout_seconds()),
                 ) as server:
                     groups = list(static_groups)
-                    if not entries:
+                    if not group_env.strip():
                         global _discovered_groups
                         if _discovered_groups is None:
                             try:
