@@ -419,14 +419,24 @@ def test_build_nzb_logs_all_attempts(monkeypatch, caplog) -> None:
     )
     monkeypatch.setattr(nzb_builder.time, "sleep", lambda _delay: None)
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.INFO):
         with pytest.raises(newznab.NzbFetchError):
             nzb_builder.build_nzb_for_release("MyRelease")
 
     attempt_logs = [
-        r for r in caplog.records if r.message.startswith("NNTP connection attempt")
+        r
+        for r in caplog.records
+        if r.message.startswith("nntp connection attempt")
+        and "failed" not in r.message
+        and "succeeded" not in r.message
+    ]
+    fail_logs = [
+        r
+        for r in caplog.records
+        if r.message.startswith("nntp connection attempt") and "failed" in r.message
     ]
     assert len(attempt_logs) == 3
+    assert len(fail_logs) == 3
 
 
 def test_nzb_timeout_defaults(monkeypatch) -> None:
