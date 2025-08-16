@@ -12,24 +12,23 @@ clients can correlate the entry with a specific request.
 
 ## Ingest Metrics
 
-The ingestion loop emits an `ingest_batch` log after processing each NNTP group.
-Fields included in the log are described below. Legacy keys are still emitted
-for backward compatibility.
+The ingestion loop logs a summary after processing each NNTP group. Fields
+included in the log are described below.
 
-| Field | Legacy Key | Description |
-| --- | --- | --- |
-| `processed` | – | Headers processed in the batch. |
-| `inserted` | – | Releases written to the database. |
-| `indexed` | – | Releases indexed into OpenSearch. |
-| `deduplicated` | `deduped` | Releases skipped due to duplicate detection. |
-| `duration_ms` | – | Total processing time for the batch. |
-| `average_batch_ms` | `avg_batch_ms` | Average processing time per header. |
-| `opensearch_latency_ms` | `os_latency_ms` | Time spent bulk indexing into OpenSearch. |
-| `average_database_latency_ms` | `avg_db_ms` | Average database write latency per header. |
-| `average_opensearch_latency_ms` | `avg_os_ms` | Average OpenSearch indexing latency per document. |
-| `cursor` | – | Last article number processed. |
-| `high_water` | – | Highest article number available on the server. |
-| `remaining` | – | Articles still pending processing. |
-| `percent_complete` | `pct_complete` | Progress relative to the high-water mark. |
-| `eta_seconds` | `eta_s` | Estimated time to ingest remaining articles. |
-| `group` | – | NNTP group associated with the batch. |
+| Field | Description |
+| --- | --- |
+| `processed` | Headers processed in the batch. |
+| `inserted` | Releases written to the database. |
+| `indexed` | Releases indexed into OpenSearch. |
+| `deduplicated` | Releases skipped due to duplicate detection. |
+| `duration_ms` | Total processing time for the batch. |
+| `average_batch_ms` | Average processing time per header. |
+| `opensearch_latency_ms` | Time spent bulk indexing into OpenSearch. |
+| `average_database_latency_ms` | Average database write latency per header. |
+| `average_opensearch_latency_ms` | Average OpenSearch indexing latency per document. |
+| `cursor` | Last article number processed. |
+| `high_water` | Highest article number available on the server. |
+| `remaining` | Articles still pending processing. |
+| `percent_complete` | Progress relative to the high-water mark. |
+| `eta_seconds` | Estimated time to ingest remaining articles. |
+| `group` | NNTP group associated with the batch. |

@@ -441,11 +441,9 @@ async def health(request: Request) -> ORJSONResponse:
         except Exception:
             payload["os"] = "down"
         payload["opensearch_latency_ms"] = int((time.monotonic() - start) * 1000)
-        payload["os_latency_ms"] = payload["opensearch_latency_ms"]
     else:
         payload["os"] = "down"
         payload["opensearch_latency_ms"] = 0
-        payload["os_latency_ms"] = 0
     if cache:
         start = time.monotonic()
         try:  # pragma: no cover - network errors
