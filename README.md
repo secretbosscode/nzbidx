@@ -362,6 +362,17 @@ images install it from `pyproject.toml`, but local environments may need to run
 `pip install psycopg[binary]>=3.1`. Without the driver the ingest worker will
 log `psycopg_unavailable` and fall back to SQLite.
 
+## Backfilling release parts
+
+NZB downloads rely on `release_part` rows that map releases to their segments.
+If these rows are missing—for example after migrating an older database—NZB
+requests will fail with `404` responses such as `nzb fetch failed: no segments
+for release`. Populate missing segments with:
+
+```
+docker compose exec nzbidx python scripts/backfill_release_parts.py
+```
+
 ## Backups
 
 OpenSearch snapshots can be stored in S3 or GCS. Configure the repository via
