@@ -25,6 +25,7 @@ sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
+import nzbidx_ingest.config as ingest_config  # type: ignore
 from nzbidx_ingest.main import (
     CATEGORY_MAP,
     _infer_category,
@@ -127,21 +128,63 @@ def test_build_nzb_without_host(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
-def test_build_nzb_without_groups(monkeypatch) -> None:
+def test_build_nzb_autodiscover_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
 
-    class Boom(DummyNNTP):
-        def __init__(self, *_args, **_kwargs):
-            raise RuntimeError("should not connect")
+    called: dict[str, bool] = {}
+
+    def fake_load() -> list[str]:
+        called["ok"] = True
+        return ["alt.binaries.example"]
+
+    monkeypatch.setattr(ingest_config, "_load_groups", fake_load, raising=False)
+
+    class CaptureGroup(DummyNNTP):
+        seen: list[str] = []
+
+        def group(self, group):  # type: ignore[override]
+            CaptureGroup.seen.append(group)
+            return super().group(group)
 
     monkeypatch.setattr(
         nzb_builder,
         "nntplib",
-        SimpleNamespace(NNTP=Boom, NNTP_SSL=Boom, NNTP_SSL_PORT=563),
+        SimpleNamespace(NNTP=CaptureGroup, NNTP_SSL=CaptureGroup, NNTP_SSL_PORT=563),
     )
-    with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
+    nzb_builder.build_nzb_for_release("MyRelease")
+
+    assert called["ok"] is True
+    assert CaptureGroup.seen == ["alt.binaries.example"]
+
+
+def test_build_nzb_autodiscover_group_limit(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setenv("NNTP_GROUP_LIMIT", "1")
+    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
+
+    def fake_load() -> list[str]:
+        return ["alt.binaries.example", "alt.binaries.other"]
+
+    monkeypatch.setattr(ingest_config, "_load_groups", fake_load, raising=False)
+
+    class CaptureGroup(DummyNNTP):
+        seen: list[str] = []
+
+        def group(self, group):  # type: ignore[override]
+            CaptureGroup.seen.append(group)
+            return super().group(group)
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(NNTP=CaptureGroup, NNTP_SSL=CaptureGroup, NNTP_SSL_PORT=563),
+    )
+    nzb_builder.build_nzb_for_release("MyRelease")
+
+    assert CaptureGroup.seen == ["alt.binaries.example"]
 
 
 def test_build_nzb_without_matches(monkeypatch) -> None:

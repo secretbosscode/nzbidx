@@ -148,17 +148,29 @@ def build_nzb_for_release(release_id: str) -> str:
     conn_cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
 
     group_env = os.getenv("NNTP_GROUPS", "")
-    if not group_env.strip():
-        raise newznab.NzbFetchError(
-            "NNTP_GROUPS not configured; set NNTP_GROUPS to a comma-separated list or wildcard pattern",
-        )
     try:
         group_limit = int(os.getenv("NNTP_GROUP_LIMIT", "0"))
     except ValueError:
         group_limit = 0
-    entries = [g.strip() for g in group_env.split(",") if g.strip()]
-    static_groups = [g for g in entries if "*" not in g and "?" not in g]
-    patterns = [g for g in entries if "*" in g or "?" in g]
+
+    if group_env.strip():
+        entries = [g.strip() for g in group_env.split(",") if g.strip()]
+        static_groups = [g for g in entries if "*" not in g and "?" not in g]
+        patterns = [g for g in entries if "*" in g or "?" in g]
+    else:
+        patterns = []
+        groups = _group_list_cache.get("__all__")
+        if groups is None:
+            try:
+                from nzbidx_ingest.config import _load_groups as ingest_load_groups
+
+                groups = ingest_load_groups()
+            except Exception:
+                groups = []
+            _group_list_cache["__all__"] = groups
+        static_groups = list(groups)
+        if group_limit and len(static_groups) > group_limit:
+            static_groups = static_groups[:group_limit]
 
     start = time.monotonic()
     max_secs = config.nntp_total_timeout_seconds()

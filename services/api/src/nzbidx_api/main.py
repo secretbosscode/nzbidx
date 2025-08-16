@@ -145,6 +145,7 @@ from .config import (
     max_param_bytes,
     search_ttl_seconds,
     nzb_timeout_seconds,
+    nntp_total_timeout_seconds,
     os_primary_shards,
     os_replicas,
 )
@@ -933,6 +934,15 @@ routes = [
     Route("/health", health),
     Route("/api/health", health),
     Route("/api/status", status),
+    Route(
+        "/api/config",
+        lambda request: ORJSONResponse(
+            {
+                "nzb_timeout_seconds": nzb_timeout_seconds(),
+                "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
+            }
+        ),
+    ),
     Route("/api/admin/backfill", admin_backfill, methods=["POST"]),
     Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
