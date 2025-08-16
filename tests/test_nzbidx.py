@@ -567,6 +567,12 @@ def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 404
     assert "Retry-After" not in resp.headers
+    assert json.loads(resp.body) == {
+        "error": {
+            "code": "nzb_not_found",
+            "message": "No segments found for release 1",
+        }
+    }
 
 
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
