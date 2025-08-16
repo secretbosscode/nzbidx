@@ -15,7 +15,7 @@ import nzbidx_api.search as search_mod  # type: ignore
 from nzbidx_ingest.parsers import normalize_subject  # type: ignore
 
 
-def test_part_rar_segments_collapsed(monkeypatch) -> None:
+def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
     captured: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
@@ -38,11 +38,16 @@ def test_part_rar_segments_collapsed(monkeypatch) -> None:
             ]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    conn = sqlite3.connect(":memory:")
-    conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
-    )
-    monkeypatch.setattr(loop, "connect_db", lambda: conn)
+    db_path = tmp_path / "db.sqlite"
+
+    def _connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        )
+        return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
     monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
 
     def fake_bulk(_client, docs):
@@ -55,7 +60,8 @@ def test_part_rar_segments_collapsed(monkeypatch) -> None:
     assert len(captured) == 1
     doc_id, body = captured[0]
     assert body.get("size_bytes") == 300
-    rows = conn.execute("SELECT norm_title, size_bytes FROM release").fetchall()
+    with sqlite3.connect(db_path) as check:
+        rows = check.execute("SELECT norm_title, size_bytes FROM release").fetchall()
     assert rows == [("release", 300)]
 
     class DummySearchClient:
