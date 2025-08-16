@@ -23,9 +23,9 @@ spec:
         - name: DATABASE_URL
           value: postgresql://postgres:postgres@postgres:5432/postgres
         - name: NNTP_TOTAL_TIMEOUT
-          value: "60"
+          value: "600"
         - name: NZB_TIMEOUT_SECONDS
-          value: "60" # should be ≥ NNTP_TOTAL_TIMEOUT
+          value: "600" # should be ≥ NNTP_TOTAL_TIMEOUT
         ports:
         - containerPort: 8080
         readinessProbe:

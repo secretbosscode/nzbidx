@@ -445,7 +445,7 @@ def test_nzb_timeout_defaults(monkeypatch) -> None:
     monkeypatch.delenv("NZB_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("NNTP_TOTAL_TIMEOUT", raising=False)
     api_config.nzb_timeout_seconds.cache_clear()
-    assert api_config.nzb_timeout_seconds() == 60
+    assert api_config.nzb_timeout_seconds() == 600
 
 
 def test_nzb_timeout_uses_nntp_total(monkeypatch) -> None:

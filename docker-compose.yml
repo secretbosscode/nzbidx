@@ -40,8 +40,8 @@ services:
       NNTP_USER: ""
       NNTP_PASS: ""
       NNTP_GROUPS: ""
-      NNTP_TOTAL_TIMEOUT: 60
-      NZB_TIMEOUT_SECONDS: 60 # should be ≥ NNTP_TOTAL_TIMEOUT
+      NNTP_TOTAL_TIMEOUT: 600
+      NZB_TIMEOUT_SECONDS: 600 # should be ≥ NNTP_TOTAL_TIMEOUT
       SEARCH_TTL_SECONDS: 60
   opensearch:
     image: opensearchproject/opensearch:2
