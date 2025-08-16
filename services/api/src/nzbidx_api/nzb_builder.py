@@ -104,8 +104,6 @@ NNTPTemporaryError = getattr(
 log = logging.getLogger(__name__)
 
 
-
-
 def build_nzb_for_release(release_id: str) -> str:
     """Return an NZB XML document for ``release_id``.
 
@@ -173,7 +171,10 @@ def build_nzb_for_release(release_id: str) -> str:
                             first_num, last_num = int(first), int(last)
                             xover_start = max(last_num - limit + 1, first_num)
                             log.debug(
-                                "xover range for %s: %s-%s", group, xover_start, last_num
+                                "xover range for %s: %s-%s",
+                                group,
+                                xover_start,
+                                last_num,
                             )
                             if xover_start > first_num:
                                 search_limited = True
