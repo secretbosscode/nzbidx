@@ -416,19 +416,30 @@ def index_release(
 
 def bulk_index_releases(
     client: Optional[object],
-    docs: list[tuple[str, dict[str, object]]],
+    docs: list[tuple[str, dict[str, object] | None]],
 ) -> None:
-    """Index multiple releases into OpenSearch using the bulk API."""
+    """Index multiple releases into OpenSearch using the bulk API.
+
+    Passing ``None`` as the document body issues a delete operation for the
+    corresponding identifier.
+    """
     global _os_warned
     if not client or not docs:
         return
     for i in range(0, len(docs), INGEST_OS_BULK):
         lines: list[str] = []
         for doc_id, body in docs[i : i + INGEST_OS_BULK]:
+            if body is None:
+                lines.append(
+                    json.dumps({"delete": {"_index": OS_RELEASES_ALIAS, "_id": doc_id}})
+                )
+                continue
             lines.append(
                 json.dumps({"index": {"_index": OS_RELEASES_ALIAS, "_id": doc_id}})
             )
             lines.append(json.dumps(body))
+        if not lines:
+            continue
         payload = "\n".join(lines) + "\n"
         try:  # pragma: no cover - network errors
             client.bulk(body=payload, refresh=False)

@@ -151,6 +151,16 @@ under the `nzbidx-releases` alias and rollover automatically. Indices move to
 the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
 `ILM_DELETE_DAYS` (default `180`).
 
+## Backfill Release Parts
+
+After deploying a schema that adds the `release_part` table, populate it for
+existing releases:
+
+    docker compose exec nzbidx python scripts/backfill_release_parts.py
+
+The script inserts segment metadata for each release and drops entries that no
+longer resolve via NNTP.
+
 ## Ingest
 
 The API container also runs an ingest worker which polls NNTP groups and stores

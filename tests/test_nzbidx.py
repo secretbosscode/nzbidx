@@ -372,11 +372,24 @@ def test_bulk_index_releases_builds_payload() -> None:
         "index": {"_index": OS_RELEASES_ALIAS, "_id": "id1"}
     }
     assert json.loads(lines[1])["norm_title"] == "one"
-    assert json.loads(lines[2]) == {
-        "index": {"_index": OS_RELEASES_ALIAS, "_id": "id2"}
+
+
+def test_bulk_index_releases_deletes() -> None:
+    """Passing ``None`` deletes documents via the bulk API."""
+
+    captured: dict[str, object] = {}
+
+    class DummyClient:
+        def bulk(self, *, body: str, refresh: bool) -> None:  # type: ignore[override]
+            captured["body"] = body
+
+    bulk_index_releases(DummyClient(), [("id1", None)])
+
+    lines = captured["body"].splitlines()
+    assert lines and json.loads(lines[0]) == {
+        "delete": {"_index": OS_RELEASES_ALIAS, "_id": "id1"}
     }
-    assert json.loads(lines[3])["norm_title"] == "two"
-    assert captured["refresh"] is False
+    assert len(lines) == 1
 
 
 def test_os_search_multiple_categories(monkeypatch) -> None:
