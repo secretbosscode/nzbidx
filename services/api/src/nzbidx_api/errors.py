@@ -27,5 +27,9 @@ def nzb_unavailable(message: str = "nzb temporarily unavailable") -> ORJSONRespo
     return error_response("nzb_unavailable", message, 503)
 
 
+def nzb_timeout(message: str = "nzb fetch timed out") -> ORJSONResponse:
+    return error_response("nzb_timeout", message, 504)
+
+
 def invalid_params(message: str = "invalid parameters") -> ORJSONResponse:
     return error_response("invalid_params", message, 400)

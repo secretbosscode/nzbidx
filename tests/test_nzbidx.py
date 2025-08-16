@@ -719,7 +719,7 @@ def test_strips_adult_cats_when_disallowed(monkeypatch) -> None:
 
 
 def test_getnzb_timeout(monkeypatch) -> None:
-    """Slow NZB generation should return 503 after timeout."""
+    """Slow NZB generation should return 504 after timeout."""
 
     async def slow_get_nzb(_release_id, _cache):
         await asyncio.sleep(0.1)
@@ -729,7 +729,8 @@ def test_getnzb_timeout(monkeypatch) -> None:
     monkeypatch.setattr(api_main, "nzb_timeout_seconds", lambda: 0.01)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
-    assert resp.status_code == 503
+    assert resp.status_code == 504
+    assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
 
 
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
