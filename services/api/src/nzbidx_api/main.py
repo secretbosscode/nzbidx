@@ -135,7 +135,12 @@ from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker, redis_breaker
 from .otel import current_trace_id, setup_tracing
-from .errors import invalid_params, breaker_open, nzb_unavailable, nzb_timeout
+from .errors import (
+    invalid_params,
+    breaker_open,
+    nzb_timeout,
+    nzb_not_found,
+)
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
 from .config import (
@@ -918,9 +923,7 @@ async def api(request: Request) -> Response:
                 msg,
                 extra={"release_id": release_id, "error": str(exc)},
             )
-            resp = nzb_unavailable(msg)
-            resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
-            return resp
+            return nzb_not_found(msg)
         except asyncio.TimeoutError:
             logger.warning(
                 "nzb fetch timed out after %ss",
