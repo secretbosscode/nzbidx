@@ -420,7 +420,10 @@ def run_forever(stop_event: Event | None = None) -> None:
     while not (stop_event and stop_event.is_set()):
         try:
             delay = run_once()
-        except Exception:
+        except BaseException as exc:  # pragma: no cover
+            if isinstance(exc, KeyboardInterrupt):
+                logger.info("ingest_loop_interrupted")
+                raise
             logger.exception("ingest_loop_failure")
             delay = INGEST_POLL_MAX_SECONDS
         delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
