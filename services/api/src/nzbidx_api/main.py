@@ -837,10 +837,17 @@ async def api(request: Request) -> Response:
             return invalid_params("missing id")
         if cache is None:
             await init_cache_async()
+        logger.info("fetching nzb", extra={"release_id": release_id})
+        start = time.perf_counter()
         try:
             xml = await asyncio.wait_for(
                 get_nzb(release_id, cache),
                 timeout=nzb_timeout_seconds(),
+            )
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            logger.info(
+                "nzb fetched",
+                extra={"release_id": release_id, "duration_ms": duration_ms},
             )
         except CircuitOpenError:
             return breaker_open()
@@ -865,7 +872,12 @@ async def api(request: Request) -> Response:
                             cache.setex(key, newznab.FAIL_TTL, newznab.FAIL_SENTINEL)
                         )
                 except Exception as exc:  # pragma: no cover - cache failure
-                    logger.warning("redis setex failed for %s: %s", release_id, exc)
+                    logger.warning(
+                        "redis setex failed for %s: %s",
+                        release_id,
+                        exc,
+                        extra={"release_id": release_id},
+                    )
             resp = nzb_timeout("nzb fetch timed out")
             resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
             return resp
