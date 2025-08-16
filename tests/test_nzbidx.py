@@ -119,6 +119,44 @@ def test_build_nzb_missing_segments_raises(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
+def test_segments_from_db_missing_release_logs(monkeypatch, caplog) -> None:
+    """Missing release should emit a structured warning."""
+
+    class DummyCursor:
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchone(self):
+            return None
+
+        def fetchall(self):
+            return []
+
+    class DummyConn:
+        def cursor(self):
+            return DummyCursor()
+
+        def close(self):
+            pass
+
+    DummyConn.__module__ = "sqlite3"
+
+    def _connect() -> DummyConn:
+        return DummyConn()
+
+    monkeypatch.setattr(main, "connect_db", _connect)
+    with caplog.at_level(logging.WARNING):
+        rows = nzb_builder._segments_from_db("missing")
+
+    assert rows == []
+    assert any(
+        rec.message == "db_query_failed"
+        and rec.release_id == "missing"
+        and rec.exception == "LookupError"
+        for rec in caplog.records
+    )
+
+
 def test_builds_nzb_from_db(monkeypatch) -> None:
     """Segments fetched from the DB should generate an NZB."""
 
