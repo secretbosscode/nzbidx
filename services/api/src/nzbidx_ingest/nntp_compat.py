@@ -6,6 +6,7 @@ Python versions where it has been removed (3.13+), fall back to the
 with synchronous helpers so the rest of the code can continue to use the
 blocking ``nntplib`` API.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,6 +29,7 @@ else:  # pragma: no cover - only exercised in tests
     if _aio_client is None:  # pragma: no cover - no usable library
         nntplib = None  # type: ignore
     else:
+
         class _NNTPCompat:
             """Minimal synchronous wrapper around :mod:`aio_nntp`."""
 
