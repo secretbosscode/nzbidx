@@ -145,6 +145,7 @@ from .config import (
     max_param_bytes,
     search_ttl_seconds,
     nzb_timeout_seconds,
+    nntp_total_timeout_seconds,
     os_primary_shards,
     os_replicas,
 )
@@ -527,6 +528,15 @@ async def status(request: Request) -> ORJSONResponse:
         payload["redis"] = "down"
     payload["breaker"]["os"] = os_breaker.state()
     payload["breaker"]["redis"] = redis_breaker.state()
+    return ORJSONResponse(payload)
+
+
+async def config_endpoint(request: Request) -> ORJSONResponse:
+    """Expose effective timeout configuration values."""
+    payload = {
+        "nzb_timeout_seconds": nzb_timeout_seconds(),
+        "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
+    }
     return ORJSONResponse(payload)
 
 
@@ -933,6 +943,7 @@ routes = [
     Route("/health", health),
     Route("/api/health", health),
     Route("/api/status", status),
+    Route("/api/config", config_endpoint),
     Route("/api/admin/backfill", admin_backfill, methods=["POST"]),
     Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
