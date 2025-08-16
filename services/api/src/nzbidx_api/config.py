@@ -163,3 +163,24 @@ def os_primary_shards() -> int:
 @lru_cache()
 def os_replicas() -> int:
     return _int_env("OS_REPLICAS", 0)
+
+
+def validate_nntp_config() -> List[str]:
+    """Check required NNTP configuration variables.
+
+    Returns a list of any missing variables after logging an error. This
+    allows callers to gracefully handle misconfiguration before attempting to
+    perform NNTP operations.
+    """
+
+    required = [
+        "NNTP_HOST",
+        "NNTP_PORT",
+        "NNTP_USER",
+        "NNTP_PASS",
+        "NNTP_GROUPS",
+    ]
+    missing = [name for name in required if not os.getenv(name)]
+    if missing:
+        logger.error("missing NNTP configuration: %s", ", ".join(missing))
+    return missing

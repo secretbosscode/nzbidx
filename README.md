@@ -162,6 +162,12 @@ existing releases:
 The script inserts segment metadata for each release and drops entries that no
 longer resolve via NNTP.
 
+An authenticated admin endpoint can also trigger the job asynchronously:
+
+    curl -X POST -H 'X-Api-Key: dev' http://localhost:8080/api/admin/backfill
+
+Repeat requests report the current progress while the backfill runs.
+
 ## Ingest
 
 The API container also runs an ingest worker which polls NNTP groups and stores
