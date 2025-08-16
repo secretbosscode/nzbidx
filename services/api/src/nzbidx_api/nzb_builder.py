@@ -105,6 +105,9 @@ log = logging.getLogger(__name__)
 
 
 _group_list_cache: dict[str, List[str]] = {}
+# Cache for autodiscovered groups when NNTP_GROUPS is unset.  The full list
+# is cached so per-request limits can be applied without re-listing groups.
+_discovered_groups: List[str] | None = None
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -191,7 +194,23 @@ def build_nzb_for_release(release_id: str) -> str:
                     timeout=float(config.nntp_timeout_seconds()),
                 ) as server:
                     groups = list(static_groups)
-                    if patterns and not (group_limit and len(groups) >= group_limit):
+                    if not entries:
+                        global _discovered_groups
+                        if _discovered_groups is None:
+                            try:
+                                _resp, listing = server.list()
+                                _discovered_groups = [
+                                    (
+                                        g[0]
+                                        if isinstance(g, (tuple, list))
+                                        else str(g).split()[0]
+                                    )
+                                    for g in listing
+                                ]
+                            except Exception:
+                                _discovered_groups = []
+                        groups.extend(_discovered_groups)
+                    elif patterns and not (group_limit and len(groups) >= group_limit):
                         for pattern in patterns:
                             cached = _group_list_cache.get(pattern)
                             if cached is None:
