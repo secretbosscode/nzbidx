@@ -133,6 +133,7 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_timeout_seconds.cache_clear()
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
+    log.info("starting nzb build for release %s", release_id)
     segments = _segments_from_db(release_id)
     if segments:
         return _build_xml_from_segments(release_id, segments)
@@ -186,7 +187,11 @@ def build_nzb_for_release(release_id: str) -> str:
             if time.monotonic() - start > max_secs:
                 raise newznab.NzbFetchError("nntp timeout exceeded")
             try:
-                log.info("NNTP connection attempt %d", attempt)
+                log.info(
+                    "nntp connection attempt %d for release %s",
+                    attempt,
+                    release_id,
+                )
                 with conn_cls(
                     host,
                     port,
@@ -195,6 +200,11 @@ def build_nzb_for_release(release_id: str) -> str:
                     readermode=True,
                     timeout=float(config.nntp_timeout_seconds()),
                 ) as server:
+                    log.info(
+                        "nntp connection attempt %d succeeded for release %s",
+                        attempt,
+                        release_id,
+                    )
                     groups = list(static_groups)
                     if not group_env.strip():
                         global _discovered_groups
@@ -239,6 +249,11 @@ def build_nzb_for_release(release_id: str) -> str:
                         raise newznab.NzbFetchError(
                             "no NNTP groups configured; check NNTP_GROUPS"
                         )
+                    log.info(
+                        "release %s processing %d groups",
+                        release_id,
+                        len(groups),
+                    )
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
                     for group in groups:
                         try:
@@ -276,6 +291,13 @@ def build_nzb_for_release(release_id: str) -> str:
                             )
                     if not files:
                         raise newznab.NzbFetchError("no matching articles found")
+                    segment_count = sum(len(segs) for segs in files.values())
+                    log.info(
+                        "release %s processed %d segments across %d groups",
+                        release_id,
+                        segment_count,
+                        len(groups),
+                    )
 
                     root = ET.Element("nzb", xmlns=NZB_XMLNS)
                     for filename, segments in files.items():
@@ -299,16 +321,25 @@ def build_nzb_for_release(release_id: str) -> str:
             except newznab.NzbFetchError:
                 raise
             except nntplib.NNTPPermanentError as exc:
-                log.error("NNTP permanent error on attempt %d: %s", attempt, exc)
+                log.error(
+                    "nntp permanent error on attempt %d for release %s: %s",
+                    attempt,
+                    release_id,
+                    exc,
+                )
                 raise newznab.NzbFetchError(str(exc)) from exc
             except Exception as exc:
-                if attempt == 3:
-                    log.warning("NNTP connection attempt %d failed: %s", attempt, exc)
-                    raise
-                log.warning(
-                    "NNTP connection attempt %d failed: %s; retrying in %s seconds",
+                log.info(
+                    "nntp connection attempt %d failed for release %s: %s",
                     attempt,
+                    release_id,
                     exc,
+                )
+                if attempt == 3:
+                    raise
+                log.info(
+                    "retrying nntp connection for release %s in %s seconds",
+                    release_id,
                     delay,
                 )
                 time.sleep(delay)
