@@ -189,12 +189,18 @@ def build_nzb_for_release(release_id: str) -> str:
                     if not groups:
                         raise newznab.NzbFetchError("no NNTP groups configured")
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
+                    search_limited = False
                     for group in groups:
                         try:
                             _resp, _count, first, last, _name = server.group(group)
                             limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
                             first_num, last_num = int(first), int(last)
                             xover_start = max(last_num - limit + 1, first_num)
+                            log.debug(
+                                "xover range for %s: %s-%s", group, xover_start, last_num
+                            )
+                            if xover_start > first_num:
+                                search_limited = True
                             _resp, overviews = server.xover(xover_start, last_num)
                         except Exception:
                             continue
@@ -224,7 +230,11 @@ def build_nzb_for_release(release_id: str) -> str:
                                 (seg_num, size, message_id)
                             )
                     if not files:
-                        raise newznab.NzbFetchError("no matching articles found")
+                        if search_limited:
+                            raise newznab.NzbFetchError(
+                                "release may be older than NNTP_XOVER_LIMIT"
+                            )
+                        raise newznab.NzbFetchError("release not found in NNTP groups")
 
                     root = ET.Element("nzb", xmlns=NZB_XMLNS)
                     for filename, segments in files.items():
