@@ -104,7 +104,7 @@ NNTPTemporaryError = getattr(
 log = logging.getLogger(__name__)
 
 
-_group_list_cache: List[str] | None = None
+_group_list_cache: dict[str, List[str]] = {}
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -136,9 +136,9 @@ def build_nzb_for_release(release_id: str) -> str:
 
     host = os.getenv("NNTP_HOST")
     if not host:
-        msg = "NNTP_HOST not configured; set the NNTP_HOST environment variable"
-        log.warning("nntp config error for %s: %s", release_id, msg)
-        raise newznab.NntpConfigError(msg)
+        raise newznab.NzbFetchError(
+            "NNTP_HOST not configured; set the NNTP_HOST environment variable"
+        )
 
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
@@ -147,6 +147,19 @@ def build_nzb_for_release(release_id: str) -> str:
     use_ssl = (ssl_env == "1") if ssl_env is not None else port == nntplib.NNTP_SSL_PORT
     conn_cls = nntplib.NNTP_SSL if use_ssl else nntplib.NNTP
 
+    group_env = os.getenv("NNTP_GROUPS", "")
+    if not group_env.strip():
+        raise newznab.NzbFetchError(
+            "NNTP_GROUPS not configured; set NNTP_GROUPS to a comma-separated list or wildcard pattern",
+        )
+    try:
+        group_limit = int(os.getenv("NNTP_GROUP_LIMIT", "0"))
+    except ValueError:
+        group_limit = 0
+    entries = [g.strip() for g in group_env.split(",") if g.strip()]
+    static_groups = [g for g in entries if "*" not in g and "?" not in g]
+    patterns = [g for g in entries if "*" in g or "?" in g]
+
     start = time.monotonic()
     max_secs = config.nntp_total_timeout_seconds()
 
@@ -154,7 +167,6 @@ def build_nzb_for_release(release_id: str) -> str:
         delay = 1
         for attempt in range(1, 4):
             if time.monotonic() - start > max_secs:
-                log.warning("nntp timeout exceeded for %s", release_id)
                 raise newznab.NzbFetchError("nntp timeout exceeded")
             try:
                 log.info("NNTP connection attempt %d", attempt)
@@ -166,33 +178,34 @@ def build_nzb_for_release(release_id: str) -> str:
                     readermode=True,
                     timeout=float(config.nntp_timeout_seconds()),
                 ) as server:
-                    groups = [
-                        g.strip()
-                        for g in os.getenv("NNTP_GROUPS", "").split(",")
-                        if g.strip()
-                    ]
+                    groups = list(static_groups)
+                    if patterns and not (group_limit and len(groups) >= group_limit):
+                        for pattern in patterns:
+                            cached = _group_list_cache.get(pattern)
+                            if cached is None:
+                                try:
+                                    _resp, listing = server.list(pattern)
+                                    cached = [
+                                        (
+                                            g[0]
+                                            if isinstance(g, (tuple, list))
+                                            else str(g).split()[0]
+                                        )
+                                        for g in listing
+                                    ]
+                                except Exception:
+                                    cached = []
+                                _group_list_cache[pattern] = cached
+                            groups.extend(cached)
+                            if group_limit and len(groups) >= group_limit:
+                                groups = groups[:group_limit]
+                                break
+                    if group_limit and len(groups) > group_limit:
+                        groups = groups[:group_limit]
                     if not groups:
-                        global _group_list_cache
-                        if _group_list_cache is not None:
-                            groups = _group_list_cache
-                        else:
-                            try:
-                                _resp, listing = server.list("alt.binaries.*")
-                                groups = [
-                                    (
-                                        g[0]
-                                        if isinstance(g, (tuple, list))
-                                        else str(g).split()[0]
-                                    )
-                                    for g in listing
-                                ]
-                                _group_list_cache = groups
-                            except Exception:
-                                groups = []
-                    if not groups:
-                        msg = "no NNTP groups configured or discovered; check NNTP_GROUPS or server list"
-                        log.warning("nntp config error for %s: %s", release_id, msg)
-                        raise newznab.NntpConfigError(msg)
+                        raise newznab.NzbFetchError(
+                            "no NNTP groups configured; check NNTP_GROUPS"
+                        )
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
                     for group in groups:
                         try:
@@ -229,10 +242,7 @@ def build_nzb_for_release(release_id: str) -> str:
                                 (seg_num, size, message_id)
                             )
                     if not files:
-                        log.warning(
-                            "no matching NNTP articles found for %s", release_id
-                        )
-                        raise newznab.NntpNoArticlesError("no matching articles found")
+                        raise newznab.NzbFetchError("no matching articles found")
 
                     root = ET.Element("nzb", xmlns=NZB_XMLNS)
                     for filename, segments in files.items():
