@@ -126,9 +126,10 @@ def build_nzb_for_release(release_id: str) -> str:
 
     from . import newznab
 
-    # Ensure environment changes to NNTP timeouts are honored across calls.
+    # Ensure environment changes to timeouts are honored across calls.
     config.nntp_timeout_seconds.cache_clear()
     config.nntp_total_timeout_seconds.cache_clear()
+    config.nzb_timeout_seconds.cache_clear()
     segments = _segments_from_db(release_id)
     if segments:
         return _build_xml_from_segments(release_id, segments)
