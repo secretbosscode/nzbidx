@@ -75,7 +75,6 @@ class _AggregateMetrics:
         if self._duration_s > 0 and self._processed > 0 and self._remaining > 0:
             rate = self._processed / self._duration_s
             summary["eta_seconds"] = int(self._remaining / rate)
-        summary["eta_s"] = summary["eta_seconds"]
         return summary
 
 
@@ -229,7 +228,6 @@ def _process_groups(
             metrics["indexed"] = len(to_index)
         cursors.set_cursor(group, current)
         metrics["deduplicated"] = metrics["processed"] - metrics["inserted"]
-        metrics["deduped"] = metrics["deduplicated"]
         duration_s = time.monotonic() - batch_start
         metrics["duration_ms"] = int(duration_s * 1000)
         metrics["average_batch_ms"] = (
@@ -237,9 +235,7 @@ def _process_groups(
             if metrics["processed"]
             else 0.0
         )
-        metrics["avg_batch_ms"] = metrics["average_batch_ms"]
         metrics["opensearch_latency_ms"] = int(os_latency * 1000)
-        metrics["os_latency_ms"] = metrics["opensearch_latency_ms"]
         avg_db_ms = (
             round((db_latency * 1000) / metrics["processed"], 3)
             if metrics["processed"]
@@ -252,19 +248,15 @@ def _process_groups(
         )
         metrics["average_database_latency_ms"] = avg_db_ms
         metrics["average_opensearch_latency_ms"] = avg_os_ms
-        metrics["avg_db_ms"] = avg_db_ms
-        metrics["avg_os_ms"] = avg_os_ms
         metrics["cursor"] = current
         metrics["high_water"] = high
         remaining = max(high - current, 0)
         metrics["remaining"] = remaining
         if high > 0:
             metrics["percent_complete"] = int(current / high * 100)
-            metrics["pct_complete"] = metrics["percent_complete"]
         if duration_s > 0 and metrics["processed"] > 0 and remaining > 0:
             rate = metrics["processed"] / duration_s
             metrics["eta_seconds"] = int(remaining / rate)
-            metrics["eta_s"] = metrics["eta_seconds"]
         metrics["group"] = group
         global _log_counter
         _log_counter += 1
@@ -273,7 +265,16 @@ def _process_groups(
             config.INGEST_LOG_EVERY > 0 and _log_counter % config.INGEST_LOG_EVERY == 0
         ):
             log_fn = logger.info
-        log_fn("ingest_batch", extra=metrics)
+        processed = metrics["processed"]
+        inserted = metrics["inserted"]
+        deduplicated = metrics["deduplicated"]
+        percent_complete = metrics.get("percent_complete", 0)
+        eta_seconds = metrics.get("eta_seconds", 0)
+        log_fn(
+            f"Processed {processed} items (inserted {inserted}, deduplicated {deduplicated}). "
+            f"{percent_complete}% complete, ETA {eta_seconds}s for {group}",
+            extra=metrics,
+        )
         aggregate.add(metrics)
         if metrics["inserted"] == 0:
             cursors.mark_irrelevant(group)
