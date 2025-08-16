@@ -133,7 +133,7 @@ from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker, redis_breaker
 from .otel import current_trace_id, setup_tracing, start_span
-from .errors import invalid_params, breaker_open, nzb_unavailable
+from .errors import invalid_params, breaker_open, nzb_unavailable, nzb_timeout
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
 from .config import (
@@ -854,7 +854,9 @@ async def api(request: Request) -> Response:
                         )
                 except Exception as exc:  # pragma: no cover - cache failure
                     logger.warning("redis setex failed for %s: %s", release_id, exc)
-            return nzb_unavailable("nzb fetch timed out")
+            resp = nzb_timeout("nzb fetch timed out")
+            resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
+            return resp
         return Response(
             xml,
             media_type="application/x-nzb",
