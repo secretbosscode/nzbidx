@@ -733,6 +733,19 @@ def test_getnzb_timeout(monkeypatch) -> None:
     assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
 
 
+def test_getnzb_timeout_on_fetch(monkeypatch) -> None:
+    """NzbFetchError timeout should return 504 with retry header."""
+
+    async def boom_get_nzb(_release_id, _cache):
+        raise newznab.NzbFetchError("nntp timeout exceeded")
+
+    monkeypatch.setattr(api_main, "get_nzb", boom_get_nzb)
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
+    resp = asyncio.run(api_main.api(req))
+    assert resp.status_code == 504
+    assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
+
+
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     """NZB downloads should include a content-disposition header."""
 
