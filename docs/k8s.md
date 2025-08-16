@@ -9,6 +9,11 @@ Persistent storage is required for the backing Postgres and OpenSearch
 services; use `PersistentVolumeClaim` resources or managed cloud services and
 set `DATABASE_URL` and `OPENSEARCH_URL` accordingly.
 
+The example manifest also sets `NNTP_TOTAL_TIMEOUT` and
+`NZB_TIMEOUT_SECONDS`. Adjust these to suit your deployment, ensuring
+`NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT` to avoid
+premature API timeouts during NZB generation.
+
 Apply the manifest:
 
 ```bash
