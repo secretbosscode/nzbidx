@@ -23,9 +23,14 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         return []
     try:
         conn = connect_db()
-    except Exception:
+    except Exception as exc:
         log.warning(
-            "database connection failed for release %s", release_id, exc_info=True
+            "db_connection_failed",
+            extra={
+                "release_id": release_id,
+                "exception": exc.__class__.__name__,
+                "error": str(exc),
+            },
         )
         return []
     try:
@@ -36,7 +41,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         )
         row = cur.fetchone()
         if not row:
-            return []
+            raise LookupError("release not found")
         rid = row[0]
         cur.execute(
             f"SELECT segment_number, message_id, group_name, size_bytes FROM release_part WHERE release_id = {placeholder} ORDER BY segment_number",
@@ -44,10 +49,17 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         )
         rows = cur.fetchall()
         if not rows:
-            log.debug("release %s has no release_part rows", release_id)
-            return []
+            raise LookupError("release has no release_part rows")
         return [(int(a), str(b), str(c), int(d or 0)) for a, b, c, d in rows]
-    except Exception:
+    except Exception as exc:
+        log.warning(
+            "db_query_failed",
+            extra={
+                "release_id": release_id,
+                "exception": exc.__class__.__name__,
+                "error": str(exc),
+            },
+        )
         return []
     finally:
         try:
