@@ -21,6 +21,62 @@ from typing import Dict, List, Tuple
 
 from . import config
 
+
+def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
+    try:
+        from nzbidx_ingest.main import connect_db  # type: ignore
+    except Exception:
+        return []
+    try:
+        conn = connect_db()
+    except Exception:
+        return []
+    try:
+        cur = conn.cursor()
+        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+        cur.execute(
+            f"SELECT id FROM release WHERE norm_title = {placeholder}", (release_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return []
+        rid = row[0]
+        cur.execute(
+            f"SELECT segment_number, message_id, group_name, size_bytes FROM release_part WHERE release_id = {placeholder} ORDER BY segment_number",
+            (rid,),
+        )
+        return [(int(a), str(b), str(c), int(d or 0)) for a, b, c, d in cur.fetchall()]
+    except Exception:
+        return []
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _build_xml_from_segments(
+    release_id: str, segments: List[Tuple[int, str, str, int]]
+) -> str:
+    root = ET.Element("nzb", xmlns=NZB_XMLNS)
+    file_el = ET.SubElement(root, "file", {"subject": release_id})
+    groups_el = ET.SubElement(file_el, "groups")
+    for g in sorted({g for _, _, g, _ in segments}):
+        if g:
+            ET.SubElement(groups_el, "group").text = g
+    segs_el = ET.SubElement(file_el, "segments")
+    for number, msgid, group, size in sorted(segments, key=lambda s: s[0])[
+        :MAX_SEGMENTS
+    ]:
+        seg_el = ET.SubElement(
+            segs_el, "segment", {"bytes": str(size), "number": str(number)}
+        )
+        seg_el.text = msgid.strip("<>")
+    return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
+        root, encoding="unicode"
+    )
+
+
 # Prefer the bundled ``nntplib`` implementation over the deprecated
 # standard library version.  Insert the local ``services/api/src`` path at
 # the start of ``sys.path`` so resolving the module picks up our copy.
@@ -73,6 +129,9 @@ def build_nzb_for_release(release_id: str) -> str:
     # Ensure environment changes to NNTP timeouts are honored across calls.
     config.nntp_timeout_seconds.cache_clear()
     config.nntp_total_timeout_seconds.cache_clear()
+    segments = _segments_from_db(release_id)
+    if segments:
+        return _build_xml_from_segments(release_id, segments)
 
     host = os.getenv("NNTP_HOST")
     if not host:

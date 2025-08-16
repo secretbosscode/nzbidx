@@ -18,7 +18,7 @@ from .config import (
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
-from .parsers import normalize_subject, detect_language
+from .parsers import normalize_subject, detect_language, extract_segment_number
 from .main import (
     insert_release,
     bulk_index_releases,
@@ -28,6 +28,7 @@ from .main import (
     connect_opensearch,
     CATEGORY_MAP,
     prune_group,
+    prune_release_parts,
 )
 
 try:  # pragma: no cover - optional import
@@ -148,10 +149,14 @@ def _process_groups(
             ],
         ] = {}
         docs: dict[str, dict[str, object]] = {}
+        parts: dict[str, list[tuple[int, str, str, int]]] = {}
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
             size = int(header.get("bytes") or header.get(":bytes") or 0)
             current = idx
+            message_id = str(header.get("message-id") or "").strip()
+            if size <= 0 and message_id:
+                size = client.body_size(message_id)
             if size <= 0:
                 continue
             subject = header.get("subject", "")
@@ -208,6 +213,11 @@ def _process_groups(
                 if size > 0:
                     body["size_bytes"] = size
                 docs[dedupe_key] = body
+            if message_id:
+                seg_num = extract_segment_number(subject)
+                parts.setdefault(dedupe_key, []).append(
+                    (seg_num, message_id.strip("<>"), group, size)
+                )
         db_latency = 0.0
         os_latency = 0.0
         inserted: set[str] = set()
@@ -220,6 +230,40 @@ def _process_groups(
             elif result:
                 inserted = {r[0] for r in releases.values()}
             metrics["inserted"] = len(inserted)
+        if inserted and db is not None:
+            try:
+                cur = db.cursor()
+                placeholder = (
+                    "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
+                )
+                placeholders = ",".join([placeholder] * len(inserted))
+                cur.execute(
+                    f"SELECT id, norm_title FROM release WHERE norm_title IN ({placeholders})",
+                    list(inserted),
+                )
+                id_map = {row[1]: row[0] for row in cur.fetchall()}
+                rows = []
+                for title in inserted:
+                    rid = id_map.get(title)
+                    if rid is None:
+                        continue
+                    for seg_num, msgid, grp, size in parts.get(title, []):
+                        rows.append((rid, seg_num, msgid, grp, size))
+                if rows:
+                    if db.__class__.__module__.startswith("sqlite3"):
+                        cur.executemany(
+                            "INSERT OR IGNORE INTO release_part (release_id, segment_number, message_id, group_name, size_bytes) VALUES (?, ?, ?, ?, ?)",
+                            rows,
+                        )
+                    else:
+                        cur.executemany(
+                            "INSERT INTO release_part (release_id, segment_number, message_id, group_name, size_bytes) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                            rows,
+                        )
+                    db.commit()
+                prune_release_parts(db)
+            except Exception:
+                pass
         to_index = [(doc_id, docs[doc_id]) for doc_id in inserted if doc_id in docs]
         if to_index:
             os_start = time.monotonic()

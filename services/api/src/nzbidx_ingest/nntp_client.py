@@ -154,6 +154,25 @@ class NNTPClient:
         return []
 
     # ------------------------------------------------------------------
+    def body_size(self, message_id: str) -> int:
+        """Return the size in bytes of ``message_id``."""
+        if not self.host:
+            return 0
+        for _ in range(2):
+            try:
+                server = self._ensure_connection()
+                if server is None:
+                    return 0
+                _resp, _num, _mid, lines = server.body(message_id, decode=False)
+                return sum(len(line) for line in lines)
+            except Exception:  # pragma: no cover - network failure
+                try:
+                    self._reconnect()
+                except Exception:
+                    return 0
+        return 0
+
+    # ------------------------------------------------------------------
     def list_groups(self) -> list[str]:
         """Return a list of available NNTP groups."""
         if not self.host:
