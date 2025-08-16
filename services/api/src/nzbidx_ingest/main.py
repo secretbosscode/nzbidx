@@ -27,7 +27,11 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     # to the default alias if the package is not available on ``sys.path``.
     OS_RELEASES_ALIAS = "nzbidx-releases"
 
-from .config import INGEST_OS_BULK, opensearch_timeout_seconds
+from .config import (
+    INGEST_OS_BULK,
+    RELEASE_PART_MAX_RELEASES,
+    opensearch_timeout_seconds,
+)
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
@@ -193,6 +197,19 @@ def connect_db() -> Any:
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT",
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
+                    (
+                        """
+                        CREATE TABLE IF NOT EXISTS release_part (
+                            release_id BIGINT REFERENCES release(id) ON DELETE CASCADE,
+                            segment_number INT,
+                            message_id TEXT,
+                            group_name TEXT,
+                            size_bytes BIGINT,
+                            PRIMARY KEY (release_id, segment_number)
+                        )
+                        """
+                    ),
+                    "CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx ON release_part (release_id, segment_number)",
                 ):
                     try:
                         conn.execute(text(stmt))
@@ -254,6 +271,21 @@ def connect_db() -> Any:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS release_part (
+            release_id INTEGER REFERENCES release(id) ON DELETE CASCADE,
+            segment_number INT,
+            message_id TEXT,
+            group_name TEXT,
+            size_bytes BIGINT,
+            PRIMARY KEY (release_id, segment_number)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx ON release_part (release_id, segment_number)"
     )
     return conn
 
@@ -438,10 +470,33 @@ def bulk_index_releases(
                 _os_warned = True
 
 
+def prune_release_parts(
+    conn: Any, max_releases: int = RELEASE_PART_MAX_RELEASES
+) -> None:
+    """Retain ``max_releases`` worth of segment data."""
+    if max_releases <= 0:
+        return
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(id) FROM release")
+    row = cur.fetchone()
+    if not row or row[0] is None:
+        return
+    cutoff = row[0] - max_releases
+    if cutoff <= 0:
+        return
+    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    cur.execute(f"DELETE FROM release_part WHERE release_id < {placeholder}", (cutoff,))
+    conn.commit()
+
+
 def prune_group(conn: Any, client: Optional[object], group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
     cur = conn.cursor()
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    cur.execute(
+        f"DELETE FROM release_part WHERE release_id IN (SELECT id FROM release WHERE source_group = {placeholder})",
+        (group,),
+    )
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
     if client:

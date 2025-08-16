@@ -38,6 +38,20 @@ def extract_tags(subject: str) -> list[str]:
     return tags
 
 
+_SEGMENT_RE = re.compile(r"\((\d+)/")
+
+
+def extract_segment_number(subject: str) -> int:
+    """Return the segment number parsed from ``subject`` if possible."""
+    match = _SEGMENT_RE.search(subject)
+    if match:
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return 1
+    return 1
+
+
 try:  # pragma: no cover - optional dependency
     from langdetect import DetectorFactory, detect  # type: ignore
 

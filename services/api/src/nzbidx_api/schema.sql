@@ -33,3 +33,15 @@ CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_
 CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
+
+CREATE TABLE IF NOT EXISTS release_part (
+    release_id BIGINT REFERENCES release(id) ON DELETE CASCADE,
+    segment_number INT,
+    message_id TEXT,
+    group_name TEXT,
+    size_bytes BIGINT,
+    PRIMARY KEY (release_id, segment_number)
+);
+
+CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx
+    ON release_part (release_id, segment_number);
