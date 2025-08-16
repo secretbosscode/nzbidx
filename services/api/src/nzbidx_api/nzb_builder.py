@@ -156,11 +156,13 @@ def build_nzb_for_release(release_id: str) -> str:
     except ValueError:
         group_limit = 0
 
+    entries: list[str] = []
     if group_env.strip():
         entries = [g.strip() for g in group_env.split(",") if g.strip()]
         static_groups = [g for g in entries if "*" not in g and "?" not in g]
         patterns = [g for g in entries if "*" in g or "?" in g]
     else:
+        entries = []
         patterns = []
         groups = _group_list_cache.get("__all__")
         if groups is None:
