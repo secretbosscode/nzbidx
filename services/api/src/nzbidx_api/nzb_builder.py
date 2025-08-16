@@ -1,8 +1,8 @@
 """Thin NZB builder interface.
 
 This module exposes :func:`build_nzb_for_release` which connects to an NNTP
-server to build a real NZB document.  Empty results raise
-:class:`newznab.NzbFetchError` while unexpected failures fall back to a
+server to build a real NZB document.  Missing configuration or empty results
+raise :class:`newznab.NzbFetchError` while unexpected failures fall back to a
 stub NZB document for compatibility.  The overall runtime is capped by the
 ``NNTP_TOTAL_TIMEOUT`` environment variable.
 """
@@ -104,6 +104,7 @@ NNTPTemporaryError = getattr(
 log = logging.getLogger(__name__)
 
 
+_group_list_cache: List[str] | None = None
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -133,7 +134,12 @@ def build_nzb_for_release(release_id: str) -> str:
     if segments:
         return _build_xml_from_segments(release_id, segments)
 
-    host = os.getenv("NNTP_HOST", "")
+    host = os.getenv("NNTP_HOST")
+    if not host:
+        msg = "NNTP_HOST not configured; set the NNTP_HOST environment variable"
+        log.warning("nntp config error for %s: %s", release_id, msg)
+        raise newznab.NntpConfigError(msg)
+
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
     password = os.getenv("NNTP_PASS")
@@ -148,6 +154,7 @@ def build_nzb_for_release(release_id: str) -> str:
         delay = 1
         for attempt in range(1, 4):
             if time.monotonic() - start > max_secs:
+                log.warning("nntp timeout exceeded for %s", release_id)
                 raise newznab.NzbFetchError("nntp timeout exceeded")
             try:
                 log.info("NNTP connection attempt %d", attempt)
@@ -164,19 +171,35 @@ def build_nzb_for_release(release_id: str) -> str:
                         for g in os.getenv("NNTP_GROUPS", "").split(",")
                         if g.strip()
                     ]
+                    if not groups:
+                        global _group_list_cache
+                        if _group_list_cache is not None:
+                            groups = _group_list_cache
+                        else:
+                            try:
+                                _resp, listing = server.list("alt.binaries.*")
+                                groups = [
+                                    (
+                                        g[0]
+                                        if isinstance(g, (tuple, list))
+                                        else str(g).split()[0]
+                                    )
+                                    for g in listing
+                                ]
+                                _group_list_cache = groups
+                            except Exception:
+                                groups = []
+                    if not groups:
+                        msg = "no NNTP groups configured or discovered; check NNTP_GROUPS or server list"
+                        log.warning("nntp config error for %s: %s", release_id, msg)
+                        raise newznab.NntpConfigError(msg)
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
-                    search_limited = False
                     for group in groups:
                         try:
                             _resp, _count, first, last, _name = server.group(group)
                             limit = int(os.getenv("NNTP_XOVER_LIMIT", "1000"))
                             first_num, last_num = int(first), int(last)
                             xover_start = max(last_num - limit + 1, first_num)
-                            log.debug(
-                                "xover range for %s: %s-%s", group, xover_start, last_num
-                            )
-                            if xover_start > first_num:
-                                search_limited = True
                             _resp, overviews = server.xover(xover_start, last_num)
                         except Exception:
                             continue
@@ -206,11 +229,10 @@ def build_nzb_for_release(release_id: str) -> str:
                                 (seg_num, size, message_id)
                             )
                     if not files:
-                        if search_limited:
-                            raise newznab.NzbFetchError(
-                                "release may be older than NNTP_XOVER_LIMIT"
-                            )
-                        raise newznab.NzbFetchError("release not found in NNTP groups")
+                        log.warning(
+                            "no matching NNTP articles found for %s", release_id
+                        )
+                        raise newznab.NntpNoArticlesError("no matching articles found")
 
                     root = ET.Element("nzb", xmlns=NZB_XMLNS)
                     for filename, segments in files.items():

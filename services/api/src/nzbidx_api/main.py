@@ -115,6 +115,8 @@ from .newznab import (
     caps_xml,
     get_nzb,
     NzbFetchError,
+    NntpConfigError,
+    NntpNoArticlesError,
     is_adult_category,
     rss_xml,
     MOVIE_CATEGORY_IDS,
@@ -143,10 +145,8 @@ from .config import (
     max_param_bytes,
     search_ttl_seconds,
     nzb_timeout_seconds,
-    nntp_total_timeout_seconds,
     os_primary_shards,
     os_replicas,
-    validate_nntp_config,
 )
 from .metrics_log import start as start_metrics, inc_api_5xx
 from .access_log import AccessLogMiddleware
@@ -156,6 +156,17 @@ _ingest_stop: threading.Event | None = None
 _ingest_thread: threading.Thread | None = None
 
 logger = logging.getLogger(__name__)
+
+NNTP_ERROR_MESSAGES = {
+    NntpConfigError: (
+        "NNTP configuration missing; set NNTP_HOST, NNTP_PORT, NNTP_USER, "
+        "NNTP_PASS and NNTP_GROUPS environment variables."
+    ),
+    NntpNoArticlesError: (
+        "No NNTP articles found for release; verify NNTP_GROUPS and the "
+        "release identifier."
+    ),
+}
 
 
 class JsonFormatter(logging.Formatter):
@@ -418,13 +429,6 @@ def init_cache() -> None:
     asyncio.run(init_cache_async())
 
 
-def log_timeout_settings() -> None:
-    """Log effective timeout configuration on startup."""
-    nzb = nzb_timeout_seconds()  # triggers warning if misconfigured
-    nntp_total = nntp_total_timeout_seconds()
-    logger.info("NZB_TIMEOUT_SECONDS=%s NNTP_TOTAL_TIMEOUT=%s", nzb, nntp_total)
-
-
 async def shutdown() -> None:
     """Close global connections on shutdown."""
     global opensearch, cache
@@ -506,15 +510,6 @@ async def status(request: Request) -> ORJSONResponse:
         payload["redis"] = "down"
     payload["breaker"]["os"] = os_breaker.state()
     payload["breaker"]["redis"] = redis_breaker.state()
-    return ORJSONResponse(payload)
-
-
-async def config_info(request: Request) -> ORJSONResponse:
-    """Expose effective timeout configuration for diagnostics."""
-    payload = {
-        "nzb_timeout_seconds": nzb_timeout_seconds(),
-        "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
-    }
     return ORJSONResponse(payload)
 
 
@@ -857,12 +852,6 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
-        missing = validate_nntp_config()
-        if missing:
-            msg = "missing NNTP config: " + ", ".join(missing)
-            resp = nzb_unavailable(msg)
-            resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
-            return resp
         if cache is None:
             await init_cache_async()
         logger.info("fetching nzb", extra={"release_id": release_id})
@@ -880,12 +869,13 @@ async def api(request: Request) -> Response:
         except CircuitOpenError:
             return breaker_open()
         except NzbFetchError as exc:
+            msg = NNTP_ERROR_MESSAGES.get(type(exc), str(exc))
             logger.warning(
                 "nzb fetch failed: %s",
-                exc,
-                extra={"release_id": release_id, "detail": str(exc)},
+                msg,
+                extra={"release_id": release_id, "error": str(exc)},
             )
-            resp = nzb_unavailable(str(exc))
+            resp = nzb_unavailable(msg)
             resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
             return resp
         except asyncio.TimeoutError:
@@ -910,7 +900,6 @@ routes = [
     Route("/health", health),
     Route("/api/health", health),
     Route("/api/status", status),
-    Route("/api/config", config_info),
     Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
     Route("/openapi.json", openapi_json),
@@ -931,7 +920,6 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[
-        log_timeout_settings,
         apply_schema,
         init_opensearch,
         init_cache_async,
