@@ -733,6 +733,19 @@ def test_getnzb_timeout(monkeypatch) -> None:
     assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
 
 
+def test_getnzb_fetch_error_retry_after(monkeypatch) -> None:
+    """Fetch failures should include a Retry-After header."""
+
+    async def error_get_nzb(_release_id, _cache):
+        raise newznab.NzbFetchError("boom")
+
+    monkeypatch.setattr(api_main, "get_nzb", error_get_nzb)
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
+    resp = asyncio.run(api_main.api(req))
+    assert resp.status_code == 503
+    assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
+
+
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     """NZB downloads should include a content-disposition header."""
 
