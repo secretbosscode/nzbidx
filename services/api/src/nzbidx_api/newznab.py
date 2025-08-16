@@ -40,6 +40,14 @@ class NzbFetchError(Exception):
     """Raised when an NZB document cannot be fetched."""
 
 
+class NntpConfigError(NzbFetchError):
+    """Raised when required NNTP configuration is missing."""
+
+
+class NntpNoArticlesError(NzbFetchError):
+    """Raised when no matching NNTP articles are found."""
+
+
 def adult_content_allowed() -> bool:
     """Return ``True`` if XXX content may be shown."""
     allow_xxx = os.getenv("ALLOW_XXX", "true").lower() != "false"

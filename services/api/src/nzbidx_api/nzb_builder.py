@@ -136,9 +136,9 @@ def build_nzb_for_release(release_id: str) -> str:
 
     host = os.getenv("NNTP_HOST")
     if not host:
-        raise newznab.NzbFetchError(
-            "NNTP_HOST not configured; set the NNTP_HOST environment variable"
-        )
+        msg = "NNTP_HOST not configured; set the NNTP_HOST environment variable"
+        log.warning("nntp config error for %s: %s", release_id, msg)
+        raise newznab.NntpConfigError(msg)
 
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
@@ -154,6 +154,7 @@ def build_nzb_for_release(release_id: str) -> str:
         delay = 1
         for attempt in range(1, 4):
             if time.monotonic() - start > max_secs:
+                log.warning("nntp timeout exceeded for %s", release_id)
                 raise newznab.NzbFetchError("nntp timeout exceeded")
             try:
                 log.info("NNTP connection attempt %d", attempt)
@@ -189,9 +190,9 @@ def build_nzb_for_release(release_id: str) -> str:
                             except Exception:
                                 groups = []
                     if not groups:
-                        raise newznab.NzbFetchError(
-                            "no NNTP groups configured or discovered; check NNTP_GROUPS or server list"
-                        )
+                        msg = "no NNTP groups configured or discovered; check NNTP_GROUPS or server list"
+                        log.warning("nntp config error for %s: %s", release_id, msg)
+                        raise newznab.NntpConfigError(msg)
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
                     for group in groups:
                         try:
@@ -228,7 +229,10 @@ def build_nzb_for_release(release_id: str) -> str:
                                 (seg_num, size, message_id)
                             )
                     if not files:
-                        raise newznab.NzbFetchError("no matching articles found")
+                        log.warning(
+                            "no matching NNTP articles found for %s", release_id
+                        )
+                        raise newznab.NntpNoArticlesError("no matching articles found")
 
                     root = ET.Element("nzb", xmlns=NZB_XMLNS)
                     for filename, segments in files.items():

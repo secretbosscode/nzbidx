@@ -115,6 +115,8 @@ from .newznab import (
     caps_xml,
     get_nzb,
     NzbFetchError,
+    NntpConfigError,
+    NntpNoArticlesError,
     is_adult_category,
     rss_xml,
     MOVIE_CATEGORY_IDS,
@@ -154,6 +156,17 @@ _ingest_stop: threading.Event | None = None
 _ingest_thread: threading.Thread | None = None
 
 logger = logging.getLogger(__name__)
+
+NNTP_ERROR_MESSAGES = {
+    NntpConfigError: (
+        "NNTP configuration missing; set NNTP_HOST, NNTP_PORT, NNTP_USER, "
+        "NNTP_PASS and NNTP_GROUPS environment variables."
+    ),
+    NntpNoArticlesError: (
+        "No NNTP articles found for release; verify NNTP_GROUPS and the "
+        "release identifier."
+    ),
+}
 
 
 class JsonFormatter(logging.Formatter):
@@ -856,12 +869,13 @@ async def api(request: Request) -> Response:
         except CircuitOpenError:
             return breaker_open()
         except NzbFetchError as exc:
+            msg = NNTP_ERROR_MESSAGES.get(type(exc), str(exc))
             logger.warning(
                 "nzb fetch failed: %s",
-                exc,
+                msg,
                 extra={"release_id": release_id, "error": str(exc)},
             )
-            resp = nzb_unavailable(str(exc))
+            resp = nzb_unavailable(msg)
             resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
             return resp
         except asyncio.TimeoutError:
