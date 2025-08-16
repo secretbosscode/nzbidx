@@ -1,8 +1,8 @@
 """Thin NZB builder interface.
 
 This module exposes :func:`build_nzb_for_release` which connects to an NNTP
-server to build a real NZB document.  Missing configuration or empty results
-raise :class:`newznab.NzbFetchError` while unexpected failures fall back to a
+server to build a real NZB document.  Empty results raise
+:class:`newznab.NzbFetchError` while unexpected failures fall back to a
 stub NZB document for compatibility.  The overall runtime is capped by the
 ``NNTP_TOTAL_TIMEOUT`` environment variable.
 """
@@ -104,7 +104,6 @@ NNTPTemporaryError = getattr(
 log = logging.getLogger(__name__)
 
 
-_group_list_cache: List[str] | None = None
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -134,12 +133,7 @@ def build_nzb_for_release(release_id: str) -> str:
     if segments:
         return _build_xml_from_segments(release_id, segments)
 
-    host = os.getenv("NNTP_HOST")
-    if not host:
-        raise newznab.NzbFetchError(
-            "NNTP_HOST not configured; set the NNTP_HOST environment variable"
-        )
-
+    host = os.getenv("NNTP_HOST", "")
     port = int(os.getenv("NNTP_PORT", "119"))
     user = os.getenv("NNTP_USER")
     password = os.getenv("NNTP_PASS")
@@ -170,28 +164,6 @@ def build_nzb_for_release(release_id: str) -> str:
                         for g in os.getenv("NNTP_GROUPS", "").split(",")
                         if g.strip()
                     ]
-                    if not groups:
-                        global _group_list_cache
-                        if _group_list_cache is not None:
-                            groups = _group_list_cache
-                        else:
-                            try:
-                                _resp, listing = server.list("alt.binaries.*")
-                                groups = [
-                                    (
-                                        g[0]
-                                        if isinstance(g, (tuple, list))
-                                        else str(g).split()[0]
-                                    )
-                                    for g in listing
-                                ]
-                                _group_list_cache = groups
-                            except Exception:
-                                groups = []
-                    if not groups:
-                        raise newznab.NzbFetchError(
-                            "no NNTP groups configured or discovered; check NNTP_GROUPS or server list"
-                        )
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
                     for group in groups:
                         try:

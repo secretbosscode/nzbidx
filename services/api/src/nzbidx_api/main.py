@@ -146,6 +146,7 @@ from .config import (
     nntp_total_timeout_seconds,
     os_primary_shards,
     os_replicas,
+    validate_nntp_config,
 )
 from .metrics_log import start as start_metrics, inc_api_5xx
 from .access_log import AccessLogMiddleware
@@ -856,6 +857,12 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
+        missing = validate_nntp_config()
+        if missing:
+            msg = "missing NNTP config: " + ", ".join(missing)
+            resp = nzb_unavailable(msg)
+            resp.headers["Retry-After"] = str(newznab.FAIL_TTL)
+            return resp
         if cache is None:
             await init_cache_async()
         logger.info("fetching nzb", extra={"release_id": release_id})
