@@ -923,7 +923,7 @@ async def api(request: Request) -> Response:
                 msg,
                 extra={"release_id": release_id, "error": str(exc)},
             )
-            return nzb_not_found(msg)
+            return nzb_not_found(f"No segments found for release {release_id}")
         except asyncio.TimeoutError:
             logger.warning(
                 "nzb fetch timed out after %ss",
