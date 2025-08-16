@@ -290,8 +290,7 @@ def run_once() -> float:
         _log_counter += 1
         log_fn = logger.debug
         if metrics["inserted"] > 0 or (
-            config.INGEST_LOG_EVERY > 0
-            and _log_counter % config.INGEST_LOG_EVERY == 0
+            config.INGEST_LOG_EVERY > 0 and _log_counter % config.INGEST_LOG_EVERY == 0
         ):
             log_fn = logger.info
         log_fn("ingest_batch", extra=metrics)
