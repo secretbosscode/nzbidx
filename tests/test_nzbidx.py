@@ -727,10 +727,13 @@ def test_getnzb_timeout(monkeypatch) -> None:
 
     monkeypatch.setattr(api_main, "get_nzb", slow_get_nzb)
     monkeypatch.setattr(api_main, "nzb_timeout_seconds", lambda: 0.01)
+    cache = DummyAsyncCache()
+    monkeypatch.setattr(api_main, "cache", cache)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 504
     assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
+    assert "nzb:1" not in cache.store
 
 
 def test_getnzb_fetch_error_retry_after(monkeypatch) -> None:
