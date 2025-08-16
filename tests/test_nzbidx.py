@@ -364,6 +364,36 @@ def test_build_nzb_total_timeout(monkeypatch) -> None:
     api_config.nntp_total_timeout_seconds.cache_clear()
 
 
+def test_build_nzb_logs_all_attempts(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+    class BoomConnect(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            raise ConnectionError("boom")
+
+    monkeypatch.setattr(
+        nzb_builder.nntplib,
+        "NNTP",
+        BoomConnect,
+    )
+    monkeypatch.setattr(
+        nzb_builder.nntplib,
+        "NNTP_SSL",
+        BoomConnect,
+    )
+    monkeypatch.setattr(nzb_builder.time, "sleep", lambda _delay: None)
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(newznab.NzbFetchError):
+            nzb_builder.build_nzb_for_release("MyRelease")
+
+    attempt_logs = [
+        r for r in caplog.records if r.message.startswith("NNTP connection attempt")
+    ]
+    assert len(attempt_logs) == 3
+
+
 def test_nzb_timeout_defaults(monkeypatch) -> None:
     from nzbidx_api import config as api_config
 

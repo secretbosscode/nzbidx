@@ -156,7 +156,7 @@ def build_nzb_for_release(release_id: str) -> str:
     except ValueError:
         group_limit = 0
 
-    entries: List[str] = []
+    entries: list[str] = []
     if group_env.strip():
         entries = [g.strip() for g in group_env.split(",") if g.strip()]
         static_groups = [g for g in entries if "*" not in g and "?" not in g]
@@ -297,11 +297,12 @@ def build_nzb_for_release(release_id: str) -> str:
                     )
             except newznab.NzbFetchError:
                 raise
-            except NNTPPermanentError as exc:
+            except nntplib.NNTPPermanentError as exc:
                 log.error("NNTP permanent error on attempt %d: %s", attempt, exc)
                 raise newznab.NzbFetchError(str(exc)) from exc
             except Exception as exc:
                 if attempt == 3:
+                    log.warning("NNTP connection attempt %d failed: %s", attempt, exc)
                     raise
                 log.warning(
                     "NNTP connection attempt %d failed: %s; retrying in %s seconds",
