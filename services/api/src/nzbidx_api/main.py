@@ -175,7 +175,11 @@ class JsonFormatter(logging.Formatter):
 
 def setup_logging() -> None:
     handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
+    log_format = os.getenv("LOG_FORMAT", "plain")
+    if log_format.lower() == "json":
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)
