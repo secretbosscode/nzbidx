@@ -97,7 +97,10 @@ class DummyNNTP:
 
 
 class AutoNNTP(DummyNNTP):
-    def list(self):
+    list_calls = 0
+
+    def list(self, _pattern: str | None = None):
+        AutoNNTP.list_calls += 1
         return "", [("alt.binaries.example", "0", "0", "0")]
 
 
@@ -135,9 +138,10 @@ def test_build_nzb_without_host(monkeypatch) -> None:
 def test_build_nzb_without_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    nzb_builder._group_list_cache = None
 
     class EmptyList(DummyNNTP):
-        def list(self):
+        def list(self, _pattern: str | None = None):
             return "", []
 
     monkeypatch.setattr(
@@ -968,6 +972,8 @@ def test_ignores_overview_without_message_id(monkeypatch) -> None:
 def test_builds_nzb_auto_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    nzb_builder._group_list_cache = None
+    AutoNNTP.list_calls = 0
     monkeypatch.setattr(
         nzb_builder,
         "nntplib",
@@ -977,6 +983,8 @@ def test_builds_nzb_auto_groups(monkeypatch) -> None:
     assert "msg1@example.com" in xml
     assert "msg2@example.com" in xml
     assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
+    nzb_builder.build_nzb_for_release("MyRelease")
+    assert AutoNNTP.list_calls == 1
 
 
 def test_builds_nzb_auto_ssl(monkeypatch) -> None:

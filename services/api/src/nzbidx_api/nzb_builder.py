@@ -48,6 +48,9 @@ NNTPTemporaryError = getattr(
 log = logging.getLogger(__name__)
 
 
+_group_list_cache: List[str] | None = None
+
+
 def build_nzb_for_release(release_id: str) -> str:
     """Return an NZB XML document for ``release_id``.
 
@@ -106,18 +109,23 @@ def build_nzb_for_release(release_id: str) -> str:
                         if g.strip()
                     ]
                     if not groups:
-                        try:
-                            _resp, listing = server.list()
-                            groups = [
-                                (
-                                    g[0]
-                                    if isinstance(g, (tuple, list))
-                                    else str(g).split()[0]
-                                )
-                                for g in listing
-                            ]
-                        except Exception:
-                            groups = []
+                        global _group_list_cache
+                        if _group_list_cache is not None:
+                            groups = _group_list_cache
+                        else:
+                            try:
+                                _resp, listing = server.list("alt.binaries.*")
+                                groups = [
+                                    (
+                                        g[0]
+                                        if isinstance(g, (tuple, list))
+                                        else str(g).split()[0]
+                                    )
+                                    for g in listing
+                                ]
+                                _group_list_cache = groups
+                            except Exception:
+                                groups = []
                     if not groups:
                         raise newznab.NzbFetchError("no NNTP groups configured")
                     files: Dict[str, List[Tuple[int, int, str]]] = {}
