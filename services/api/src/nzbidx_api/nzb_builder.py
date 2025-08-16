@@ -162,6 +162,7 @@ def build_nzb_for_release(release_id: str) -> str:
         static_groups = [g for g in entries if "*" not in g and "?" not in g]
         patterns = [g for g in entries if "*" in g or "?" in g]
     else:
+        entries = []
         patterns = []
         groups = _group_list_cache.get("__all__")
         if groups is None:

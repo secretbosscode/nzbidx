@@ -219,6 +219,41 @@ def test_build_nzb_autodiscover_group_limit(monkeypatch) -> None:
     assert CaptureGroup.seen == ["alt.binaries.example"]
 
 
+def test_build_nzb_autodiscover_groups_from_server(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setattr(nzb_builder, "_group_list_cache", {}, raising=False)
+    monkeypatch.setattr(nzb_builder, "_discovered_groups", None, raising=False)
+
+    # No configured groups, forcing discovery via NNTP LIST
+    monkeypatch.setattr(ingest_config, "_load_groups", lambda: [], raising=False)
+
+    class DiscoverGroups(DummyNNTP):
+        listed = False
+        seen: list[str] = []
+
+        def list(self, pattern=None):  # type: ignore[override]
+            DiscoverGroups.listed = True
+            return "", [("alt.binaries.autodisc",)]
+
+        def group(self, group):  # type: ignore[override]
+            DiscoverGroups.seen.append(group)
+            return super().group(group)
+
+    monkeypatch.setattr(
+        nzb_builder,
+        "nntplib",
+        SimpleNamespace(
+            NNTP=DiscoverGroups, NNTP_SSL=DiscoverGroups, NNTP_SSL_PORT=563
+        ),
+    )
+
+    nzb_builder.build_nzb_for_release("MyRelease")
+
+    assert DiscoverGroups.listed is True
+    assert DiscoverGroups.seen == ["alt.binaries.autodisc"]
+
+
 def test_build_nzb_without_matches(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
