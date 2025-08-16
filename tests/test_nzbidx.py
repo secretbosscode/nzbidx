@@ -96,14 +96,6 @@ class DummyNNTP:
         return "", 0, message_id, []
 
 
-class AutoNNTP(DummyNNTP):
-    list_calls = 0
-
-    def list(self, _pattern: str | None = None):
-        AutoNNTP.list_calls += 1
-        return "", [("alt.binaries.example", "0", "0", "0")]
-
-
 class DummyNNTPTuple(DummyNNTP):
     def xover(self, start, end):  # pragma: no cover - simple
         return (
@@ -138,16 +130,15 @@ def test_build_nzb_without_host(monkeypatch) -> None:
 def test_build_nzb_without_groups(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    nzb_builder._group_list_cache = None
 
-    class EmptyList(DummyNNTP):
-        def list(self, _pattern: str | None = None):
-            return "", []
+    class Boom(DummyNNTP):
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("should not connect")
 
     monkeypatch.setattr(
         nzb_builder,
         "nntplib",
-        SimpleNamespace(NNTP=EmptyList, NNTP_SSL=EmptyList, NNTP_SSL_PORT=563),
+        SimpleNamespace(NNTP=Boom, NNTP_SSL=Boom, NNTP_SSL_PORT=563),
     )
     with pytest.raises(newznab.NzbFetchError):
         nzb_builder.build_nzb_for_release("MyRelease")
@@ -1020,22 +1011,32 @@ def test_ignores_overview_without_message_id(monkeypatch) -> None:
     assert "456" not in xml
 
 
-def test_builds_nzb_auto_groups(monkeypatch) -> None:
+def test_builds_nzb_group_pattern(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    nzb_builder._group_list_cache = None
-    AutoNNTP.list_calls = 0
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.*")
+    monkeypatch.setenv("NNTP_GROUP_LIMIT", "1")
+
+    class MultiListNNTP(DummyNNTPTuple):
+        groups_scanned: list[str] = []
+
+        def list(self, pattern: str | None = None):
+            return "", [
+                ("alt.binaries.example", "0", "0", "0"),
+                ("alt.binaries.other", "0", "0", "0"),
+            ]
+
+        def group(self, group):  # type: ignore[override]
+            MultiListNNTP.groups_scanned.append(group)
+            return super().group(group)
+
     monkeypatch.setattr(
         nzb_builder,
         "nntplib",
-        SimpleNamespace(NNTP=AutoNNTP, NNTP_SSL=AutoNNTP, NNTP_SSL_PORT=563),
+        SimpleNamespace(NNTP=MultiListNNTP, NNTP_SSL=MultiListNNTP, NNTP_SSL_PORT=563),
     )
     xml = nzb_builder.build_nzb_for_release("MyRelease")
     assert "msg1@example.com" in xml
-    assert "msg2@example.com" in xml
-    assert DummyNNTP.instance and DummyNNTP.instance.body_calls == 0
-    nzb_builder.build_nzb_for_release("MyRelease")
-    assert AutoNNTP.list_calls == 1
+    assert MultiListNNTP.groups_scanned == ["alt.binaries.example"]
 
 
 def test_builds_nzb_auto_ssl(monkeypatch) -> None:
