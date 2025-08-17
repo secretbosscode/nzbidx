@@ -510,7 +510,10 @@ def bulk_index_releases(
                     if err:
                         logger.warning(
                             "opensearch_bulk_item_failed",
-                            extra={"id": info.get("_id"), "error": err.get("reason", str(err))},
+                            extra={
+                                "id": info.get("_id"),
+                                "error": err.get("reason", str(err)),
+                            },
                         )
 
 
