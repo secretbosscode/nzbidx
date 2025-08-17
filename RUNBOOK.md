@@ -113,6 +113,12 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Checks:** missing data in the `segments` column for affected releases.
 - **Actions:** populate segments with `docker compose exec nzbidx python scripts/backfill_release_parts.py`.
 
+## OpenSearch orphan cleanup
+- **Symptoms:** documents exist in `nzbidx-releases` without matching rows in the `release` table.
+- **Checks:** `python scripts/check_os_orphans.py` logs the number of orphans.
+- **Actions:** remove them with `python scripts/check_os_orphans.py --prune`.
+- **Schedule:** run nightly via cron, e.g., `0 4 * * * python scripts/check_os_orphans.py --prune`.
+
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`
 - Health check: `curl -fsS localhost:8080/health`
