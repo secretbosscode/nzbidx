@@ -38,6 +38,94 @@ else:  # pragma: no cover - no sqlalchemy available
     engine = None
 
 
+def _split_sql(sql: str) -> list[str]:
+    """Split SQL script into individual statements.
+
+    When ``sqlparse`` is available, it is used for correctness.  Otherwise a
+    tiny state machine is employed which understands basic quoting rules and
+    PostgreSQL dollar-quoted blocks so that semicolons inside functions or
+    strings do not prematurely terminate statements.
+    """
+
+    if sqlparse:  # pragma: no cover - exercised when dependency installed
+        return [s.strip() for s in sqlparse.split(sql) if s.strip()]
+
+    statements: list[str] = []
+    current: list[str] = []
+    in_single = False
+    in_double = False
+    dollar_tag: str | None = None
+    i = 0
+    length = len(sql)
+    while i < length:
+        ch = sql[i]
+        if in_single:
+            current.append(ch)
+            if ch == "'":
+                # handle escaped '' inside strings
+                if i + 1 < length and sql[i + 1] == "'":
+                    current.append("'")
+                    i += 1
+                else:
+                    in_single = False
+            i += 1
+            continue
+        if in_double:
+            current.append(ch)
+            if ch == '"':
+                if i + 1 < length and sql[i + 1] == '"':
+                    current.append('"')
+                    i += 1
+                else:
+                    in_double = False
+            i += 1
+            continue
+        if dollar_tag is not None:
+            if sql.startswith(dollar_tag, i):
+                current.append(dollar_tag)
+                i += len(dollar_tag)
+                dollar_tag = None
+            else:
+                current.append(ch)
+                i += 1
+            continue
+
+        # Outside of any quoted context
+        if ch == "'":
+            in_single = True
+            current.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            current.append(ch)
+            i += 1
+            continue
+        if ch == "$":
+            j = i + 1
+            while j < length and (sql[j].isalnum() or sql[j] == "_"):
+                j += 1
+            if j < length and sql[j] == "$":
+                dollar_tag = sql[i : j + 1]
+                current.append(dollar_tag)
+                i = j + 1
+                continue
+        if ch == ";":
+            stmt = "".join(current).strip()
+            if stmt:
+                statements.append(stmt)
+            current = []
+            i += 1
+            continue
+        current.append(ch)
+        i += 1
+
+    stmt = "".join(current).strip()
+    if stmt:
+        statements.append(stmt)
+    return statements
+
+
 async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     """Create database schema if it does not already exist."""
     if not engine or not text:
@@ -45,10 +133,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     sql = (
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
     )
-    if sqlparse:
-        statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
-    else:  # pragma: no cover - sqlparse not installed
-        statements = [s.strip() for s in sql.split(";") if s.strip()]
+    statements = _split_sql(sql)
 
     async def _apply(conn: Any) -> None:
         for stmt in statements:
