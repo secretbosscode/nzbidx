@@ -16,8 +16,16 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         length = request.headers.get("content-length")
-        if length and int(length) > self.max_request_bytes:
-            return ORJSONResponse({"detail": "request too large"}, status_code=413)
+        if length:
+            try:
+                if int(length) > self.max_request_bytes:
+                    return ORJSONResponse(
+                        {"detail": "request too large"}, status_code=413
+                    )
+            except ValueError:
+                return ORJSONResponse(
+                    {"detail": "invalid Content-Length header"}, status_code=400
+                )
         response = await call_next(request)
         headers = response.headers
         headers.setdefault("X-Content-Type-Options", "nosniff")
