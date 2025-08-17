@@ -160,7 +160,45 @@ def connect_db() -> Any:
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
             with engine.connect() as conn:  # type: ignore[call-arg]
-                for stmt in (
+                exists = (
+                    conn.execute(
+                        text("SELECT 1 FROM pg_class WHERE relname='release'")
+                    ).first()
+                    is not None
+                )
+                partitioned = (
+                    conn.execute(
+                        text(
+                            """
+                            SELECT 1
+                            FROM pg_partitioned_table p
+                            JOIN pg_class c ON p.partrelid = c.oid
+                            WHERE c.relname = 'release'
+                            """
+                        )
+                    ).first()
+                    is not None
+                )
+                if exists and not partitioned:
+                    logger.error(
+                        "release_table_not_partitioned",
+                        extra={"next_step": "drop_or_migrate"},
+                    )
+                    raise RuntimeError(
+                        "'release' table exists but is not partitioned; drop or migrate the table before starting the worker"
+                    )
+                if not exists:
+                    logger.info(
+                        "release_table_missing",
+                        extra={"next_step": "creating"},
+                    )
+                else:
+                    logger.info(
+                        "release_table_partitioned",
+                        extra={"next_step": "ensuring_partitions"},
+                    )
+
+                stmts = (
                     "CREATE EXTENSION IF NOT EXISTS pg_trgm",
                     (
                         """
@@ -203,22 +241,24 @@ def connect_db() -> Any:
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
                     "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
-                ):
-                    try:
-                        conn.execute(text(stmt))
-                        conn.commit()
-                    except Exception as exc:
-                        # Creating extensions requires superuser privileges.  If
-                        # unavailable, log the failure and roll back so that
-                        # subsequent statements can proceed.
-                        conn.rollback()
-                        if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
-                            logger.warning(
-                                "extension_unavailable",
-                                extra={"stmt": stmt, "error": str(exc)},
-                            )
-                        else:
-                            raise
+                )
+                if not exists or partitioned:
+                    for stmt in stmts:
+                        try:
+                            conn.execute(text(stmt))
+                            conn.commit()
+                        except Exception as exc:
+                            # Creating extensions requires superuser privileges.  If
+                            # unavailable, log the failure and roll back so that
+                            # subsequent statements can proceed.
+                            conn.rollback()
+                            if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
+                                logger.warning(
+                                    "extension_unavailable",
+                                    extra={"stmt": stmt, "error": str(exc)},
+                                )
+                            else:
+                                raise
             return engine.raw_connection()
 
         try:
@@ -285,7 +325,6 @@ def connect_db() -> Any:
         "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
     )
     return conn
-
 
 
 def insert_release(
@@ -429,6 +468,7 @@ def prune_group(conn: Any, group: str) -> None:
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
+
 
 def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
