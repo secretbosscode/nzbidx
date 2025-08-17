@@ -27,9 +27,6 @@ orjson = ["orjson"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools]
-py-modules = ["nntplib"]
-
 [tool.setuptools.package-data]
 "nzbidx_api" = ["schema.sql"]
 "nzbidx_api.opensearch" = ["*.json"]
