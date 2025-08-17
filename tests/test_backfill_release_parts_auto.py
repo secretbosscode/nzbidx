@@ -23,6 +23,7 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
             id INTEGER PRIMARY KEY,
             norm_title TEXT,
             source_group TEXT,
+            size_bytes BIGINT,
             has_parts BOOLEAN,
             segments TEXT,
             part_count INT
@@ -30,10 +31,10 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
         """
     )
     cur.execute(
-        "INSERT INTO release (id, norm_title, source_group, has_parts, part_count) VALUES (1, 'r1', 'g1', 1, 0)"
+        "INSERT INTO release (id, norm_title, source_group, size_bytes, has_parts, part_count) VALUES (1, 'r1', 'g1', 0, 1, 0)"
     )
     cur.execute(
-        "INSERT INTO release (id, norm_title, source_group, has_parts, segments, part_count) VALUES (2, 'r2', 'g1', 1, ?, 1)",
+        "INSERT INTO release (id, norm_title, source_group, size_bytes, has_parts, segments, part_count) VALUES (2, 'r2', 'g1', 10, 1, ?, 1)",
         ('[{"number":1,"message_id":"m2","group":"g1","size":10}]',),
     )
     conn.commit()

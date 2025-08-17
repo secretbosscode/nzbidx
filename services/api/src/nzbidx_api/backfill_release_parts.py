@@ -101,8 +101,11 @@ def backfill_release_parts(
             ]
             total_size = sum(size for _, _, size in segments)
             conn.execute(
-                f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder} WHERE id = {placeholder}",
-                (json.dumps(seg_data), True, len(seg_data), rel_id),
+                (
+                    f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
+                    f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
+                ),
+                (json.dumps(seg_data), True, len(seg_data), total_size, rel_id),
             )
             to_index.append(
                 (

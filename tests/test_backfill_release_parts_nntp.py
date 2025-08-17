@@ -37,6 +37,7 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
             id INTEGER PRIMARY KEY,
             norm_title TEXT,
             source_group TEXT,
+            size_bytes BIGINT,
             has_parts BOOLEAN,
             segments TEXT,
             part_count INT
@@ -44,7 +45,7 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
         """
     )
     cur.execute(
-        "INSERT INTO release (id, norm_title, source_group, has_parts, part_count) VALUES (1, 'my release', 'alt.test', 1, 0)"
+        "INSERT INTO release (id, norm_title, source_group, size_bytes, has_parts, part_count) VALUES (1, 'my release', 'alt.test', 0, 1, 0)"
     )
     conn.commit()
     conn.close()
@@ -59,10 +60,11 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
 
     conn2 = sqlite3.connect(dbfile)
     cur2 = conn2.cursor()
-    cur2.execute("SELECT segments, part_count FROM release WHERE id = 1")
-    seg_json, part_count = cur2.fetchone()
+    cur2.execute("SELECT segments, part_count, size_bytes FROM release WHERE id = 1")
+    seg_json, part_count, size_bytes = cur2.fetchone()
     segments = json.loads(seg_json)
     assert segments[0]["message_id"] == "m1"
     assert segments[1]["message_id"] == "m2"
     assert part_count == 2
+    assert size_bytes == 25
     conn2.close()
