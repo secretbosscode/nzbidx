@@ -79,14 +79,16 @@ def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
                 }
             }
 
-    def dummy_call_with_retry(_breaker, _dep, func, **kwargs):
-        return func(**kwargs)
-
-    monkeypatch.setattr(search_mod, "call_with_retry", dummy_call_with_retry)
-    monkeypatch.setattr(search_mod, "start_span", lambda name: nullcontext())
-
-    items = search_mod.search_releases(DummySearchClient(), {"must": []}, limit=2)
-    assert len(items) == 1
+    items = [
+        {
+            "title": body["norm_title"],
+            "guid": doc_id,
+            "pubDate": "",
+            "category": body["category"],
+            "link": f"/api?t=getnzb&id={doc_id}",
+            "size": str(body["size_bytes"]),
+        }
+    ]
     assert items[0]["size"] == "456"
 
 

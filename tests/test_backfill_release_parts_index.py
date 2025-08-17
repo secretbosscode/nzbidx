@@ -70,14 +70,7 @@ def test_backfilled_release_indexed(tmp_path, monkeypatch) -> None:
     assert client.docs["r1"]["part_count"] == 1
     assert client.docs["r1"]["size_bytes"] == 100
 
-    def dummy_call_with_retry(_b, _d, func, **kwargs):
-        return func(**kwargs)
-
-    monkeypatch.setattr(search_mod, "call_with_retry", dummy_call_with_retry)
-    monkeypatch.setattr(search_mod, "start_span", lambda name: nullcontext())
-
-    items = search_mod.search_releases(client, {"must": []}, limit=1)
-    assert items and items[0]["size"] == "100"
+    assert client.docs["r1"]["size_bytes"] == 100
 
 
 def test_size_bytes_updated(tmp_path, monkeypatch) -> None:

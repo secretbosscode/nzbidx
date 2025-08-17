@@ -108,23 +108,6 @@ def nntp_total_timeout_seconds() -> int:
     return _int_env("NNTP_TOTAL_TIMEOUT", 600)
 
 
-@lru_cache()
-def search_timeout_ms() -> int:
-    """Request timeout in milliseconds for OpenSearch calls."""
-    return _int_env("SEARCH_TIMEOUT_MS", 2500)
-
-
-@lru_cache()
-def ilm_delete_days() -> int:
-    """Retention period for OpenSearch indices."""
-    return _int_env("ILM_DELETE_DAYS", 180)
-
-
-@lru_cache()
-def ilm_warm_days() -> int:
-    """Age in days before indices move to the warm phase."""
-    return _int_env("ILM_WARM_DAYS", 14)
-
 
 @lru_cache()
 def request_id_header() -> str:
@@ -162,14 +145,6 @@ def retry_jitter_ms() -> int:
     return _int_env("RETRY_JITTER_MS", 200)
 
 
-@lru_cache()
-def os_primary_shards() -> int:
-    return _int_env("OS_PRIMARY_SHARDS", 1)
-
-
-@lru_cache()
-def os_replicas() -> int:
-    return _int_env("OS_REPLICAS", 0)
 
 
 def validate_nntp_config() -> List[str]:

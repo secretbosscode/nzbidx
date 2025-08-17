@@ -3,8 +3,6 @@ services:
   nzbidx:
     image: nzbidx:latest
     depends_on:
-      opensearch:
-        condition: service_healthy
       postgres:
         condition: service_healthy
     restart: unless-stopped
@@ -17,24 +15,6 @@ services:
       NZBIDX_USE_STD_JSON: ${NZBIDX_USE_STD_JSON:-1} # set to 0 to enable orjson
       NNTP_TOTAL_TIMEOUT: ${NNTP_TOTAL_TIMEOUT:-600}
       NZB_TIMEOUT_SECONDS: ${NZB_TIMEOUT_SECONDS:-600} # should be ≥ NNTP_TOTAL_TIMEOUT
-  opensearch:
-    restart: unless-stopped
-    volumes:
-      - opensearch-data:/usr/share/opensearch/data
-    environment:
-      - discovery.type=single-node
-      - plugins.security.disabled=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
   postgres:
     restart: unless-stopped
     image: pgvector/pgvector:pg17
@@ -76,4 +56,3 @@ services:
 volumes:
   postgres-data:
   redis-data:
-  opensearch-data:

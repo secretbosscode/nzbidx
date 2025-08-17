@@ -12,7 +12,6 @@ from importlib import resources
 from pathlib import Path
 from typing import Optional, Callable
 
-from nzbidx_common.os import OS_RELEASES_ALIAS
 import threading
 from nzbidx_ingest import ingest_loop
 from nzbidx_ingest.main import prune_orphaned_releases
@@ -36,12 +35,7 @@ else:  # pragma: no cover - prefers orjson when available
             ),
         )
 
-# Optional third party dependencies
-try:  # pragma: no cover - import guard
-    from opensearchpy import OpenSearch
-except Exception:  # pragma: no cover - optional dependency
-    OpenSearch = None  # type: ignore
-
+# Optional redis dependency
 try:  # pragma: no cover - import guard
     from redis.asyncio import Redis
 except Exception:  # pragma: no cover - optional dependency
@@ -135,7 +129,7 @@ from .search_cache import cache_rss, get_cached_rss
 from .search import MAX_LIMIT, MAX_OFFSET, search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
-from .middleware_circuit import CircuitOpenError, os_breaker, redis_breaker
+from .middleware_circuit import CircuitOpenError, redis_breaker
 from .otel import current_trace_id, setup_tracing
 from .errors import (
     invalid_params,
@@ -154,8 +148,6 @@ from .config import (
     search_ttl_seconds,
     nzb_timeout_seconds,
     nntp_total_timeout_seconds,
-    os_primary_shards,
-    os_replicas,
 )
 from .metrics_log import start as start_metrics, inc_api_5xx
 from .access_log import AccessLogMiddleware
@@ -239,7 +231,7 @@ def setup_logging() -> None:
         root.setLevel(getattr(logging, level, logging.INFO))
 
         # Quiet overly chatty third-party libraries so logs stay readable.
-        for name in ("urllib3", "opensearchpy", "httpx"):
+        for name in ("urllib3", "httpx"):
             logging.getLogger(name).setLevel(logging.WARNING)
 
         # Forward uvicorn's access logs through the same handler without propagating.
@@ -307,7 +299,6 @@ def _git_sha() -> str:
 
 BUILD = os.getenv("GIT_SHA", _git_sha())
 
-opensearch: Optional[OpenSearch] = None
 cache: Optional[Redis] = None
 
 
@@ -315,40 +306,6 @@ async def _maybe_await(result):
     if inspect.isawaitable(result):
         return await result
     return result
-
-
-def build_ilm_policy() -> dict[str, object]:
-    with (
-        resources.files("nzbidx_api.opensearch")
-        .joinpath("ilm-policy.json")
-        .open("r", encoding="utf-8")
-    ) as f:
-        policy = json.load(f)
-    from .config import ilm_delete_days, ilm_warm_days
-
-    policy["policy"]["phases"]["warm"]["min_age"] = f"{ilm_warm_days()}d"
-    policy["policy"]["phases"]["delete"]["min_age"] = f"{ilm_delete_days()}d"
-    return policy
-
-
-def build_index_template(*, ilm: bool = True) -> dict[str, object]:
-    with (
-        resources.files("nzbidx_api.opensearch")
-        .joinpath("index-template.json")
-        .open("r", encoding="utf-8")
-    ) as f:
-        template = json.load(f)
-    settings = template.setdefault("template", {}).setdefault("settings", {})
-    settings.setdefault("refresh_interval", "5s")
-    if ilm:
-        settings["index.lifecycle.name"] = "nzbidx-releases-policy"
-        settings["index.lifecycle.rollover_alias"] = OS_RELEASES_ALIAS
-    else:
-        settings.pop("index.lifecycle.name", None)
-        settings.pop("index.lifecycle.rollover_alias", None)
-    settings["number_of_shards"] = os_primary_shards()
-    settings["number_of_replicas"] = os_replicas()
-    return template
 
 
 class TimingMiddleware(BaseHTTPMiddleware):
@@ -376,73 +333,6 @@ class TimingMiddleware(BaseHTTPMiddleware):
         if response.status_code >= 500:
             inc_api_5xx()
         return response
-
-
-def init_opensearch() -> None:
-    """Connect to OpenSearch and ensure indices exist."""
-    global opensearch
-    if OpenSearch is None:
-        return
-    url = os.getenv("OPENSEARCH_URL", "http://opensearch:9200")
-    try:
-        client = OpenSearch(url, timeout=2)
-        supports_ilm = hasattr(client, "ilm")
-        if supports_ilm:
-            client.ilm.put_lifecycle(
-                name="nzbidx-releases-policy", body=build_ilm_policy()
-            )
-        else:
-            logger.info("OpenSearch client lacks ILM; skipping lifecycle setup")
-        client.indices.put_index_template(
-            name="nzbidx-releases-template",
-            body=build_index_template(ilm=supports_ilm),
-        )
-        try:
-            alias_info = client.indices.get_alias(name=OS_RELEASES_ALIAS)
-            if not any(
-                d["aliases"].get(OS_RELEASES_ALIAS, {}).get("is_write_index")
-                for d in alias_info.values()
-            ):
-                index_name = next(iter(alias_info))
-                client.indices.put_alias(
-                    index=index_name, name=OS_RELEASES_ALIAS, is_write_index=True
-                )
-        except Exception:
-            initial_index = f"{OS_RELEASES_ALIAS}-000001"
-            if not client.indices.exists(index=initial_index):
-                client.indices.create(
-                    index=initial_index,
-                    body={
-                        "aliases": {OS_RELEASES_ALIAS: {"is_write_index": True}},
-                    },
-                )
-            else:
-                client.indices.put_alias(
-                    index=initial_index, name=OS_RELEASES_ALIAS, is_write_index=True
-                )
-        if os.getenv("SEED_OS_SAMPLE") == "true":
-            sample = {
-                "norm_title": "Test Release",
-                "category": "test",
-                "language": "en",
-                "tags": ["sample"],
-                "posted_at": "1970-01-01T00:00:00Z",
-                "size_bytes": 0,
-            }
-            try:
-                client.index(
-                    index=OS_RELEASES_ALIAS,
-                    id="1",
-                    body=sample,
-                    refresh="wait_for",
-                )
-            except Exception:
-                pass
-        opensearch = client
-        prune_orphaned_releases(client)
-        logger.info("OpenSearch ready")
-    except Exception as exc:  # pragma: no cover - optional dependency
-        logger.warning("OpenSearch unavailable: %s", exc)
 
 
 async def init_cache_async() -> None:
@@ -473,13 +363,7 @@ def init_cache() -> None:
 
 async def shutdown() -> None:
     """Close global connections on shutdown."""
-    global opensearch, cache
-    if opensearch:
-        try:
-            opensearch.close()  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        opensearch = None
+    global cache
     if cache:
         try:
             await _maybe_await(cache.close())  # type: ignore[attr-defined]
@@ -493,17 +377,6 @@ async def health(request: Request) -> ORJSONResponse:
     db_status = "ok" if await ping() else "down"
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
     payload = {"status": "ok", "db": db_status, "request_id": req_id}
-    if opensearch:
-        start = time.monotonic()
-        try:  # pragma: no cover - network errors
-            opensearch.info()
-            payload["os"] = "ok"
-        except Exception:
-            payload["os"] = "down"
-        payload["opensearch_latency_ms"] = int((time.monotonic() - start) * 1000)
-    else:
-        payload["os"] = "down"
-        payload["opensearch_latency_ms"] = 0
     if cache:
         start = time.monotonic()
         try:  # pragma: no cover - network errors
@@ -534,14 +407,6 @@ async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
     payload = {"request_id": req_id, "breaker": {}}
-    if opensearch:
-        try:  # pragma: no cover - network errors
-            opensearch.info()
-            payload["os"] = "ok"
-        except Exception:
-            payload["os"] = "down"
-    else:
-        payload["os"] = "down"
     if cache:
         try:  # pragma: no cover - network errors
             await _maybe_await(cache.ping())
@@ -550,7 +415,6 @@ async def status(request: Request) -> ORJSONResponse:
             payload["redis"] = "down"
     else:
         payload["redis"] = "down"
-    payload["breaker"]["os"] = os_breaker.state()
     payload["breaker"]["redis"] = redis_breaker.state()
     return ORJSONResponse(payload)
 
@@ -580,28 +444,7 @@ async def admin_backfill(request: Request) -> ORJSONResponse:
     return ORJSONResponse({"status": "started"})
 
 
-async def admin_takedown(request: Request) -> ORJSONResponse:
-    """Remove a release from the search index."""
-    if opensearch is None:
-        return ORJSONResponse({"status": "unavailable"}, status_code=503)
-    try:
-        data = await request.json()
-    except Exception:
-        data = {}
-    release_id = data.get("id") or request.query_params.get("id")
-    if not release_id:
-        return invalid_params("missing id")
-    try:
-        opensearch.delete(  # type: ignore[union-attr]
-            index=OS_RELEASES_ALIAS, id=release_id, refresh="wait_for"
-        )
-    except Exception as exc:
-        logger.warning("takedown_failed", extra={"id": release_id, "error": str(exc)})
-        return ORJSONResponse({"status": "error"}, status_code=500)
-    return ORJSONResponse({"status": "ok"})
-
-
-def _os_search(
+def _search(
     q: Optional[str],
     *,
     category: Optional[str] = None,
@@ -612,99 +455,20 @@ def _os_search(
     sort: Optional[str] = None,
     api_key: Optional[str] = None,
 ) -> list[dict[str, str]]:
-    """Run a search against OpenSearch and return RSS item dicts."""
-    items: list[dict[str, str]] = []
+    """Run a database search and return RSS item dicts."""
     q = q.strip() if isinstance(q, str) else None
-    if opensearch:
-        try:
-            must: list[dict[str, object]] = []
-            should: list[dict[str, object]] = []
-            if q:
-                must.append(
-                    {"match": {"norm_title": {"query": q, "fuzziness": "AUTO"}}}
-                )
-                should.append({"match": {"tags": {"query": q, "boost": 2}}})
-            filters: list[dict[str, object]] = []
-
-            tag_fields = {
-                "artist",
-                "album",
-                "author",
-                "title",
-                "format",
-                "bitrate",
-                "isbn",
-                "studio",
-                "site",
-                "resolution",
-            }
-
-            if extra:
-                for field, value in extra.items():
-                    if field == "year" and value:
-                        try:
-                            year_int = int(value)  # type: ignore[arg-type]
-                            filters.append(
-                                {
-                                    "range": {
-                                        "posted_at": {
-                                            "gte": f"{year_int}-01-01",
-                                            "lt": f"{year_int + 1}-01-01",
-                                        }
-                                    }
-                                }
-                            )
-                        except (ValueError, TypeError):
-                            pass
-                        continue
-
-                    values = value if isinstance(value, list) else [value]
-                    for v in values:
-                        if not v:
-                            continue
-                        if field == "tags" or field in tag_fields:
-                            must.append({"term": {"tags": str(v).lower()}})
-                        else:
-                            must.append({"match": {field: v}})
-
-            if not must:
-                must.append({"match_all": {}})
-
-            if category:
-                categories = [c.strip() for c in category.split(",") if c.strip()]
-                if len(categories) == 1:
-                    filters.append({"term": {"category": categories[0]}})
-                elif categories:
-                    filters.append({"terms": {"category": categories}})
-
-            if tag:
-                # Prefix on keyword field 'tags' (requires tags to be keyword in mapping)
-                filters.append({"prefix": {"tags": tag}})
-
-            # Block adult content by default unless explicitly allowed
-            must_not: list[dict[str, object]] = []
-            if not adult_content_allowed():
-                must_not.append({"prefix": {"category": str(ADULT_CATEGORY_ID)[0]}})
-
-            query: dict[str, object] = {"must": must}
-            if filters:
-                query["filter"] = filters
-            if must_not:
-                query["must_not"] = must_not
-            if should:
-                query["should"] = should
-                query["minimum_should_match"] = 0
-            items = search_releases(
-                opensearch,
-                query,
-                limit=limit,
-                offset=offset,
-                sort=sort,
-                api_key=api_key,
-            )
-        except Exception:
-            items = []
-    return items
+    try:
+        return search_releases(
+            q,
+            category=category,
+            tag=tag,
+            limit=limit,
+            offset=offset,
+            sort=sort,
+            api_key=api_key,
+        )
+    except Exception:
+        return []
 
 
 def _xml_response(body: str) -> Response:
@@ -786,7 +550,7 @@ async def api(request: Request) -> Response:
             return invalid_params("query too long")
         tag = params.get("tag")
         items = await asyncio.to_thread(
-            _os_search,
+            _search,
             q,
             category=cat,
             tag=tag,
@@ -813,7 +577,7 @@ async def api(request: Request) -> Response:
         tag = params.get("tag")
         cats = cat or ",".join(TV_CATEGORY_IDS)
         items = await asyncio.to_thread(
-            _os_search,
+            _search,
             q,
             category=cats,
             tag=tag,
@@ -840,7 +604,7 @@ async def api(request: Request) -> Response:
         tag = params.get("tag")
         cats = cat or ",".join(MOVIE_CATEGORY_IDS)
         items = await asyncio.to_thread(
-            _os_search,
+            _search,
             q,
             category=cats,
             tag=tag,
@@ -871,7 +635,7 @@ async def api(request: Request) -> Response:
             extra["year"] = year
         cats = cat or ",".join(AUDIO_CATEGORY_IDS)
         items = await asyncio.to_thread(
-            _os_search,
+            _search,
             q,
             category=cats,
             tag=tag,
@@ -902,7 +666,7 @@ async def api(request: Request) -> Response:
             extra["year"] = year
         cats = cat or ",".join(BOOKS_CATEGORY_IDS)
         items = await asyncio.to_thread(
-            _os_search,
+            _search,
             q,
             category=cats,
             tag=tag,
@@ -975,7 +739,6 @@ routes = [
     Route("/api/status", status),
     Route("/api/config", config_endpoint),
     Route("/api/admin/backfill", admin_backfill, methods=["POST"]),
-    Route("/api/admin/takedown", admin_takedown, methods=["POST"]),
     Route("/api", api),
     Route("/openapi.json", openapi_json),
 ]
@@ -996,7 +759,6 @@ app = Starlette(
     routes=routes,
     on_startup=[
         apply_schema,
-        init_opensearch,
         init_cache_async,
         start_ingest,
         lambda: _set_stop(start_metrics()),

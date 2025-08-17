@@ -107,7 +107,6 @@ def test_status_endpoint() -> None:
             data = response.json()
         else:
             data = json.loads(response.body)
-        assert data["breaker"]["os"] == "closed"
         assert data["breaker"]["redis"] == "closed"
 
 
@@ -132,21 +131,3 @@ def test_config_endpoint(monkeypatch) -> None:
     cfg.nntp_total_timeout_seconds.cache_clear()
 
 
-def test_takedown_deletes_release(monkeypatch) -> None:
-    class DummyOS:
-        def __init__(self) -> None:
-            self.deleted = []
-
-        def delete(self, *, index, id, refresh="wait_for") -> None:
-            self.deleted.append((index, id, refresh))
-
-    dummy = DummyOS()
-    monkeypatch.setattr(main, "opensearch", dummy)
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/admin/takedown",
-            headers={"X-Api-Key": "secret"},
-            json={"id": "abc"},
-        )
-        assert response.status_code == 200
-        assert dummy.deleted == [(OS_RELEASES_ALIAS, "abc", "wait_for")]

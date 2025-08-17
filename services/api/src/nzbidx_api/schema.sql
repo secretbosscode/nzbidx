@@ -41,3 +41,9 @@ CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_
 CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
+ALTER TABLE IF EXISTS release
+    ADD COLUMN IF NOT EXISTS search_tsv tsvector
+        GENERATED ALWAYS AS (
+            to_tsvector('simple', coalesce(norm_title, '') || ' ' || coalesce(tags, ''))
+        ) STORED;
+CREATE INDEX IF NOT EXISTS release_search_tsv_idx ON release USING GIN (search_tsv);
