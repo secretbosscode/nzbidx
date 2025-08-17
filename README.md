@@ -3,9 +3,8 @@
 If you find this project useful, donations are welcome at `BC1QTL4RMQJXTJ2K05UMGVWXL46SGR4DJG2GCMRR38`.
 
 NZBidx is a lightweight, Newznab-compatible indexer implemented as a single
-Python application. It exposes Starlette endpoints backed by OpenSearch and
-runs a background worker that parses NNTP headers, normalises subjects and
-indexes metadata into OpenSearch.
+Python application. It exposes Starlette endpoints and runs a background worker
+that parses NNTP headers, normalises subjects and indexes metadata.
 
 Only release metadata is stored; binaries are discarded during ingest.
 
@@ -27,13 +26,6 @@ Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper schedules `VACUUM (ANALYZE)`, `ANALYZE`,
 and `REINDEX` jobs via APScheduler.
 
-## Performance Tuning
-
-The default compose files apply a few settings aimed at keeping searches fast:
-
-* **OpenSearch** runs with a fixed 512 MB heap via `OPENSEARCH_JAVA_OPTS` and uses
-  a slower `30s` refresh interval with replicas disabled for better write throughput.
-
 ## Quickstart
 
     docker compose up -d
@@ -42,21 +34,16 @@ The default compose files apply a few settings aimed at keeping searches fast:
 
 The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
 
-> **Note**: OpenSearch requires `vm.max_map_count` to be at least 262144:
-
-    sudo sysctl -w vm.max_map_count=262144
-
 ### Use existing services
 
-Already running Postgres or an OpenSearch/ElasticSearch instance?
-Create an override file and point `nzbidx` at your own services:
+Already running Postgres? Create an override file and point `nzbidx` at your own
+service:
 
 ```yaml
 services:
   nzbidx:
     environment:
       DATABASE_URL: postgresql+asyncpg://nzbidx:nzbidx@host.docker.internal:5432/nzbidx
-      OPENSEARCH_URL: http://host.docker.internal:30003
     depends_on: []
 ```
 
@@ -67,13 +54,6 @@ docker compose -f docker-compose.local.yml -f docker-compose.override.yml up -d 
 ```
 
 Adjust hosts, ports, and credentials to match your environment.
-
-If your OpenSearch or ElasticSearch instance requires authentication, embed
-credentials in the URL:
-
-```yaml
-OPENSEARCH_URL: http://user:password@host.docker.internal:30003
-```
 
 Both the ingest worker and the API must use the **same persistent database**
 specified via `DATABASE_URL`. Using different databases or an in-memory
@@ -97,8 +77,6 @@ faster serializer once compatible.
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Superuser applied to `schema.sql` during init | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
-| `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
-| `OPENSEARCH_TIMEOUT_SECONDS` | Timeout in seconds for OpenSearch connections | `2` |
 | `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `off` |
 | `ALLOW_XXX` | `true` enables the XXX category | `true` |
@@ -116,7 +94,6 @@ faster serializer once compatible.
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
-| `INGEST_OS_BULK` | Releases per OpenSearch bulk request | `100` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
 
 > **Note**: To avoid premature API timeouts during NZB generation, ensure
@@ -133,15 +110,6 @@ Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 IDs such as `MOVIES_CAT_ID`). Review the configuration modules in
 `services/api` for the full list. Consider whether extra variables are
 necessary before adding them—defaults cover most cases.
-
-## Seed OpenSearch
-
-    docker compose exec nzbidx python scripts/seed_os.py
-
-OpenSearch uses an index template and ILM policy. Monthly indices are created
-under the `nzbidx-releases` alias and rollover automatically. Indices move to
-the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
-`ILM_DELETE_DAYS` (default `180`).
 
 ## Backfill Segments
 
