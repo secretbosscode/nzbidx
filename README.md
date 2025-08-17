@@ -399,17 +399,7 @@ docker compose exec nzbidx python scripts/backfill_release_parts.py
 
 ## Backups
 
-OpenSearch snapshots can be stored in S3 or GCS. Configure the repository via
-environment variables and run the helper target (safe to run multiple times):
-
-```bash
-export OS_SNAP_REPO=nzbidx-snaps
-export OS_S3_BUCKET=my-bucket
-export OS_S3_REGION=us-east-1
-# or GCS
-# export OS_GCS_BUCKET=my-bucket
-make snapshot-repo
-```
+Snapshots can be created with `scripts/snapshot.sh`.
 
 ### Schedule
 
@@ -419,26 +409,6 @@ in `.github/workflows/snapshot.yml`.
 
 Set `OS_SNAP_KEEP` to the number of snapshots to retain. Older snapshots will
 be removed after each run to keep the repository size in check.
-
-### Restore
-
-1. Register the repository if needed.
-2. List snapshots via `GET /_snapshot/<repo>/_all`.
-3. Restore and remap the alias:
-
-```bash
-curl -XPOST \
-  http://localhost:9200/_snapshot/<repo>/<snap>/_restore \
-  -H 'Content-Type: application/json' -d '
-{
-  "indices": "nzbidx-releases-*",
-  "aliases": {"nzbidx-releases": {"is_write_index": true}}
-}
-'
-```
-
-Close indices if required; restoring over an existing alias may need
-`rename_pattern`/`rename_replacement`.
 
 ## Security
 
@@ -484,7 +454,6 @@ docker compose up -d && scripts/smoke.sh
 - ``503`` – circuit breaker open or backend unavailable.
 - Port 8080 in use – remap in ``docker-compose.yml`` via ``ports: ["18080:8080"]``.
 - Dependencies unhealthy – ``docker compose ps`` and ``docker compose logs <svc>``.
-- Snapshot repo not configured – ``make snapshot-repo`` no-ops until env vars set.
 - Smoke test times out – increase timeout or inspect ``docker compose logs``.
 
 ## Kubernetes (examples only)
