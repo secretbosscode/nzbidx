@@ -183,8 +183,16 @@ def connect_db() -> Any:
                 pass
             else:
                 if exists and not partitioned:
-                    logger.error("release_table_not_partitioned")
-                    raise RuntimeError("release table must be partitioned")
+                    logger.error(
+                        "release_table_not_partitioned",
+                        extra={
+                            "next_step": "run_db_init",
+                            "resolution": "run db/init/schema.sql or recreate the database",
+                        },
+                    )
+                    raise RuntimeError(
+                        "release table must be partitioned; run db/init/schema.sql or recreate the database"
+                    )
 
             with engine.connect() as conn:  # type: ignore[call-arg]
                 exists = (
@@ -209,10 +217,13 @@ def connect_db() -> Any:
                 if exists and not partitioned:
                     logger.error(
                         "release_table_not_partitioned",
-                        extra={"next_step": "drop_or_migrate"},
+                        extra={
+                            "next_step": "drop_or_migrate",
+                            "resolution": "run db/init/schema.sql or recreate the database",
+                        },
                     )
                     raise RuntimeError(
-                        "'release' table exists but is not partitioned; drop or migrate the table before starting the worker"
+                        "'release' table exists but is not partitioned; run db/init/schema.sql or recreate the database before starting the worker"
                     )
                 if not exists:
                     logger.info(
