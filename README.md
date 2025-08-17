@@ -3,9 +3,9 @@
 If you find this project useful, donations are welcome at `BC1QTL4RMQJXTJ2K05UMGVWXL46SGR4DJG2GCMRR38`.
 
 NZBidx is a lightweight, Newznab-compatible indexer implemented as a single
-Python application. It exposes Starlette endpoints backed by OpenSearch and
-runs a background worker that parses NNTP headers, normalises subjects and
-indexes metadata into OpenSearch.
+Python application. It exposes Starlette endpoints backed by PostgreSQL and
+runs a background worker that parses NNTP headers and stores release metadata
+in the database.
 
 Only release metadata is stored; binaries are discarded during ingest.
 
@@ -31,8 +31,6 @@ and `REINDEX` jobs via APScheduler.
 
 The default compose files apply a few settings aimed at keeping searches fast:
 
-* **OpenSearch** runs with a fixed 512 MB heap via `OPENSEARCH_JAVA_OPTS` and uses
-  a slower `30s` refresh interval with replicas disabled for better write throughput.
 
 ## Quickstart
 
@@ -42,36 +40,6 @@ The default compose files apply a few settings aimed at keeping searches fast:
 
 The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
 
-> **Note**: OpenSearch requires `vm.max_map_count` to be at least 262144:
-
-    sudo sysctl -w vm.max_map_count=262144
-
-### Use existing services
-
-Already running Postgres or an OpenSearch/ElasticSearch instance?
-Create an override file and point `nzbidx` at your own services:
-
-```yaml
-services:
-  nzbidx:
-    environment:
-      DATABASE_URL: postgresql+asyncpg://nzbidx:nzbidx@host.docker.internal:5432/nzbidx
-    depends_on: []
-```
-
-Start only the `nzbidx` service:
-
-```bash
-docker compose -f docker-compose.local.yml -f docker-compose.override.yml up -d nzbidx
-```
-
-Adjust hosts, ports, and credentials to match your environment.
-
-If your OpenSearch or ElasticSearch instance requires authentication, embed
-credentials in the URL:
-
-```yaml
-```
 
 Both the ingest worker and the API must use the **same persistent database**
 specified via `DATABASE_URL`. Using different databases or an in-memory
@@ -129,19 +97,6 @@ IDs such as `MOVIES_CAT_ID`). Review the configuration modules in
 `services/api` for the full list. Consider whether extra variables are
 necessary before adding them—defaults cover most cases.
 
-## Seed OpenSearch
-
-    docker compose exec nzbidx python scripts/seed_os.py
-
-OpenSearch uses an index template and ILM policy. Monthly indices are created
-under the `nzbidx-releases` alias and rollover automatically. Indices move to
-the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
-`ILM_DELETE_DAYS` (default `180`).
-
-## Backfill Segments
-
-After deploying a schema that adds the `segments` column, populate it for
-existing releases:
 
     docker compose exec nzbidx python scripts/backfill_release_parts.py
 
@@ -218,22 +173,9 @@ aid correlation. Structured logs include this `request_id` field.
 Tracing is automatically enabled when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 Override the service name with `OTEL_SERVICE_NAME`.
 
-### Circuit breaker behavior
-
-OpenSearch calls use a small circuit breaker with jittered
-retries. After repeated failures the breaker opens and search endpoints
-return empty responses while NZB retrieval returns HTTP 503. The circuit
-half-opens after `CB_RESET_SECONDS` allowing a probe to close it on
-success. Retry behaviour is tunable via `RETRY_MAX`, `RETRY_BASE_MS` and
 `RETRY_JITTER_MS`. Current breaker states are exposed via
 `/api/status`.
 
-### ILM & rollover
-
-An ILM policy and index template manage monthly OpenSearch indices. The
-template sets the `nzbidx-releases` write alias and rolls over after 30
-days. Indices move to the warm phase after `ILM_WARM_DAYS` and are deleted
-after `ILM_DELETE_DAYS`.
 
 ## Newznab Categories and Adult Content
 
@@ -397,18 +339,29 @@ Populate missing segments with:
 docker compose exec nzbidx python scripts/backfill_release_parts.py
 ```
 
-## Backups
-
-Snapshots can be created with `scripts/snapshot.sh`.
-
-### Schedule
-
-Automated snapshots can be enabled by setting `SNAPSHOT_SCHEDULE=true` and
-running `scripts/snapshot.sh` from `cron` or by enabling the scheduled workflow
-in `.github/workflows/snapshot.yml`.
 
 Set `OS_SNAP_KEEP` to the number of snapshots to retain. Older snapshots will
 be removed after each run to keep the repository size in check.
+
+### Restore
+
+1. Register the repository if needed.
+2. List snapshots via `GET /_snapshot/<repo>/_all`.
+3. Restore and remap the alias:
+
+```bash
+curl -XPOST \
+  http://localhost:9200/_snapshot/<repo>/<snap>/_restore \
+  -H 'Content-Type: application/json' -d '
+{
+  "indices": "nzbidx-releases-*",
+  "aliases": {"nzbidx-releases": {"is_write_index": true}}
+}
+'
+```
+
+Close indices if required; restoring over an existing alias may need
+`rename_pattern`/`rename_replacement`.
 
 ## Security
 
@@ -454,6 +407,7 @@ docker compose up -d && scripts/smoke.sh
 - ``503`` – circuit breaker open or backend unavailable.
 - Port 8080 in use – remap in ``docker-compose.yml`` via ``ports: ["18080:8080"]``.
 - Dependencies unhealthy – ``docker compose ps`` and ``docker compose logs <svc>``.
+- Snapshot repo not configured – ``make snapshot-repo`` no-ops until env vars set.
 - Smoke test times out – increase timeout or inspect ``docker compose logs``.
 
 ## Kubernetes (examples only)

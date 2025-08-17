@@ -6,12 +6,17 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from nzbidx_ingest.main import connect_db, insert_release
+from nzbidx_ingest.main import (
+    connect_db,
+    insert_release,
+)
 from nzbidx_ingest.parsers import normalize_subject
 
 
-def normalize_releases(conn: Any | None = None) -> None:
-    """Normalize ``release`` rows."""
+def normalize_releases(
+    conn: Any | None = None,
+) -> None:
+    """Normalize ``release`` rows and update storage backends."""
     if conn is None:
         conn = connect_db()
 

@@ -10,6 +10,7 @@ import sqlite3
 import threading
 import time
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_api import nzb_builder, newznab  # type: ignore
+from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
 from nzbidx_api import db as api_db  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
@@ -483,7 +484,6 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
         def search(self, **kwargs):
             body_holder["body"] = kwargs["body"]
             return {"hits": {"hits": []}}
-
 
 def test_getnzb_timeout(monkeypatch) -> None:
     """Slow NZB generation should return 504 after timeout."""

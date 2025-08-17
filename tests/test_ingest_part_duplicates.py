@@ -13,12 +13,12 @@ from nzbidx_ingest import config, cursors  # type: ignore
 
 
 def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
+
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
-    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     class DummyClient:
         def connect(self) -> None:

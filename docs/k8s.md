@@ -5,9 +5,9 @@ Kubernetes cluster. It provides minimal `Deployment` and `Service` resources for
 the API (which also runs the ingest worker) and exposes configuration via
 environment variables.
 
-Persistent storage is required for the backing Postgres and OpenSearch
-services; use `PersistentVolumeClaim` resources or managed cloud services and
-set `DATABASE_URL` and `OPENSEARCH_URL` accordingly.
+Persistent storage is required for the backing Postgres service; use
+`PersistentVolumeClaim` resources or managed cloud services and set
+`DATABASE_URL` accordingly.
 
 The example manifest also sets `NNTP_TOTAL_TIMEOUT` and
 `NZB_TIMEOUT_SECONDS`. Adjust these to suit your deployment, ensuring

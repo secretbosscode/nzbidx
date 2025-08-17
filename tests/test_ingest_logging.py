@@ -36,7 +36,6 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
     monkeypatch.setattr(
         loop, "insert_release", lambda _db, releases: {r[0] for r in releases}
     )
-    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_args, **_kwargs: None)
 
     with caplog.at_level(logging.INFO):
         loop.run_once()
@@ -52,13 +51,14 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
     assert not hasattr(record, "deduped")
 
 
+
+
 def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
-    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     class DummyClient:
         def connect(self) -> None:
@@ -91,24 +91,14 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
     with _connect() as conn:
         conn.execute(
             "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                "example",
-                "other",
-                7000,
-                "und",
-                "",
-                "alt.test",
-                100,
-                1,
-                1,
-                json.dumps([(1, "m1", "alt.test", 100)]),
-            ),
+            ("example", "other", 7000, "und", "", "alt.test", 100, 1, 1, json.dumps([(1, "m1", "alt.test", 100)])),
         )
         conn.commit()
 
     monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
 
     loop.run_once()
+
     with sqlite3.connect(db_path) as check:
         row = check.execute(
             "SELECT size_bytes, part_count, segments FROM release WHERE norm_title = 'example'"
@@ -122,12 +112,12 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
 
 
 def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
+
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
-    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     class DummyClient:
         def connect(self) -> None:

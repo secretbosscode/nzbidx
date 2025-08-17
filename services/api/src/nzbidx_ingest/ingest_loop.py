@@ -25,7 +25,6 @@ from .main import (
     CATEGORY_MAP,
     prune_group,
 )
-
 from email.utils import parsedate_to_datetime
 from datetime import timezone
 
@@ -209,6 +208,9 @@ def _process_groups(
                 inserted = {r[0] for r in releases.values()}
             metrics["inserted"] = len(inserted)
 
+        changed: set[str] = set()
+        part_counts: dict[str, int] = {}
+        has_parts_flags: dict[str, bool] = {}
         if db is not None:
             try:
                 cur = db.cursor()
@@ -245,20 +247,25 @@ def _process_groups(
                     ]
                     combined_segments = existing_segments + new_segments
                     total_size = sum(s for _n, _m, _g, s in combined_segments)
+                    part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
                             json.dumps(combined_segments),
                             has_parts,
-                            len(combined_segments),
+                            part_counts[title],
                             total_size,
                             title,
                         ),
                     )
+                    has_parts_flags[title] = has_parts
+                    changed.add(title)
                 db.commit()
             except Exception:
                 pass
+
+        changed |= inserted
         cursors.set_cursor(group, current)
         metrics["deduplicated"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
@@ -307,7 +314,7 @@ def _process_groups(
         sleep_ms = 0
         if INGEST_SLEEP_MS > 0 and avg_db_ms > INGEST_DB_LATENCY_MS:
             ratio = 1.0
-            if avg_db_ms > INGEST_DB_LATENCY_MS and INGEST_DB_LATENCY_MS > 0:
+            if INGEST_DB_LATENCY_MS > 0:
                 ratio = max(ratio, avg_db_ms / INGEST_DB_LATENCY_MS)
             sleep_ms = max(sleep_ms, int(INGEST_SLEEP_MS * ratio))
         if sleep_ms > 0:
