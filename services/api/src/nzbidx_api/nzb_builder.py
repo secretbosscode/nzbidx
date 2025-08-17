@@ -87,9 +87,7 @@ def _build_xml_from_segments(
         if g:
             ET.SubElement(groups_el, "group").text = g
     segs_el = ET.SubElement(file_el, "segments")
-    for number, msgid, _group, size in sorted(segments, key=lambda s: s[0])[
-        :MAX_SEGMENTS
-    ]:
+    for number, msgid, _group, size in sorted(segments, key=lambda s: s[0]):
         seg_el = ET.SubElement(
             segs_el, "segment", {"bytes": str(size), "number": str(number)}
         )
@@ -100,7 +98,6 @@ def _build_xml_from_segments(
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
-MAX_SEGMENTS = 1000
 
 
 def build_nzb_for_release(release_id: str) -> str:
@@ -122,6 +119,17 @@ def build_nzb_for_release(release_id: str) -> str:
         segments = _segments_from_db(release_id)
         if not segments:
             raise newznab.NzbFetchError("no segments found")
+        max_segments = config.nzb_max_segments()
+        if len(segments) > max_segments:
+            log.warning(
+                "segment_limit_exceeded",
+                extra={
+                    "release_id": release_id,
+                    "segment_count": len(segments),
+                    "limit": max_segments,
+                },
+            )
+            raise newznab.NzbFetchError("segment count exceeds limit")
     except LookupError as exc:
         err = str(exc).lower()
         if "not found" in err:

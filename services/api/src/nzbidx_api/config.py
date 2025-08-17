@@ -90,6 +90,13 @@ def nzb_timeout_seconds() -> int:
 
 
 @lru_cache()
+def nzb_max_segments() -> int:
+    """Maximum number of segments allowed in an NZB document."""
+
+    return _int_env("NZB_MAX_SEGMENTS", 1000)
+
+
+@lru_cache()
 def nntp_timeout_seconds() -> int:
     """Connection timeout for NNTP operations."""
     return _int_env("NNTP_TIMEOUT", 30)

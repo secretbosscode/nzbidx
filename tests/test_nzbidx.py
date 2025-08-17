@@ -272,14 +272,19 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
     assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
 
 
-def test_enforces_segment_limit(monkeypatch) -> None:
-    """Only ``MAX_SEGMENTS`` segments should be included."""
+def test_segment_limit_exceeded(monkeypatch, caplog) -> None:
+    """Exceeding the segment limit should raise an error."""
 
-    monkeypatch.setattr(nzb_builder, "MAX_SEGMENTS", 5, raising=False)
+    monkeypatch.setenv("NZB_MAX_SEGMENTS", "5")
+    from nzbidx_api import config as api_config
+
+    api_config.nzb_max_segments.cache_clear()
     segs = [(i, f"msg{i}@example.com", "g", 0) for i in range(1, 11)]
     monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: segs)
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
-    assert xml.count("<segment ") == 5
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(newznab.NzbFetchError):
+            nzb_builder.build_nzb_for_release("MyRelease")
+    assert any(rec.message == "segment_limit_exceeded" for rec in caplog.records)
 
 
 def test_basic_api_and_ingest(monkeypatch) -> None:
