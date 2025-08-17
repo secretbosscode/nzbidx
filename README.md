@@ -106,8 +106,8 @@ faster serializer once compatible.
 | `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup (avoids writes to `/data`) | _(unset)_ |
 | `REDIS_DATA_DIR` | Directory Redis uses for persistence (bind-mounted) | `/data` |
 | `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
-| `SAFESEARCH` | `on` hides adult categories | `on` |
-| `ALLOW_XXX` | `true` enables the XXX category | `false` |
+| `SAFESEARCH` | `on` hides adult categories | `off` |
+| `ALLOW_XXX` | `true` enables the XXX category | `true` |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
 | `NZBIDX_USE_STD_JSON` | `0` uses `orjson` if installed; `1` or unset uses the standard library `json` module | `1` |
