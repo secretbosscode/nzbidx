@@ -20,7 +20,10 @@
         "language": { "type": "keyword" },
         "tags": { "type": "keyword" },
         "posted_at": { "type": "date" },
-        "size_bytes": { "type": "long" }
+        "size_bytes": { "type": "long" },
+        "source_group": { "type": "keyword" },
+        "has_parts": { "type": "boolean" },
+        "part_count": { "type": "integer" }
       }
     }
   }

@@ -8,6 +8,14 @@ def test_build_index_template_without_ilm():
     assert "index.lifecycle.rollover_alias" not in settings
 
 
+def test_build_index_template_has_new_mappings():
+    template = main.build_index_template(ilm=False)
+    properties = template["template"]["mappings"]["properties"]
+    assert properties["source_group"]["type"] == "keyword"
+    assert properties["has_parts"]["type"] == "boolean"
+    assert properties["part_count"]["type"] == "integer"
+
+
 def test_init_opensearch_without_ilm(monkeypatch):
     body_holder = {}
 
