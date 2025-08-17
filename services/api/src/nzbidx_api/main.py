@@ -15,7 +15,6 @@ from typing import Optional, Callable
 from nzbidx_common.os import OS_RELEASES_ALIAS
 import threading
 from nzbidx_ingest import ingest_loop
-from nzbidx_ingest.main import prune_orphaned_releases
 
 # Default to the standard library JSON module unless explicitly disabled
 if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
@@ -432,7 +431,6 @@ def init_opensearch() -> None:
             except Exception:
                 pass
         opensearch = client
-        prune_orphaned_releases(client)
         logger.info("OpenSearch ready")
     except Exception as exc:  # pragma: no cover - optional dependency
         logger.warning("OpenSearch unavailable: %s", exc)
