@@ -4,8 +4,8 @@ If you find this project useful, donations are welcome at `BC1QTL4RMQJXTJ2K05UMG
 
 NZBidx is a lightweight, Newznab-compatible indexer implemented as a single
 Python application. It exposes Starlette endpoints backed by OpenSearch and
-Redis and runs a background worker that parses NNTP headers, normalises
-subjects and indexes metadata into OpenSearch.
+runs a background worker that parses NNTP headers, normalises subjects and
+indexes metadata into OpenSearch.
 
 Only release metadata is stored; binaries are discarded during ingest.
 
@@ -33,8 +33,6 @@ The default compose files apply a few settings aimed at keeping searches fast:
 
 * **OpenSearch** runs with a fixed 512 MB heap via `OPENSEARCH_JAVA_OPTS` and uses
   a slower `30s` refresh interval with replicas disabled for better write throughput.
-* **Redis** limits memory to 256 MB and evicts keys with a `volatile-lru` policy to
-  keep frequently accessed results in RAM.
 
 ## Quickstart
 
@@ -50,7 +48,7 @@ The OpenAPI schema is available at `http://localhost:8080/openapi.json`.
 
 ### Use existing services
 
-Already running Postgres, Redis, or an OpenSearch/ElasticSearch instance?
+Already running Postgres or an OpenSearch/ElasticSearch instance?
 Create an override file and point `nzbidx` at your own services:
 
 ```yaml
@@ -59,7 +57,6 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://nzbidx:nzbidx@host.docker.internal:5432/nzbidx
       OPENSEARCH_URL: http://host.docker.internal:30003
-      REDIS_URL: redis://host.docker.internal:6379/0
     depends_on: []
 ```
 
@@ -102,9 +99,6 @@ faster serializer once compatible.
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
 | `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
 | `OPENSEARCH_TIMEOUT_SECONDS` | Timeout in seconds for OpenSearch connections | `2` |
-| `REDIS_URL` | Redis endpoint | `redis://redis:6379/0` |
-| `REDIS_DISABLE_PERSISTENCE` | Disable Redis `save` and `appendonly` on startup (avoids writes to `/data`) | _(unset)_ |
-| `REDIS_DATA_DIR` | Directory Redis uses for persistence (bind-mounted) | `/data` |
 | `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `off` |
 | `ALLOW_XXX` | `true` enables the XXX category | `true` |
@@ -128,13 +122,6 @@ faster serializer once compatible.
 > **Note**: To avoid premature API timeouts during NZB generation, ensure
 > `NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT`.
 
-Redis persistence is enabled by default. Setting `REDIS_DISABLE_PERSISTENCE`
-to a truthy value disables persistence. When disabled, the app issues
-`CONFIG SET save ""` and `appendonly no` to avoid permission errors, and the
-bundled `docker-compose` files apply the same commands when
-`REDIS_DISABLE_PERSISTENCE` is set so nothing is written to `/data`. Use
-`REDIS_DATA_DIR` to bind mount a custom directory for persistence if the
-default `/data` path is unsuitable.
 
 Language detection improves the accuracy of release metadata but incurs a
 performance cost. Results are cached using an LRU strategy, yet disabling
@@ -238,7 +225,7 @@ Override the service name with `OTEL_SERVICE_NAME`.
 
 ### Circuit breaker behavior
 
-OpenSearch and Redis calls use a small circuit breaker with jittered
+OpenSearch calls use a small circuit breaker with jittered
 retries. After repeated failures the breaker opens and search endpoints
 return empty responses while NZB retrieval returns HTTP 503. The circuit
 half-opens after `CB_RESET_SECONDS` allowing a probe to close it on

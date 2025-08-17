@@ -108,7 +108,6 @@ def test_status_endpoint() -> None:
         else:
             data = json.loads(response.body)
         assert data["breaker"]["os"] == "closed"
-        assert data["breaker"]["redis"] == "closed"
 
 
 def test_config_endpoint(monkeypatch) -> None:

@@ -6,24 +6,11 @@ import os
 import html
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime, timezone
 from email.utils import format_datetime
 
-from .middleware_circuit import (
-    CircuitOpenError,
-    call_with_retry,
-    call_with_retry_async,
-    redis_breaker,
-)
 from .metrics_log import inc_nzb_cache_hit, inc_nzb_cache_miss
-from .otel import start_span
-
-# Optional redis dependency for caching
-try:  # pragma: no cover - import guard
-    from redis import Redis
-except Exception:  # pragma: no cover - optional dependency
-    Redis = None  # type: ignore
 
 from . import nzb_builder
 
@@ -253,8 +240,8 @@ def rss_xml(items: list[dict[str, str]]) -> str:
     )
 
 
-async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
-    """Return an NZB document for ``release_id`` using ``cache``.
+async def get_nzb(release_id: str, cache: Optional[Any]) -> str:
+    """Return an NZB document for ``release_id`` using an optional in-memory cache.
 
     The actual NZB building is delegated to
     :func:`nzb_builder.build_nzb_for_release`. When ``cache`` is provided the
@@ -273,29 +260,20 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
             return await value
         return value
 
-    async def _cache_call(func, *args):
-        if inspect.iscoroutinefunction(func):
-            return await call_with_retry_async(redis_breaker, "redis", func, *args)
-        result = call_with_retry(redis_breaker, "redis", func, *args)
-        return await _maybe_await(result)
-
     key = f"nzb:{release_id}"
     if cache:
         try:
-            with start_span("redis.get"):
-                cached = await _cache_call(cache.get, key)
-        except CircuitOpenError:
-            inc_nzb_cache_miss()
-            raise
-        except Exception as exc:
-            log.warning("redis get failed for %s: %s", release_id, exc)
-            inc_nzb_cache_miss()
+            cached = await _maybe_await(cache.get(key))
+        except Exception as exc:  # pragma: no cover - defensive
+            log.warning("cache get failed for %s: %s", release_id, exc)
         else:
             if cached:
                 inc_nzb_cache_hit()
                 if cached == FAIL_SENTINEL:
                     raise NzbFetchError("previous fetch failed")
-                return cached.decode("utf-8")
+                if isinstance(cached, (bytes, bytearray)):
+                    return cached.decode("utf-8")
+                return cached
             inc_nzb_cache_miss()
 
     try:
@@ -305,18 +283,16 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     except NzbFetchError:
         if cache:
             try:
-                with start_span("redis.setex"):
-                    await _cache_call(cache.setex, key, FAIL_TTL, FAIL_SENTINEL)
-            except Exception as exc:
-                log.warning("redis setex failed for %s: %s", release_id, exc)
+                await _maybe_await(cache.setex(key, FAIL_TTL, FAIL_SENTINEL))
+            except Exception as exc:  # pragma: no cover - defensive
+                log.warning("cache setex failed for %s: %s", release_id, exc)
         raise
 
     if cache:
         try:
-            with start_span("redis.setex"):
-                await _cache_call(cache.setex, key, SUCCESS_TTL, xml)
-        except Exception as exc:
-            log.warning("redis setex failed for %s: %s", release_id, exc)
+            await _maybe_await(cache.setex(key, SUCCESS_TTL, xml))
+        except Exception as exc:  # pragma: no cover - defensive
+            log.warning("cache setex failed for %s: %s", release_id, exc)
 
     return xml
 
