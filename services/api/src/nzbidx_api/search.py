@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from email.utils import format_datetime
 from urllib.parse import quote
 
-from .config import search_timeout_ms
+from .config import _int_env, search_timeout_ms
 from .middleware_circuit import CircuitOpenError, call_with_retry, os_breaker
 from .otel import start_span
 from nzbidx_common.os import OS_RELEASES_ALIAS
@@ -21,6 +21,9 @@ except Exception:  # pragma: no cover - optional dependency
     OpenSearch = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+MAX_LIMIT = _int_env("MAX_LIMIT", 100)
+MAX_OFFSET = _int_env("MAX_OFFSET", 10_000)
 
 
 def _format_pubdate(iso_str: str) -> str:
@@ -66,6 +69,10 @@ async def search_releases_async(
     api_key:
         Optional API key appended to the item link.
     """
+    if limit > MAX_LIMIT:
+        raise ValueError("limit too high")
+    if offset > MAX_OFFSET:
+        offset = MAX_OFFSET
     query = dict(query)
     filters = list(query.get("filter") or [])
     filters.append({"term": {"has_parts": True}})
