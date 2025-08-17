@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -160,6 +159,33 @@ def connect_db() -> Any:
 
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
+
+            # Ensure the release table is partitioned before attempting any
+            # migrations.  ``pg_partitioned_table`` will have a row when the
+            # table exists **and** is partitioned.  If the table exists but
+            # lacks partitioning, raise an informative error so callers know
+            # that manual intervention is required.
+            try:
+                raw = engine.raw_connection()
+                cur = raw.cursor()
+                cur.execute("SELECT 1 FROM pg_class WHERE relname = 'release'")
+                exists = getattr(cur, "rowcount", 0) > 0
+                cur.execute(
+                    "SELECT 1 FROM pg_partitioned_table "
+                    "WHERE partrelid = 'release'::regclass"
+                )
+                partitioned = getattr(cur, "rowcount", 0) > 0
+            except Exception:
+                # On any errors (e.g. system catalogs missing) fall back to the
+                # migration logic below which will attempt to create the
+                # required structures.  Any failures there will surface as
+                # RuntimeError from the caller's perspective.
+                pass
+            else:
+                if exists and not partitioned:
+                    logger.error("release_table_not_partitioned")
+                    raise RuntimeError("release table must be partitioned")
+
             with engine.connect() as conn:  # type: ignore[call-arg]
                 for stmt in (
                     "CREATE EXTENSION IF NOT EXISTS pg_trgm",
@@ -286,7 +312,6 @@ def connect_db() -> Any:
         "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
     )
     return conn
-
 
 
 def insert_release(
@@ -430,6 +455,7 @@ def prune_group(conn: Any, group: str) -> None:
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
+
 
 def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
