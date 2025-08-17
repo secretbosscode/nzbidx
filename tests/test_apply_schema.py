@@ -107,7 +107,7 @@ def test_apply_schema_retries_on_oserror(monkeypatch):
     assert attempts == 3
 
 
-def test_apply_schema_handles_function_with_semicolons(monkeypatch):
+def test_apply_schema_handles_function_with_semicolons_without_sqlparse(monkeypatch):
     executed: list[str] = []
 
     sql = (
