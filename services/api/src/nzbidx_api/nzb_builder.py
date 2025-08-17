@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
     from nzbidx_ingest.main import connect_db  # type: ignore
+    from . import newznab
 
     conn = None
     try:
@@ -68,7 +69,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "error": str(exc),
             },
         )
-        raise
+        raise newznab.NzbDatabaseError(str(exc)) from exc
     finally:
         if conn is not None:
             try:
@@ -144,6 +145,8 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is normalized."
             )
         raise newznab.NzbFetchError(msg) from exc
+    except newznab.NzbDatabaseError:
+        raise
     except Exception as exc:
         raise newznab.NzbFetchError("database query failed") from exc
     return _build_xml_from_segments(release_id, segments)
