@@ -7,8 +7,8 @@ import os
 import time
 import asyncio
 import inspect
+import importlib.resources
 from types import SimpleNamespace
-from importlib import resources
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -310,7 +310,7 @@ async def _maybe_await(result):
 
 def build_ilm_policy() -> dict[str, object]:
     with (
-        resources.files("nzbidx_api.opensearch")
+        importlib.resources.files("nzbidx_api.opensearch")
         .joinpath("ilm-policy.json")
         .open("r", encoding="utf-8")
     ) as f:
@@ -324,7 +324,7 @@ def build_ilm_policy() -> dict[str, object]:
 
 def build_index_template(*, ilm: bool = True) -> dict[str, object]:
     with (
-        resources.files("nzbidx_api.opensearch")
+        importlib.resources.files("nzbidx_api.opensearch")
         .joinpath("index-template.json")
         .open("r", encoding="utf-8")
     ) as f:
