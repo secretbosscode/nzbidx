@@ -1,4 +1,4 @@
-.PHONY: build up down smoke logs prune test fmt lint seed-os snapshot-repo release
+.PHONY: build up down smoke logs prune test fmt lint release
 
 build:
 	docker compose build
@@ -25,13 +25,7 @@ fmt:
 	black .
 
 lint:
-	ruff check .
-
-seed-os:
-	python scripts/seed_os.py
-
-snapshot-repo:
-	docker compose exec nzbidx python scripts/os_snapshot_repo.py
+        ruff check .
 
 release:
 	@[ -n "$(VERSION)" ] || (echo "VERSION required" && exit 1)
