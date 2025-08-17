@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sqlite3
 
-# ruff: noqa: E402
 import sys
 from pathlib import Path
 
@@ -52,6 +51,7 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
     conn.close()
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
+    monkeypatch.setattr(backfill_mod, "bulk_index_releases", lambda *a, **k: None)
     monkeypatch.setattr(backfill_mod, "NNTPClient", lambda: DummyClient())
 
     processed = backfill_mod.backfill_release_parts(release_ids=[1])

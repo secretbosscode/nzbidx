@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# ruff: noqa: E402
 import sqlite3
 import sys
 from pathlib import Path
@@ -42,6 +41,7 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
     conn.close()
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
+    monkeypatch.setattr(backfill_mod, "bulk_index_releases", lambda *a, **k: None)
     monkeypatch.setattr(
         backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)]
     )
@@ -58,3 +58,4 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
     seg2 = json.loads(cur2.fetchone()[0])
     assert seg2[0]["message_id"] == "m2"
     conn2.close()
+

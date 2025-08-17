@@ -36,6 +36,7 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
     monkeypatch.setattr(
         loop, "insert_release", lambda _db, releases: {r[0] for r in releases}
     )
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_args, **_kwargs: None)
 
     with caplog.at_level(logging.INFO):
         loop.run_once()
@@ -57,6 +58,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     class DummyClient:
         def connect(self) -> None:
@@ -66,7 +68,13 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
             return 1
 
         def xover(self, group: str, start: int, end: int):
-            return [{"subject": "Example (2/2)", ":bytes": "150", "message-id": "<m2>"}]
+            return [
+                {
+                    "subject": "Example (2/2)",
+                    ":bytes": "150",
+                    "message-id": "<m2>",
+                }
+            ]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     db_path = tmp_path / "db.sqlite"
@@ -101,10 +109,9 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
 
     loop.run_once()
-
     with sqlite3.connect(db_path) as check:
         row = check.execute(
-            "SELECT size_bytes, part_count, segments FROM release WHERE norm_title = 'example'",
+            "SELECT size_bytes, part_count, segments FROM release WHERE norm_title = 'example'"
         ).fetchone()
     assert row[0] == 250
     assert row[1] == 2
@@ -120,6 +127,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     class DummyClient:
         def connect(self) -> None:
@@ -129,7 +137,13 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
             return 1
 
         def xover(self, group: str, start: int, end: int):
-            return [{"subject": "Example (1/1)", ":bytes": "100", "message-id": "<m1>"}]
+            return [
+                {
+                    "subject": "Example (1/1)",
+                    ":bytes": "100",
+                    "message-id": "<m1>",
+                }
+            ]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     db_path = tmp_path / "db.sqlite"
@@ -137,7 +151,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     def _connect() -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT)"
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT)",
         )
         return conn
 
