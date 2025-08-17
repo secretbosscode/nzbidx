@@ -58,6 +58,7 @@ def backfill_release_parts(
         rows = cur.fetchmany(BATCH_SIZE)
         if not rows:
             break
+        to_index: list[tuple[str, dict[str, object]]] = []
         for rel_id, norm_title, group in rows:
             try:
                 segments = _fetch_segments(norm_title)
@@ -82,9 +83,21 @@ def backfill_release_parts(
                 }
                 for num, msg_id, size in segments
             ]
+            total_size = sum(size for _, _, size in segments)
             conn.execute(
                 f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder} WHERE id = {placeholder}",
                 (json.dumps(seg_data), True, len(seg_data), rel_id),
+            )
+            to_index.append(
+                (
+                    norm_title,
+                    {
+                        "norm_title": norm_title,
+                        "has_parts": True,
+                        "part_count": len(seg_data),
+                        "size_bytes": total_size,
+                    },
+                )
             )
             processed += 1
             if progress_cb:
@@ -93,6 +106,8 @@ def backfill_release_parts(
                 except Exception:  # pragma: no cover - progress callback errors
                     log.exception("progress_callback_failed")
         conn.commit()
+        if to_index:
+            bulk_index_releases(os_client, to_index)
         if to_delete:
             ids = [r for r, _ in to_delete]
             titles = [t for _, t in to_delete]
@@ -102,6 +117,7 @@ def backfill_release_parts(
             bulk_index_releases(os_client, [(t, None) for t in titles])
             log.info("deleted %d invalid releases", len(ids))
             to_delete.clear()
+        to_index.clear()
         log.info("processed %d releases", processed)
     conn.close()
     return processed
