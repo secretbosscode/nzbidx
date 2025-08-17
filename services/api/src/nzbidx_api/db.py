@@ -19,7 +19,8 @@ except Exception:  # pragma: no cover - optional dependency
     AsyncEngine = None  # type: ignore
     create_async_engine = None  # type: ignore
 
-# Optional sqlparse dependency for parsing schema statements
+# Optional sqlparse dependency for parsing schema statements.  When unavailable
+# a lightweight internal splitter handles common PostgreSQL quoting constructs.
 try:  # pragma: no cover - import guard
     import sqlparse
 except Exception:  # pragma: no cover - optional dependency
@@ -38,65 +39,110 @@ else:  # pragma: no cover - no sqlalchemy available
     engine = None
 
 
-def _split_sql_statements(sql: str) -> list[str]:
-    """Split SQL text into individual statements.
+def _split_sql(sql: str) -> list[str]:
+    """Split ``sql`` into individual statements.
 
-    The parser walks the text character by character keeping track of single
-    quotes and ``$$`` blocks so that semicolons inside function bodies do not
-    prematurely terminate a statement.  The function is intentionally simple
-    and only supports ``$$`` dollar quoting which is sufficient for the schema
-    used in tests.
+    The implementation intentionally handles only a small subset of PostgreSQL
+    syntax but correctly preserves semicolons that appear inside quoted strings
+    or dollar-quoted PL/pgSQL blocks.  It also skips over line comments (``--``)
+    and C-style block comments (``/* ... */``) so that any semicolons contained
+    within them do not terminate a statement.  The function is designed as a
+    lightweight fallback when :mod:`sqlparse` is not available.
     """
 
+    import re
+
     statements: list[str] = []
-    current: list[str] = []
-    in_single = False
-    in_dollar = False
+    buf: list[str] = []
     i = 0
-    length = len(sql)
-    while i < length:
+    n = len(sql)
+    in_single = False
+    in_double = False
+    line_comment = False
+    block_comment = False
+    dollars: list[str] = []
+
+    while i < n:
         ch = sql[i]
-        if in_single:
-            current.append(ch)
-            if ch == "'":
-                # Escape by doubling the quote
-                if i + 1 < length and sql[i + 1] == "'":
-                    current.append("'")
-                    i += 1
-                else:
-                    in_single = False
+        nxt = sql[i : i + 2]
+
+        if line_comment:
+            buf.append(ch)
+            i += 1
+            if ch == "\n":
+                line_comment = False
+            continue
+        if block_comment:
+            buf.append(ch)
+            i += 1
+            if nxt == "*/":
+                buf.append("/")
+                i += 1
+                block_comment = False
+            continue
+        if dollars:
+            tag = dollars[-1]
+            if sql.startswith(tag, i):
+                buf.append(tag)
+                i += len(tag)
+                dollars.pop()
+                continue
+            buf.append(ch)
             i += 1
             continue
-        if in_dollar:
-            current.append(ch)
-            if ch == "$" and i + 1 < length and sql[i + 1] == "$":
-                current.append("$")
-                i += 1
-                in_dollar = False
+        if in_single:
+            buf.append(ch)
             i += 1
+            if ch == "'":
+                in_single = False
+            continue
+        if in_double:
+            buf.append(ch)
+            i += 1
+            if ch == '"':
+                in_double = False
+            continue
+
+        if nxt == "--":
+            line_comment = True
+            buf.append(nxt)
+            i += 2
+            continue
+        if nxt == "/*":
+            block_comment = True
+            buf.append(nxt)
+            i += 2
             continue
         if ch == "'":
             in_single = True
-            current.append(ch)
+            buf.append(ch)
             i += 1
             continue
-        if ch == "$" and i + 1 < length and sql[i + 1] == "$":
-            in_dollar = True
-            current.append("$")
-            current.append("$")
-            i += 2
+        if ch == '"':
+            in_double = True
+            buf.append(ch)
+            i += 1
             continue
-        if ch == ";":
-            stmt = "".join(current).strip()
+        if ch == '$':
+            m = re.match(r"\$[A-Za-z0-9_]*\$", sql[i:])
+            if m:
+                tag = m.group(0)
+                dollars.append(tag)
+                buf.append(tag)
+                i += len(tag)
+                continue
+        if ch == ';':
+            stmt = ''.join(buf).strip()
             if stmt:
                 statements.append(stmt)
-            current = []
+            buf.clear()
             i += 1
             continue
-        current.append(ch)
+
+        buf.append(ch)
         i += 1
-    # Capture any trailing statement
-    stmt = "".join(current).strip()
+
+    stmt = ''.join(buf).strip()
     if stmt:
         statements.append(stmt)
     return statements
@@ -112,7 +158,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     if sqlparse:
         statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
     else:  # pragma: no cover - sqlparse not installed
-        statements = _split_sql_statements(sql)
+        statements = _split_sql(sql)
 
     async def _apply(conn: Any) -> None:
         for stmt in statements:
