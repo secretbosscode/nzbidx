@@ -131,7 +131,7 @@ from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
 from .middleware_quota import QuotaMiddleware
 from .search_cache import cache_rss, get_cached_rss
-from .search import search_releases
+from .search import MAX_LIMIT, MAX_OFFSET, search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker, redis_breaker
@@ -751,12 +751,14 @@ async def api(request: Request) -> Response:
         limit = int(params.get("limit", "") or 50)
     except ValueError:
         limit = 50
-    if limit > 100:
+    if limit > MAX_LIMIT:
         return invalid_params("limit too high")
     try:
         offset = int(params.get("offset", "0"))
     except ValueError:
         offset = 0
+    if offset > MAX_OFFSET:
+        offset = MAX_OFFSET
     sort = params.get("sort")
 
     # Adult category gating
