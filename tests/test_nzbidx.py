@@ -6,6 +6,7 @@ import importlib
 import asyncio
 import json
 import logging
+import sqlite3
 import threading
 import time
 import sys
@@ -340,7 +341,7 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
             pass
 
         def execute(self, *args, **kwargs):
-            raise RuntimeError("boom")
+            raise sqlite3.OperationalError("boom")
 
         def fetchone(self):
             return (1,)
@@ -368,8 +369,35 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
     assert any(
         rec.message == "db_query_failed"
         and rec.release_id == "broken"
-        and rec.exception == "RuntimeError"
+        and rec.exception == "OperationalError"
         and rec.error == "boom"
+        for rec in caplog.records
+    )
+
+
+def test_postgres_error_wrapped(monkeypatch, caplog) -> None:
+    """Unexpected DB errors surface original messages."""
+
+    class DummyPostgresError(Exception):
+        pass
+
+    def _segments(_rid: str):
+        raise DummyPostgresError("pg boom")
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
+    monkeypatch.setattr(
+        nzb_builder, "DB_EXCEPTIONS", nzb_builder.DB_EXCEPTIONS + (DummyPostgresError,)
+    )
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(newznab.NzbDatabaseError, match="pg boom"):
+            nzb_builder.build_nzb_for_release("broken")
+
+    assert any(
+        rec.message == "db_query_failed"
+        and rec.release_id == "broken"
+        and rec.exception == "DummyPostgresError"
+        and rec.error == "pg boom"
         for rec in caplog.records
     )
 
