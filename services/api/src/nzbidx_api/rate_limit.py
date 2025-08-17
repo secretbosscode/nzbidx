@@ -47,8 +47,16 @@ class RateLimiter:
                 self.client = {}
             else:
                 if current == 1:
-                    self.client.expire(redis_key, self.window)
-                return int(current)
+                    try:
+                        self.client.expire(redis_key, self.window)
+                    except Exception:  # pragma: no cover - network failure
+                        # Fall back to in-memory tracking on Redis errors
+                        self.use_redis = False
+                        self.client = {}
+                    else:
+                        return int(current)
+                else:
+                    return int(current)
         counts = self.client.setdefault(bucket, {})
         counts[key] = counts.get(key, 0) + 1
         for old in list(self.client.keys()):
