@@ -41,11 +41,20 @@ for row in "${prs[@]}"; do
       echo "$conflicted"
       while IFS= read -r f; do
         if [ "$POLICY" = "PREFER_BASE" ]; then
-          git checkout --theirs -- "$f"
+          if git show ":3:$f" >/dev/null 2>&1; then
+            git checkout --theirs -- "$f"
+            git add -- "$f"
+          else
+            git rm -- "$f"
+          fi
         else
-          git checkout --ours -- "$f"
+          if git show ":2:$f" >/dev/null 2>&1; then
+            git checkout --ours -- "$f"
+            git add -- "$f"
+          else
+            git rm -- "$f"
+          fi
         fi
-        git add -- "$f"
       done <<< "$conflicted"
     fi
     git commit -m "chore: auto-resolve merge conflicts (policy: $POLICY) [skip ci]" || true

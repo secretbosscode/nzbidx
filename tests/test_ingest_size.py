@@ -39,7 +39,7 @@ def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
     def _connect() -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0)"
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0)"
         )
         return conn
 
@@ -120,7 +120,7 @@ def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
     def _connect() -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0)"
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0)"
         )
         return conn
 
@@ -167,7 +167,7 @@ def test_zero_byte_release_skipped(monkeypatch, tmp_path) -> None:
     def _connect() -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0)"
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0)"
         )
         return conn
 

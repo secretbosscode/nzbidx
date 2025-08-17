@@ -6,6 +6,7 @@ import importlib
 import asyncio
 import json
 import logging
+import sqlite3
 import threading
 import time
 import sys
@@ -340,7 +341,7 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
             pass
 
         def execute(self, *args, **kwargs):
-            raise RuntimeError("boom")
+            raise sqlite3.OperationalError("boom")
 
         def fetchone(self):
             return (1,)
@@ -368,8 +369,35 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
     assert any(
         rec.message == "db_query_failed"
         and rec.release_id == "broken"
-        and rec.exception == "RuntimeError"
+        and rec.exception == "OperationalError"
         and rec.error == "boom"
+        for rec in caplog.records
+    )
+
+
+def test_postgres_error_wrapped(monkeypatch, caplog) -> None:
+    """Unexpected DB errors surface original messages."""
+
+    class DummyPostgresError(Exception):
+        pass
+
+    def _segments(_rid: str):
+        raise DummyPostgresError("pg boom")
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
+    monkeypatch.setattr(
+        nzb_builder, "DB_EXCEPTIONS", nzb_builder.DB_EXCEPTIONS + (DummyPostgresError,)
+    )
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(newznab.NzbDatabaseError, match="pg boom"):
+            nzb_builder.build_nzb_for_release("broken")
+
+    assert any(
+        rec.message == "db_query_failed"
+        and rec.release_id == "broken"
+        and rec.exception == "DummyPostgresError"
+        and rec.error == "pg boom"
         for rec in caplog.records
     )
 
@@ -539,13 +567,10 @@ def test_getnzb_timeout(monkeypatch) -> None:
 
     monkeypatch.setattr(api_main, "get_nzb", slow_get_nzb)
     monkeypatch.setattr(api_main, "nzb_timeout_seconds", lambda: 0.01)
-    cache = DummyAsyncCache()
-    monkeypatch.setattr(api_main, "cache", cache)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 504
     assert resp.headers["Retry-After"] == str(api_main.newznab.FAIL_TTL)
-    assert "nzb:1" not in cache.store
 
 
 def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
@@ -574,15 +599,12 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
         raise newznab.NzbDatabaseError("db down")
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error_build)
-    cache = DummyAsyncCache()
-    monkeypatch.setattr(api_main, "cache", cache)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 503
     assert json.loads(resp.body) == {
         "error": {"code": "nzb_unavailable", "message": "database query failed"}
     }
-    assert "nzb:1" not in cache.store
 
 
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
@@ -688,19 +710,8 @@ def test_database_error_not_cached(monkeypatch, cache_cls) -> None:
     assert key not in cache.store
 
 
-@pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
-def test_cached_nzb_served(monkeypatch, cache_cls) -> None:
-    """A cached NZB should be returned without rebuilding."""
-
-    cache = cache_cls()
-    init_calls: list[int] = []
-
-    async def fake_init_cache_async() -> None:
-        init_calls.append(1)
-        api_main.cache = cache
-
-    monkeypatch.setattr(api_main, "init_cache_async", fake_init_cache_async)
-    api_main.cache = None
+def test_getnzb_not_cached(monkeypatch) -> None:
+    """NZB documents should be rebuilt on each request without a cache."""
 
     build_calls: list[str] = []
 
@@ -715,11 +726,9 @@ def test_cached_nzb_served(monkeypatch, cache_cls) -> None:
     assert resp1.status_code == 200
     assert build_calls == ["123"]
 
-    build_calls.clear()
     resp2 = asyncio.run(api_main.api(req))
     assert resp2.status_code == 200
-    assert build_calls == []
-    assert len(init_calls) == 1
+    assert build_calls == ["123", "123"]
 
 
 def test_connect_db_creates_parent(tmp_path, monkeypatch) -> None:

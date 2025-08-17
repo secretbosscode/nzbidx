@@ -17,7 +17,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 ## Breaker stuck open
 - **Symptoms:** search endpoints return empty arrays or `503` for NZB retrieval.
 - **Checks:** `curl -fsS localhost:8080/health | jq .breaker` shows `open`.
-- **Actions:** verify OpenSearch and Redis are reachable. Reset with
+- **Actions:** verify OpenSearch is reachable. Reset with
   `docker compose restart nzbidx` once dependencies are healthy.
 - **Threshold hint:** alert if the breaker stays open >5m.
 - **PromQL:** `nzbidx_breaker_state == 1`
@@ -37,7 +37,6 @@ script at `db/init/schema.sql` handles this during database provisioning.
   - Logs: `docker compose logs nzbidx`
   - Dependencies: `curl -fsS localhost:8080/health`,
     `docker compose exec opensearch curl -fsS localhost:9200/_cluster/health`,
-    `docker compose exec redis redis-cli PING`
   - Recent deploys: `git log -1 --oneline`
 - **Actions:** inspect upstream failures, roll back or redeploy.
 - **Threshold hint:** alert if 5xx rate >1% for 5m.
