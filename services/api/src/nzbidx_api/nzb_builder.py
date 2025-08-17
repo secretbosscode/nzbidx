@@ -100,9 +100,12 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_timeout_seconds.cache_clear()
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
+
     log.info("starting nzb build for release %s", release_id)
     try:
         segments = _segments_from_db(release_id)
+        if not segments:
+            raise newznab.NzbFetchError("no segments found")
     except LookupError as exc:
         raise newznab.NzbFetchError(str(exc)) from exc
     except Exception as exc:
