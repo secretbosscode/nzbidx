@@ -138,7 +138,7 @@ def _process_groups(
             if high > 0:
                 cursors.mark_irrelevant(group)
             continue
-        metrics = {"processed": 0, "inserted": 0, "indexed": 0}
+        metrics = {"processed": 0, "inserted": 0}
         batch_start = time.monotonic()
         current = last
         releases: dict[
@@ -319,7 +319,6 @@ def _process_groups(
             os_start = time.monotonic()
             bulk_index_releases(os_client, to_index)
             os_latency = time.monotonic() - os_start
-            metrics["indexed"] = len(to_index)
         cursors.set_cursor(group, current)
         metrics["deduplicated"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
@@ -329,19 +328,13 @@ def _process_groups(
             if metrics["processed"]
             else 0.0
         )
-        metrics["opensearch_latency_ms"] = int(os_latency * 1000)
         avg_db_ms = (
             round((db_latency * 1000) / metrics["processed"], 3)
             if metrics["processed"]
             else 0.0
         )
-        avg_os_ms = (
-            round((os_latency * 1000) / metrics["indexed"], 3)
-            if metrics["indexed"]
-            else 0.0
-        )
+        avg_os_ms = round((os_latency * 1000) / len(to_index), 3) if to_index else 0.0
         metrics["average_database_latency_ms"] = avg_db_ms
-        metrics["average_opensearch_latency_ms"] = avg_os_ms
         metrics["cursor"] = current
         metrics["high_water"] = high
         remaining = max(high - current, 0)
