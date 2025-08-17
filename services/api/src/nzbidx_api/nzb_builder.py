@@ -68,7 +68,9 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "error": str(exc),
             },
         )
-        raise
+        from . import newznab
+
+        raise newznab.NzbDatabaseError(str(exc)) from exc
 
 
 def _build_xml_from_segments(
@@ -138,6 +140,8 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is normalized."
             )
         raise newznab.NzbFetchError(msg) from exc
+    except newznab.NzbDatabaseError:
+        raise
     except Exception as exc:
         raise newznab.NzbFetchError("database query failed") from exc
     return _build_xml_from_segments(release_id, segments)
