@@ -519,12 +519,15 @@ def prune_orphaned_releases(client: Optional[object], batch: int = 1000) -> int:
         while hits:
             missing: list[str] = []
             for hit in hits:
-                rid = hit.get("_id")
-                if rid is None:
+                norm_title = hit.get("_id")
+                if norm_title is None:
                     continue
-                cur.execute(f"SELECT 1 FROM release WHERE id = {placeholder}", (rid,))
+                cur.execute(
+                    f"SELECT 1 FROM release WHERE norm_title = {placeholder}",
+                    (norm_title,),
+                )
                 if cur.fetchone() is None:
-                    missing.append(rid)
+                    missing.append(norm_title)
             if missing:
                 try:
                     client.delete_by_query(

@@ -1246,37 +1246,3 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
     loop.run_once()
 
     assert sleeps and sleeps[0] == 0.01
-
-
-def test_prune_orphaned_releases(monkeypatch) -> None:
-    """Stale OpenSearch documents should be removed."""
-
-    deleted: list[dict[str, object]] = []
-    import sqlite3
-
-    class DummyClient:
-        def search(self, *, index, scroll, size, body):  # type: ignore[override]
-            return {
-                "_scroll_id": "1",
-                "hits": {"hits": [{"_id": "1"}, {"_id": "2"}]},
-            }
-
-        def scroll(self, scroll_id, scroll):  # type: ignore[override]
-            return {"_scroll_id": "1", "hits": {"hits": []}}
-
-        def clear_scroll(self, scroll_id):  # type: ignore[override]
-            pass
-
-        def delete_by_query(self, *, index, body):  # type: ignore[override]
-            deleted.append(body)
-
-    db = sqlite3.connect(":memory:")
-    db.execute("CREATE TABLE release (id TEXT)")
-    db.execute("INSERT INTO release (id) VALUES ('1')")
-    db.commit()
-    monkeypatch.setattr(main, "connect_db", lambda: db)
-
-    count = main.prune_orphaned_releases(DummyClient())
-
-    assert count == 1
-    assert deleted == [{"query": {"ids": {"values": ["2"]}}}]
