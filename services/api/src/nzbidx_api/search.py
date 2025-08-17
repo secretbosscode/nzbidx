@@ -69,6 +69,10 @@ async def search_releases_async(
     api_key:
         Optional API key appended to the item link.
     """
+    if limit < 0:
+        raise ValueError("limit must be >= 0")
+    if offset < 0:
+        raise ValueError("offset must be >= 0")
     if limit > MAX_LIMIT:
         raise ValueError("limit too high")
     if offset > MAX_OFFSET:
