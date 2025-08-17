@@ -447,7 +447,7 @@ def run_forever(stop_event: Event | None = None) -> None:
                 logger.info("ingest_loop_interrupted")
                 raise
             logger.exception("ingest_loop_failure")
-            delay = INGEST_POLL_MAX_SECONDS
+            raise
         delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
         if stop_event:
             if stop_event.wait(delay):

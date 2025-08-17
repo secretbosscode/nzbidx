@@ -303,14 +303,6 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
             except Exception as exc:
                 log.warning("redis setex failed for %s: %s", release_id, exc)
         raise
-    except Exception as exc:  # pragma: no cover - future real implementation
-        if cache:
-            try:
-                with start_span("redis.setex"):
-                    await _cache_call(cache.setex, key, FAIL_TTL, FAIL_SENTINEL)
-            except Exception as exc2:
-                log.warning("redis setex failed for %s: %s", release_id, exc2)
-        raise NzbFetchError("failed to fetch nzb") from exc
 
     if cache:
         try:

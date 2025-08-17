@@ -78,6 +78,10 @@ credentials in the URL:
 OPENSEARCH_URL: http://user:password@host.docker.internal:30003
 ```
 
+Both the ingest worker and the API must use the **same persistent database**
+specified via `DATABASE_URL`. Using different databases or an in-memory
+SQLite database prevents NZB downloads from working.
+
 ## Environment Variables
 
 Environment variables are defined directly in the compose files. Adjust values

@@ -147,17 +147,15 @@ except Exception:  # pragma: no cover - optional dependency
 def connect_db() -> Any:
     """Connect to the database and ensure the release table exists.
 
-    If ``DATABASE_URL`` points at PostgreSQL the connection will use the
-    ``psycopg`` driver.  When that driver is missing or unavailable, the
-    function falls back to an in-memory SQLite database so the ingest worker
-    can still run in a degraded mode.
+    ``DATABASE_URL`` must point to a persistent database.  If the URL uses a
+    PostgreSQL scheme the ``psycopg`` driver and ``sqlalchemy`` are required.
+    Missing configuration or driver dependencies raises :class:`RuntimeError`.
     """
 
     url = os.getenv("DATABASE_URL")
     if not url:
-        logger.warning("database_url_missing")
-        url = ":memory:"
-        logger.warning("sqlite_fallback", extra={"url": url})
+        logger.error("database_url_missing")
+        raise RuntimeError("DATABASE_URL environment variable is required")
     parsed = urlparse(url)
 
     if parsed.scheme.startswith("postgres"):
@@ -232,8 +230,9 @@ def connect_db() -> Any:
             return _connect(url)
         except ModuleNotFoundError as exc:  # pragma: no cover - missing driver
             logger.warning("psycopg_unavailable", extra={"error": str(exc)})
-            logger.warning("sqlite_fallback", extra={"url": ":memory:"})
-            return sqlite3.connect(":memory:")
+            raise RuntimeError(
+                "psycopg driver is required for PostgreSQL URLs"
+            ) from exc
         except Exception as exc:  # pragma: no cover - network errors
             msg = str(getattr(exc, "orig", exc)).lower()
             if "does not exist" not in msg and "invalid catalog name" not in msg:
@@ -249,6 +248,9 @@ def connect_db() -> Any:
     # Treat remaining URLs as SQLite database files.  Only attempt to create
     # directories for plain file paths; URLs with a scheme (``foo://``) should
     # be handled by their respective drivers instead.
+    if url == ":memory":
+        raise RuntimeError("DATABASE_URL must point to a persistent database")
+
     if url != ":memory:" and "://" not in url:
         path = Path(url)
         path.parent.mkdir(parents=True, exist_ok=True)
