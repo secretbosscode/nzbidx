@@ -189,3 +189,8 @@ os_breaker: CircuitBreaker[object] = CircuitBreaker(
     max_failures=cb_failure_threshold(),
     reset_seconds=cb_reset_seconds(),
 )
+
+redis_breaker: CircuitBreaker[object] = CircuitBreaker(
+    max_failures=cb_failure_threshold(),
+    reset_seconds=cb_reset_seconds(),
+)

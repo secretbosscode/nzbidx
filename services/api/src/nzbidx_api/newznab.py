@@ -13,6 +13,7 @@ from email.utils import format_datetime
 from .metrics_log import inc_nzb_cache_hit, inc_nzb_cache_miss
 
 from . import nzb_builder
+from .utils import maybe_await
 
 log = logging.getLogger(__name__)
 
@@ -253,17 +254,10 @@ async def get_nzb(release_id: str, cache: Optional[Any]) -> str:
     :class:`NzbDatabaseError` from the builder is propagated unchanged.
     """
 
-    import inspect
-
-    async def _maybe_await(value):
-        if inspect.isawaitable(value):
-            return await value
-        return value
-
     key = f"nzb:{release_id}"
     if cache:
         try:
-            cached = await _maybe_await(cache.get(key))
+            cached = await maybe_await(cache.get(key))
         except Exception as exc:  # pragma: no cover - defensive
             log.warning("cache get failed for %s: %s", release_id, exc)
         else:
@@ -283,14 +277,14 @@ async def get_nzb(release_id: str, cache: Optional[Any]) -> str:
     except NzbFetchError:
         if cache:
             try:
-                await _maybe_await(cache.setex(key, FAIL_TTL, FAIL_SENTINEL))
+                await maybe_await(cache.setex(key, FAIL_TTL, FAIL_SENTINEL))
             except Exception as exc:  # pragma: no cover - defensive
                 log.warning("cache setex failed for %s: %s", release_id, exc)
         raise
 
     if cache:
         try:
-            await _maybe_await(cache.setex(key, SUCCESS_TTL, xml))
+            await maybe_await(cache.setex(key, SUCCESS_TTL, xml))
         except Exception as exc:  # pragma: no cover - defensive
             log.warning("cache setex failed for %s: %s", release_id, exc)
 
