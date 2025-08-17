@@ -14,6 +14,7 @@ from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
 log = logging.getLogger(__name__)
 
 BATCH_SIZE = int(os.getenv("BACKFILL_BATCH_SIZE", "100"))
+XOVER_LOOKBACK = int(os.getenv("BACKFILL_XOVER_LOOKBACK", "10000"))
 
 
 def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
@@ -21,11 +22,13 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
     client = NNTPClient()
     try:
         high = client.high_water_mark(group)
-        headers = client.xover(group, 0, high) if high > 0 else []
+        start = max(0, high - XOVER_LOOKBACK + 1) if XOVER_LOOKBACK > 0 else 0
+        headers = client.xover(group, start, high) if high > 0 else []
     except Exception as exc:
         raise ConnectionError(str(exc)) from exc
     segments: list[tuple[int, str, int]] = []
     target = release_id.lower()
+    seen_numbers: set[int] = set()
     for header in headers:
         subject = str(header.get("subject", ""))
         if normalize_subject(subject).lower() != target:
@@ -40,6 +43,13 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
             continue
         number = extract_segment_number(subject)
         segments.append((number, msg_id, size))
+        seen_numbers.add(number)
+        if (
+            1 in seen_numbers
+            and len(seen_numbers) == max(seen_numbers)
+            and max(seen_numbers) > 1
+        ):
+            break
     return segments
 
 
@@ -77,13 +87,12 @@ def backfill_release_parts(
                 segments = _fetch_segments(norm_title, group or "")
             except ConnectionError as exc:
                 log.warning(
-                    "nntp_fetch_failed", extra={"id": rel_id, "group": group, "error": str(exc)}
+                    "nntp_fetch_failed",
+                    extra={"id": rel_id, "group": group, "error": str(exc)},
                 )
                 continue
             except Exception as exc:  # pragma: no cover - unexpected
-                log.warning(
-                    "unexpected_error", extra={"id": rel_id, "error": str(exc)}
-                )
+                log.warning("unexpected_error", extra={"id": rel_id, "error": str(exc)})
                 to_delete.append((rel_id, norm_title))
                 continue
             if not segments:
