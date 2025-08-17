@@ -8,13 +8,11 @@ import time
 import asyncio
 import inspect
 from types import SimpleNamespace
-from importlib import resources
 from pathlib import Path
 from typing import Optional, Callable
 
 import threading
 from nzbidx_ingest import ingest_loop
-from nzbidx_ingest.main import prune_orphaned_releases
 
 # Default to the standard library JSON module unless explicitly disabled
 if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
@@ -119,7 +117,6 @@ from .newznab import (
     TV_CATEGORY_IDS,
     AUDIO_CATEGORY_IDS,
     BOOKS_CATEGORY_IDS,
-    ADULT_CATEGORY_ID,
     expand_category_ids,
 )
 from .api_key import ApiKeyMiddleware
@@ -129,7 +126,7 @@ from .search_cache import cache_rss, get_cached_rss
 from .search import MAX_LIMIT, MAX_OFFSET, search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
-from .middleware_circuit import CircuitOpenError, redis_breaker
+from .middleware_circuit import CircuitOpenError, os_breaker
 from .otel import current_trace_id, setup_tracing
 from .errors import (
     invalid_params,
@@ -415,7 +412,7 @@ async def status(request: Request) -> ORJSONResponse:
             payload["redis"] = "down"
     else:
         payload["redis"] = "down"
-    payload["breaker"]["redis"] = redis_breaker.state()
+    payload["breaker"]["os"] = os_breaker.state()
     return ORJSONResponse(payload)
 
 

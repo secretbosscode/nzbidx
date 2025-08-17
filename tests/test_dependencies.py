@@ -20,7 +20,6 @@ sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 import nzbidx_api.main as main  # type: ignore  # noqa: E402
-from nzbidx_common.os import OS_RELEASES_ALIAS  # type: ignore  # noqa: E402
 
 
 try:  # pragma: no cover - prefer real TestClient when available
@@ -107,7 +106,7 @@ def test_status_endpoint() -> None:
             data = response.json()
         else:
             data = json.loads(response.body)
-        assert data["breaker"]["redis"] == "closed"
+        assert data["breaker"]["os"] == "closed"
 
 
 def test_config_endpoint(monkeypatch) -> None:
