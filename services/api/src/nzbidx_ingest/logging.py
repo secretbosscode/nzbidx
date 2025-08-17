@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 from typing import Any, Dict
+import threading
 
 _LOG_RECORD_DEFAULTS = logging.LogRecord(
     name="", level=0, pathname="", lineno=0, msg="", args=(), exc_info=None
@@ -30,26 +31,40 @@ class JsonFormatter(logging.Formatter):
         payload.update(extras)
         return json.dumps(payload)
 
+_LOG_LOCK = threading.Lock()
+
 
 def setup_logging() -> None:
     """Configure root logger for structured JSON output."""
-    handler = logging.StreamHandler(sys.stdout)
-    log_format = os.getenv("LOG_FORMAT", "plain")
-    if log_format.lower() == "json":
-        handler.setFormatter(JsonFormatter())
-    else:
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(handler)
-    level = os.getenv("LOG_LEVEL", "INFO").upper()
-    root.setLevel(getattr(logging, level, logging.INFO))
+    if getattr(root, "_nzbidx_logging_configured", False):
+        return
+    with _LOG_LOCK:
+        if getattr(root, "_nzbidx_logging_configured", False):
+            return
 
-    # Quiet overly chatty third‑party libraries to keep logs focused.
-    for name in ("urllib3", "opensearchpy", "httpx"):
-        logging.getLogger(name).setLevel(logging.WARNING)
+        handler = logging.StreamHandler(sys.stdout)
+        log_format = os.getenv("LOG_FORMAT", "plain")
+        if log_format.lower() == "json":
+            handler.setFormatter(JsonFormatter())
+        else:
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+            )
 
-    # Ensure uvicorn access logs use the root JSON formatter for consistency.
-    access = logging.getLogger("uvicorn.access")
-    access.handlers.clear()
-    access.propagate = True
+        root.handlers.clear()
+        root.addHandler(handler)
+        level = os.getenv("LOG_LEVEL", "INFO").upper()
+        root.setLevel(getattr(logging, level, logging.INFO))
+
+        # Quiet overly chatty third‑party libraries to keep logs focused.
+        for name in ("urllib3", "opensearchpy", "httpx"):
+            logging.getLogger(name).setLevel(logging.WARNING)
+
+        # Ensure uvicorn access logs use the same handler without propagation.
+        access = logging.getLogger("uvicorn.access")
+        access.handlers.clear()
+        access.propagate = False
+        access.addHandler(handler)
+
+        root._nzbidx_logging_configured = True
