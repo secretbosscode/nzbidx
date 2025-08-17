@@ -7,6 +7,7 @@ import random
 import time
 import asyncio
 import inspect
+import threading
 from typing import Callable, Generic, TypeVar, Awaitable
 
 from .config import (
@@ -36,13 +37,18 @@ class CircuitBreaker(Generic[T]):
         self.reset_seconds = reset_seconds
         self._failures = 0
         self._opened_at: float | None = None
+        self._lock = threading.Lock()
 
-    def _state(self) -> str:
+    def _state_unlocked(self) -> str:
         if self._opened_at is None:
             return "closed"
         if time.monotonic() - self._opened_at > self.reset_seconds:
             return "half-open"
         return "open"
+
+    def _state(self) -> str:
+        with self._lock:
+            return self._state_unlocked()
 
     def state(self) -> str:
         """Public accessor for the current breaker state."""
@@ -51,7 +57,7 @@ class CircuitBreaker(Generic[T]):
     def is_open(self) -> bool:
         return self._state() == "open"
 
-    def _record_failure(self) -> None:
+    def _record_failure_unlocked(self) -> None:
         self._failures += 1
         if self._failures >= self.max_failures:
             self._opened_at = time.monotonic()
@@ -60,20 +66,30 @@ class CircuitBreaker(Generic[T]):
                 extra={"breaker_state": "open"},
             )
 
-    def _record_success(self) -> None:
+    def _record_failure(self) -> None:
+        with self._lock:
+            self._record_failure_unlocked()
+
+    def _record_success_unlocked(self) -> None:
         self._failures = 0
         self._opened_at = None
 
+    def _record_success(self) -> None:
+        with self._lock:
+            self._record_success_unlocked()
+
     def call(self, func: Callable[..., T], *args, **kwargs) -> T:
-        state = self._state()
-        if state == "open":
-            raise CircuitOpenError("circuit open")
+        with self._lock:
+            if self._state_unlocked() == "open":
+                raise CircuitOpenError("circuit open")
         try:
             result = func(*args, **kwargs)
         except Exception:
-            self._record_failure()
+            with self._lock:
+                self._record_failure_unlocked()
             raise
-        self._record_success()
+        with self._lock:
+            self._record_success_unlocked()
         return result
 
 
