@@ -38,6 +38,70 @@ else:  # pragma: no cover - no sqlalchemy available
     engine = None
 
 
+def _split_sql_statements(sql: str) -> list[str]:
+    """Split SQL text into individual statements.
+
+    The parser walks the text character by character keeping track of single
+    quotes and ``$$`` blocks so that semicolons inside function bodies do not
+    prematurely terminate a statement.  The function is intentionally simple
+    and only supports ``$$`` dollar quoting which is sufficient for the schema
+    used in tests.
+    """
+
+    statements: list[str] = []
+    current: list[str] = []
+    in_single = False
+    in_dollar = False
+    i = 0
+    length = len(sql)
+    while i < length:
+        ch = sql[i]
+        if in_single:
+            current.append(ch)
+            if ch == "'":
+                # Escape by doubling the quote
+                if i + 1 < length and sql[i + 1] == "'":
+                    current.append("'")
+                    i += 1
+                else:
+                    in_single = False
+            i += 1
+            continue
+        if in_dollar:
+            current.append(ch)
+            if ch == "$" and i + 1 < length and sql[i + 1] == "$":
+                current.append("$")
+                i += 1
+                in_dollar = False
+            i += 1
+            continue
+        if ch == "'":
+            in_single = True
+            current.append(ch)
+            i += 1
+            continue
+        if ch == "$" and i + 1 < length and sql[i + 1] == "$":
+            in_dollar = True
+            current.append("$")
+            current.append("$")
+            i += 2
+            continue
+        if ch == ";":
+            stmt = "".join(current).strip()
+            if stmt:
+                statements.append(stmt)
+            current = []
+            i += 1
+            continue
+        current.append(ch)
+        i += 1
+    # Capture any trailing statement
+    stmt = "".join(current).strip()
+    if stmt:
+        statements.append(stmt)
+    return statements
+
+
 async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     """Create database schema if it does not already exist."""
     if not engine or not text:
@@ -48,7 +112,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     if sqlparse:
         statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
     else:  # pragma: no cover - sqlparse not installed
-        statements = [s.strip() for s in sql.split(";") if s.strip()]
+        statements = _split_sql_statements(sql)
 
     async def _apply(conn: Any) -> None:
         for stmt in statements:
