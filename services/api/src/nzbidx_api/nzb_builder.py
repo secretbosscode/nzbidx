@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 
 def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
+    from . import newznab
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -70,7 +72,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "error": str(exc),
             },
         )
-        raise
+        raise newznab.NzbDatabaseError(str(exc)) from exc
 
 
 def _build_xml_from_segments(
@@ -162,6 +164,8 @@ def build_nzb_for_release(release_id: str) -> str:
             )
         raise newznab.NzbFetchError(msg) from exc
     except newznab.NzbFetchError:
+        raise
+    except newznab.NzbDatabaseError:
         raise
     except Exception as exc:
         raise newznab.NzbDatabaseError("database query failed") from exc
