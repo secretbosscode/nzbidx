@@ -31,6 +31,7 @@ class JsonFormatter(logging.Formatter):
         payload.update(extras)
         return json.dumps(payload)
 
+
 _LOG_LOCK = threading.Lock()
 
 
