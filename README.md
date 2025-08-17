@@ -156,9 +156,9 @@ under the `nzbidx-releases` alias and rollover automatically. Indices move to
 the warm phase after `ILM_WARM_DAYS` (default `14`) and are deleted after
 `ILM_DELETE_DAYS` (default `180`).
 
-## Backfill Release Parts
+## Backfill Segments
 
-After deploying a schema that adds the `release_part` table, populate it for
+After deploying a schema that adds the `segments` column, populate it for
 existing releases:
 
     docker compose exec nzbidx python scripts/backfill_release_parts.py
@@ -167,8 +167,7 @@ The script inserts segment metadata for each release and drops entries that no
 longer resolve via NNTP.
 
 To repair any future releases that lose their segment metadata, schedule the
-auto mode which scans for entries with `has_parts=true` but no `release_part`
-rows:
+auto mode which scans for entries with `has_parts=true` but missing `segments`:
 
     docker compose exec nzbidx python scripts/backfill_release_parts.py --auto
 
@@ -375,12 +374,12 @@ images install it from `pyproject.toml`, but local environments may need to run
 `pip install psycopg[binary]>=3.1`. Without the driver the ingest worker will
 log `psycopg_unavailable` and fall back to SQLite.
 
-## Backfilling release parts
+## Backfilling segments
 
-NZB downloads rely on `release_part` rows that map releases to their segments.
-If these rows are missing—for example after migrating an older database—NZB
-requests will fail with `404` responses such as `nzb fetch failed: no segments
-for release`. Populate missing segments with:
+NZB downloads rely on segment metadata stored in the `segments` column. If this
+data is missing—for example after migrating an older database—NZB requests will
+fail with `404` responses such as `nzb fetch failed: no segments for release`.
+Populate missing segments with:
 
 ```
 docker compose exec nzbidx python scripts/backfill_release_parts.py

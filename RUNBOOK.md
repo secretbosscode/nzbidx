@@ -108,9 +108,9 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Actions:** install the driver with `pip install psycopg[binary]>=3.1` or
   rebuild the Docker image so it installs dependencies from `pyproject.toml`.
 
-## Backfilling release parts
+## Backfilling segments
 - **Symptoms:** NZB requests return `404` with `nzb fetch failed: no segments for release`.
-- **Checks:** missing rows in the `release_part` table for affected releases.
+- **Checks:** missing data in the `segments` column for affected releases.
 - **Actions:** populate segments with `docker compose exec nzbidx python scripts/backfill_release_parts.py`.
 
 ## Useful commands

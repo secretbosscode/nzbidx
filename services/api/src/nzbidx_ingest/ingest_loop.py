@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from threading import Event
@@ -28,7 +29,6 @@ from .main import (
     connect_opensearch,
     CATEGORY_MAP,
     prune_group,
-    prune_release_parts,
 )
 
 try:  # pragma: no cover - optional import
@@ -239,47 +239,23 @@ def _process_groups(
                 placeholder = (
                     "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
                 )
-                titles_with_parts = [t for t, v in parts.items() if v]
-                id_map: dict[str, int] = {}
-                if titles_with_parts:
-                    placeholders = ",".join([placeholder] * len(titles_with_parts))
-                    cur.execute(
-                        f"SELECT id, norm_title FROM release WHERE norm_title IN ({placeholders})",
-                        titles_with_parts,
-                    )
-                    id_map = {row[1]: row[0] for row in cur.fetchall()}
-                existing_titles = set(titles_with_parts) - inserted
-                existing_ids = [id_map[t] for t in existing_titles if t in id_map]
-                have_parts: set[int] = set()
-                if existing_ids:
-                    placeholders = ",".join([placeholder] * len(existing_ids))
-                    cur.execute(
-                        f"SELECT DISTINCT release_id FROM release_part WHERE release_id IN ({placeholders})",
-                        existing_ids,
-                    )
-                    have_parts = {row[0] for row in cur.fetchall()}
-                rows = []
-                for title in titles_with_parts:
-                    rid = id_map.get(title)
-                    if rid is None:
+                for title, segs in parts.items():
+                    if not segs:
                         continue
-                    if title not in inserted and rid in have_parts:
-                        continue
-                    for seg_num, msgid, grp, size in parts.get(title, []):
-                        rows.append((rid, seg_num, msgid, grp, size))
-                if rows:
-                    if db.__class__.__module__.startswith("sqlite3"):
-                        cur.executemany(
-                            "INSERT OR IGNORE INTO release_part (release_id, segment_number, message_id, group_name, size_bytes) VALUES (?, ?, ?, ?, ?)",
-                            rows,
-                        )
-                    else:
-                        cur.executemany(
-                            "INSERT INTO release_part (release_id, segment_number, message_id, group_name, size_bytes) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
-                            rows,
-                        )
+                    seg_data = [
+                        {
+                            "number": seg_num,
+                            "message_id": msgid,
+                            "group": grp,
+                            "size": size,
+                        }
+                        for seg_num, msgid, grp, size in segs
+                    ]
+                    cur.execute(
+                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder} WHERE norm_title = {placeholder}",
+                        (json.dumps(seg_data), True, len(seg_data), title),
+                    )
                 db.commit()
-                prune_release_parts(db, client=os_client)
             except Exception:
                 pass
         for title in inserted:

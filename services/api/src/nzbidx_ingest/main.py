@@ -29,7 +29,6 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 from .config import (
     INGEST_OS_BULK,
-    RELEASE_PART_MAX_RELEASES,
     opensearch_timeout_seconds,
 )
 from .logging import setup_logging
@@ -186,6 +185,7 @@ def connect_db() -> Any:
                             tags TEXT NOT NULL DEFAULT '',
                             source_group TEXT,
                             size_bytes BIGINT,
+                            segments JSONB,
                             has_parts BOOLEAN NOT NULL DEFAULT FALSE,
                             part_count INT NOT NULL DEFAULT 0
                         )
@@ -195,23 +195,11 @@ def connect_db() -> Any:
                     "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT",
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0",
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release_part (
-                            release_id BIGINT REFERENCES release(id) ON DELETE CASCADE,
-                            segment_number INT,
-                            message_id TEXT,
-                            group_name TEXT,
-                            size_bytes BIGINT,
-                            PRIMARY KEY (release_id, segment_number)
-                        )
-                        """
-                    ),
-                    "CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx ON release_part (release_id, segment_number)",
                 ):
                     try:
                         conn.execute(text(stmt))
@@ -269,6 +257,7 @@ def connect_db() -> Any:
             tags TEXT NOT NULL DEFAULT '',
             source_group TEXT,
             size_bytes BIGINT,
+            segments TEXT,
             has_parts BOOLEAN NOT NULL DEFAULT 0,
             part_count INT NOT NULL DEFAULT 0
         )
@@ -279,21 +268,6 @@ def connect_db() -> Any:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release_part (
-            release_id INTEGER REFERENCES release(id) ON DELETE CASCADE,
-            segment_number INT,
-            message_id TEXT,
-            group_name TEXT,
-            size_bytes BIGINT,
-            PRIMARY KEY (release_id, segment_number)
-        )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx ON release_part (release_id, segment_number)"
     )
     return conn
 
@@ -489,46 +463,10 @@ def bulk_index_releases(
                 _os_warned = True
 
 
-def prune_release_parts(
-    conn: Any,
-    max_releases: int = RELEASE_PART_MAX_RELEASES,
-    client: Optional[object] = None,
-) -> None:
-    """Retain ``max_releases`` worth of segment data."""
-    if max_releases <= 0:
-        return
-    cur = conn.cursor()
-    cur.execute("SELECT MAX(id) FROM release")
-    row = cur.fetchone()
-    if not row or row[0] is None:
-        return
-    cutoff = row[0] - max_releases
-    if cutoff <= 0:
-        return
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-    cur.execute(f"DELETE FROM release_part WHERE release_id < {placeholder}", (cutoff,))
-    cur.execute(
-        f"UPDATE release SET has_parts = FALSE, part_count = 0 WHERE id < {placeholder}",
-        (cutoff,),
-    )
-    cur.execute(
-        f"SELECT norm_title FROM release WHERE id < {placeholder}",
-        (cutoff,),
-    )
-    titles = [row[0] for row in cur.fetchall()]
-    conn.commit()
-    if client and titles:
-        bulk_index_releases(client, [(t, None) for t in titles])
-
-
 def prune_group(conn: Any, client: Optional[object], group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
     cur = conn.cursor()
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-    cur.execute(
-        f"DELETE FROM release_part WHERE release_id IN (SELECT id FROM release WHERE source_group = {placeholder})",
-        (group,),
-    )
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
     if client:
