@@ -7,6 +7,7 @@ exist the function raises :class:`newznab.NzbFetchError`.
 
 from __future__ import annotations
 
+import json
 import logging
 import xml.etree.ElementTree as ET
 from typing import List, Tuple
@@ -25,22 +26,31 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         cur = conn.cursor()
         placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
         cur.execute(
-            f"SELECT id FROM release WHERE norm_title = {placeholder}", (release_id,)
+            f"SELECT parts FROM release_with_parts WHERE norm_title = {placeholder}",
+            (release_id,),
         )
         row = cur.fetchone()
         if not row:
             log.warning("release_not_found", extra={"release_id": release_id})
             raise LookupError("release not found")
-        rid = row[0]
-        cur.execute(
-            f"SELECT segment_number, message_id, group_name, size_bytes FROM release_part WHERE release_id = {placeholder} ORDER BY segment_number",
-            (rid,),
-        )
-        rows = cur.fetchall()
-        if not rows:
+        parts = row[0] or []
+        if isinstance(parts, str):
+            try:
+                parts = json.loads(parts)
+            except Exception:
+                parts = []
+        if not parts:
             log.warning("missing_release_parts", extra={"release_id": release_id})
             raise LookupError("release has no release_part rows")
-        return [(int(a), str(b), str(c), int(d or 0)) for a, b, c, d in rows]
+        return [
+            (
+                int(p.get("segment_number")),
+                str(p.get("message_id")),
+                str(p.get("group_name")),
+                int(p.get("size_bytes") or 0),
+            )
+            for p in parts
+        ]
     except LookupError:
         raise
     except Exception as exc:

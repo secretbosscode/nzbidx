@@ -49,3 +49,22 @@ CREATE TABLE IF NOT EXISTS release_part (
 
 CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx
     ON release_part (release_id, segment_number);
+
+DROP VIEW IF EXISTS release_with_parts;
+CREATE VIEW release_with_parts AS
+SELECT r.*,
+       COALESCE(
+           json_agg(
+               json_build_object(
+                   'segment_number', rp.segment_number,
+                   'message_id', rp.message_id,
+                   'group_name', rp.group_name,
+                   'size_bytes', rp.size_bytes
+               )
+               ORDER BY rp.segment_number
+           ) FILTER (WHERE rp.segment_number IS NOT NULL),
+           '[]'::json
+       ) AS parts
+FROM release r
+LEFT JOIN release_part rp ON rp.release_id = r.id
+GROUP BY r.id;
