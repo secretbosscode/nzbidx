@@ -3,7 +3,6 @@ from __future__ import annotations
 # ruff: noqa: E402 - path manipulation before imports
 import sys
 from pathlib import Path
-from contextlib import nullcontext
 import sqlite3
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -11,18 +10,16 @@ sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 import nzbidx_ingest.ingest_loop as loop  # type: ignore
 from nzbidx_ingest import config, cursors  # type: ignore
-import nzbidx_api.search as search_mod  # type: ignore
 from nzbidx_ingest.parsers import normalize_subject  # type: ignore
 
 
 def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
-    captured: list[tuple[str, dict[str, object]]] = []
-
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     class DummyClient:
         def connect(self) -> None:
@@ -48,18 +45,8 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
-
-    def fake_bulk(_client, docs):
-        captured.extend(docs)
-
-    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
-
     loop.run_once()
 
-    assert len(captured) == 1
-    doc_id, body = captured[0]
-    assert body.get("size_bytes") == 300
     with sqlite3.connect(db_path) as check:
         rows = check.execute("SELECT norm_title, size_bytes FROM release").fetchall()
     assert rows == [("release", 300)]

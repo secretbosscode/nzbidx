@@ -74,10 +74,8 @@ script at `db/init/schema.sql` handles this during database provisioning.
 
 ## Snapshot failures
 - **Symptoms:** backup jobs error or snapshots missing.
-- **Checks:** `docker compose logs nzbidx | grep snapshot`,
-  `curl -fsS localhost:9200/_snapshot/_all`, `make snapshot-repo`.
-- **Actions:** ensure repository registered and credentials valid; rerun
-  `make snapshot-repo` and inspect OpenSearch logs.
+- **Checks:** `docker compose logs nzbidx | grep snapshot`.
+- **Actions:** ensure snapshot credentials are valid and inspect logs.
 - **Threshold hint:** alert if no successful snapshot in 24h.
 - **PromQL:** `time() - nzbidx_snapshot_last_success > 86400`
 - **Alert rule:**
