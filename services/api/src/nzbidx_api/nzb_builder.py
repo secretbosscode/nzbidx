@@ -42,8 +42,16 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             data = (
                 json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
-        except Exception:
-            data = []
+        except Exception as exc:
+            log.warning(
+                "invalid_segments_json",
+                extra={
+                    "release_id": release_id,
+                    "exception": exc.__class__.__name__,
+                    "error": str(exc),
+                },
+            )
+            raise LookupError("release has no segments") from exc
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
             segments.append(
