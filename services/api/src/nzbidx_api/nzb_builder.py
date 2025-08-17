@@ -13,24 +13,23 @@ import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
 from . import config
+from .db import get_connection
 
 log = logging.getLogger(__name__)
 
 
 def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
-    from nzbidx_ingest.main import connect_db  # type: ignore
-    from . import newznab
-
-    conn = None
+    conn = get_connection()
     try:
-        conn = connect_db()
-        cur = conn.cursor()
-        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-        cur.execute(
-            f"SELECT segments FROM release WHERE norm_title = {placeholder}",
-            (release_id,),
-        )
-        row = cur.fetchone()
+        with conn.cursor() as cur:
+            placeholder = (
+                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+            )
+            cur.execute(
+                f"SELECT segments FROM release WHERE norm_title = {placeholder}",
+                (release_id,),
+            )
+            row = cur.fetchone()
         if not row:
             log.warning("release_not_found", extra={"release_id": release_id})
             raise LookupError("release not found")
@@ -69,13 +68,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "error": str(exc),
             },
         )
-        raise newznab.NzbDatabaseError(str(exc)) from exc
-    finally:
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
+        raise
 
 
 def _build_xml_from_segments(
@@ -145,8 +138,6 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is normalized."
             )
         raise newznab.NzbFetchError(msg) from exc
-    except newznab.NzbDatabaseError:
-        raise
     except Exception as exc:
         raise newznab.NzbFetchError("database query failed") from exc
     return _build_xml_from_segments(release_id, segments)
