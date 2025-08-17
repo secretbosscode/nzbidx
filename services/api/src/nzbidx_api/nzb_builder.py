@@ -39,9 +39,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             raise LookupError("release has no segments")
         try:
             data = (
-                json.loads(seg_data)
-                if isinstance(seg_data, (str, bytes))
-                else seg_data
+                json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
         except Exception:
             data = []
