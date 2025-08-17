@@ -14,7 +14,7 @@ from .config import rate_limit, rate_window
 from .errors import rate_limited
 
 try:  # pragma: no cover - optional dependency
-    from redis import Redis
+    from redis.asyncio import Redis
 except Exception:  # pragma: no cover - optional dependency
     Redis = None  # type: ignore
 
@@ -33,14 +33,14 @@ class RateLimiter:
             self.client: Dict[int, Dict[str, int]] = {}
             self.use_redis = False
 
-    def increment(self, key: str) -> int:
+    async def increment(self, key: str) -> int:
         """Increment and return current count for ``key``."""
         now = int(time.time())
         bucket = now // self.window
         if self.use_redis:  # pragma: no cover - requires redis server
             redis_key = f"rl:{bucket}:{key}"
             try:
-                current = self.client.incr(redis_key)
+                current = await self.client.incr(redis_key)
             except Exception:  # pragma: no cover - network failure
                 # Fall back to in-memory tracking on Redis errors
                 self.use_redis = False
@@ -48,7 +48,7 @@ class RateLimiter:
             else:
                 if current == 1:
                     try:
-                        self.client.expire(redis_key, self.window)
+                        await self.client.expire(redis_key, self.window)
                     except Exception:  # pragma: no cover - network failure
                         # Fall back to in-memory tracking on Redis errors
                         self.use_redis = False
@@ -79,7 +79,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         client_ip = request.client.host if request.client else "anonymous"
-        count = self.limiter.increment(client_ip)
+        count = await self.limiter.increment(client_ip)
         if count > self.limit:
             return rate_limited()
         return await call_next(request)
