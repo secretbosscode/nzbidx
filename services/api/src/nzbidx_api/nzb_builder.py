@@ -12,6 +12,7 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
+from nzbidx_ingest.parsers import normalize_subject
 from . import config
 
 log = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
 
+    release_id = normalize_subject(release_id).lower()
     log.info("starting nzb build for release %s", release_id)
     try:
         segments = _segments_from_db(release_id)
