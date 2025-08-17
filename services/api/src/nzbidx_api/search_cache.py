@@ -10,8 +10,7 @@ _CACHE: Dict[str, Tuple[float, str]] = {}
 
 
 def purge_expired() -> None:
-    """Remove expired entries from the in-memory cache."""
-
+    """Delete any expired cache entries."""
     now = time.time()
     for key, (expires, _) in list(_CACHE.items()):
         if expires < now:

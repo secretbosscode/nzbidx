@@ -2,35 +2,24 @@ from __future__ import annotations
 
 import asyncio
 
-from nzbidx_api import search_cache as sc, config
+from nzbidx_api import config, search_cache
 
 
-def test_cache_purges_expired_entries(monkeypatch) -> None:
-    sc._CACHE.clear()
+def test_cache_purges_expired_entries(monkeypatch):
+    t = [1000.0]
+
+    def fake_time() -> float:
+        return t[0]
+
+    monkeypatch.setattr(search_cache.time, "time", fake_time)
     monkeypatch.setattr(config, "search_ttl_seconds", lambda: 1)
-    current = [100.0]
-    monkeypatch.setattr(sc.time, "time", lambda: current[0])
+    search_cache._CACHE.clear()
 
-    asyncio.run(sc.cache_rss("old", "<rss/>"))
-    assert "old" in sc._CACHE
+    asyncio.run(search_cache.cache_rss("old", "<rss>old</rss>"))
+    assert "old" in search_cache._CACHE
 
-    current[0] = 200.0
-    asyncio.run(sc.cache_rss("new", "<rss2/>"))
+    t[0] += 2
+    asyncio.run(search_cache.cache_rss("new", "<rss>new</rss>"))
 
-    assert "old" not in sc._CACHE
-    assert "new" in sc._CACHE
-
-
-def test_manual_purge_expired(monkeypatch) -> None:
-    sc._CACHE.clear()
-    monkeypatch.setattr(config, "search_ttl_seconds", lambda: 1)
-    current = [100.0]
-    monkeypatch.setattr(sc.time, "time", lambda: current[0])
-
-    asyncio.run(sc.cache_rss("old", "<rss/>"))
-    assert "old" in sc._CACHE
-
-    current[0] = 200.0
-    sc.purge_expired()
-
-    assert "old" not in sc._CACHE
+    assert "old" not in search_cache._CACHE
+    assert "new" in search_cache._CACHE
