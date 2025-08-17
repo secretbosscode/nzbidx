@@ -872,9 +872,7 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
     def db_error_build(_release_id: str) -> str:
         raise newznab.NzbDatabaseError("db down")
 
-    monkeypatch.setattr(
-        newznab.nzb_builder, "build_nzb_for_release", db_error_build
-    )
+    monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error_build)
     cache = DummyAsyncCache()
     monkeypatch.setattr(api_main, "cache", cache)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
