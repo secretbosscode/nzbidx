@@ -10,7 +10,6 @@ import sqlite3
 import threading
 import time
 import sys
-from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
+from nzbidx_api import nzb_builder, newznab  # type: ignore
 from nzbidx_api import db as api_db  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
@@ -31,8 +30,6 @@ from nzbidx_ingest.main import (
     CATEGORY_MAP,
     _infer_category,
     connect_db,
-    bulk_index_releases,
-    OS_RELEASES_ALIAS,
 )  # type: ignore
 
 
@@ -486,76 +483,6 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
         def search(self, **kwargs):
             body_holder["body"] = kwargs["body"]
             return {"hits": {"hits": []}}
-
-def test_bulk_index_releases_builds_payload() -> None:
-    """Bulk payload should include action and source pairs."""
-
-    captured: dict[str, object] = {}
-
-    class DummyClient:
-        def bulk(self, *, body: str, refresh: bool) -> None:
-            captured["body"] = body
-            captured["refresh"] = refresh
-
-    docs = [
-        ("id1", {"norm_title": "one", "category": "2000"}),
-        ("id2", {"norm_title": "two", "category": "3000"}),
-    ]
-
-    bulk_index_releases(DummyClient(), docs)
-
-    lines = captured["body"].splitlines()
-    assert json.loads(lines[0]) == {
-        "index": {"_index": OS_RELEASES_ALIAS, "_id": "id1"}
-    }
-    assert json.loads(lines[1])["norm_title"] == "one"
-
-
-def test_bulk_index_releases_deletes() -> None:
-    """Passing ``None`` deletes documents via the bulk API."""
-
-    captured: dict[str, object] = {}
-
-    class DummyClient:
-        def bulk(self, *, body: str, refresh: bool) -> None:  # type: ignore[override]
-            captured["body"] = body
-
-    bulk_index_releases(DummyClient(), [("id1", None)])
-
-    lines = captured["body"].splitlines()
-    assert lines and json.loads(lines[0]) == {
-        "delete": {"_index": OS_RELEASES_ALIAS, "_id": "id1"}
-    }
-    assert len(lines) == 1
-
-
-def test_bulk_index_releases_logs_errors(caplog) -> None:
-    """Bulk API errors should emit a warning for each failed item."""
-
-    class DummyClient:
-        def bulk(self, *, body: str, refresh: bool) -> dict[str, object]:  # type: ignore[override]
-            return {
-                "errors": True,
-                "items": [
-                    {"index": {"_id": "id1", "error": {"reason": "boom"}}},
-                    {"index": {"_id": "id2"}},
-                ],
-            }
-
-    docs = [
-        ("id1", {"norm_title": "one", "category": "2000"}),
-        ("id2", {"norm_title": "two", "category": "3000"}),
-    ]
-
-    with caplog.at_level(logging.WARNING):
-        bulk_index_releases(DummyClient(), docs)
-
-    assert any(
-        rec.message == "opensearch_bulk_item_failed"
-        and rec.id == "id1"
-        and rec.error == "boom"
-        for rec in caplog.records
-    )
 
 
 def test_getnzb_timeout(monkeypatch) -> None:
@@ -1068,13 +995,11 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
     monkeypatch.setattr(
         loop,
         "insert_release",
         lambda *_args, **_kwargs: True,
     )
-    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_args, **_kwargs: None)
 
     with caplog.at_level(logging.INFO):
         loop.run_once()
@@ -1111,7 +1036,6 @@ def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
 
     loop.run_once()
 
@@ -1144,7 +1068,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
 
     real_sleep = _time.sleep
     sleeps: list[float] = []
@@ -1155,7 +1078,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
         return True
 
     monkeypatch.setattr(loop, "insert_release", fake_insert)
-    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     loop.run_once()
 

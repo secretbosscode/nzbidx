@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
+# ruff: noqa: E402
 import sqlite3
 import sys
-from contextlib import nullcontext
 from pathlib import Path
 
 # ruff: noqa: E402 - path manipulation before imports
@@ -12,7 +11,6 @@ sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api import backfill_release_parts as backfill_mod  # type: ignore
-from nzbidx_api import search as search_mod  # type: ignore
 
 
 def test_backfilled_release_indexed(tmp_path, monkeypatch) -> None:
@@ -38,39 +36,18 @@ def test_backfilled_release_indexed(tmp_path, monkeypatch) -> None:
     conn.commit()
     conn.close()
 
-    class DummyClient:
-        def __init__(self) -> None:
-            self.docs: dict[str, dict[str, object]] = {}
-
-        def bulk(self, *, body: str, refresh: bool) -> None:  # type: ignore[override]
-            lines = body.strip().splitlines()
-            for i in range(0, len(lines), 2):
-                action = json.loads(lines[i])
-                if "index" in action:
-                    doc_id = action["index"]["_id"]
-                    self.docs[doc_id] = json.loads(lines[i + 1])
-                elif "delete" in action:
-                    doc_id = action["delete"]["_id"]
-                    self.docs.pop(doc_id, None)
-
-        def search(self, **kwargs):  # type: ignore[override]
-            hits = [
-                {"_id": doc_id, "_source": body}
-                for doc_id, body in self.docs.items()
-            ]
-            return {"hits": {"hits": hits}}
-
-    client = DummyClient()
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
-    monkeypatch.setattr(backfill_mod, "connect_opensearch", lambda: client)
-    monkeypatch.setattr(backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 100)])
+    monkeypatch.setattr(
+        backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 100)]
+    )
 
     processed = backfill_mod.backfill_release_parts()
     assert processed == 1
-    assert client.docs["r1"]["part_count"] == 1
-    assert client.docs["r1"]["size_bytes"] == 100
-
-    assert client.docs["r1"]["size_bytes"] == 100
+    conn2 = sqlite3.connect(dbfile)
+    cur2 = conn2.cursor()
+    cur2.execute("SELECT part_count, size_bytes FROM release WHERE id = 1")
+    assert cur2.fetchone() == (1, 100)
+    conn2.close()
 
 
 def test_size_bytes_updated(tmp_path, monkeypatch) -> None:
@@ -97,9 +74,9 @@ def test_size_bytes_updated(tmp_path, monkeypatch) -> None:
     conn.close()
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
-    monkeypatch.setattr(backfill_mod, "connect_opensearch", lambda: None)
-    monkeypatch.setattr(backfill_mod, "bulk_index_releases", lambda *a, **k: None)
-    monkeypatch.setattr(backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 100)])
+    monkeypatch.setattr(
+        backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 100)]
+    )
 
     processed = backfill_mod.backfill_release_parts()
     assert processed == 1

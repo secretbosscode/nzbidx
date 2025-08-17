@@ -59,7 +59,7 @@ def setup_logging() -> None:
         root.setLevel(getattr(logging, level, logging.INFO))
 
         # Quiet overly chatty third‑party libraries to keep logs focused.
-        for name in ("urllib3", "opensearchpy", "httpx"):
+        for name in ("urllib3", "httpx"):
             logging.getLogger(name).setLevel(logging.WARNING)
 
         # Ensure uvicorn access logs use the same handler without propagation.

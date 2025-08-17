@@ -12,8 +12,6 @@ from .config import (
     INGEST_BATCH_MAX,
     INGEST_POLL_MIN_SECONDS,
     INGEST_POLL_MAX_SECONDS,
-    INGEST_OS_LATENCY_MS,
-    CB_RESET_SECONDS,
     INGEST_SLEEP_MS,
     INGEST_DB_LATENCY_MS,
 )
@@ -22,24 +20,12 @@ from .nntp_client import NNTPClient
 from .parsers import normalize_subject, detect_language, extract_segment_number
 from .main import (
     insert_release,
-    bulk_index_releases,
-    index_release,  # noqa: F401  # backward compat for tests
     _infer_category,
     connect_db,
-    connect_opensearch,
     CATEGORY_MAP,
     prune_group,
 )
 
-try:  # pragma: no cover - optional import
-    from nzbidx_api.middleware_circuit import os_breaker  # type: ignore
-except Exception:  # pragma: no cover - fallback when api pkg missing
-
-    class _DummyBreaker:
-        def is_open(self) -> bool:  # pragma: no cover - trivial
-            return False
-
-    os_breaker = _DummyBreaker()
 from email.utils import parsedate_to_datetime
 from datetime import timezone
 
@@ -86,14 +72,13 @@ class _AggregateMetrics:
 def _process_groups(
     client: NNTPClient,
     db: object,
-    os_client: object | None,
     groups: list[str],
     ignored: set[str],
 ) -> float:
     aggregate = _AggregateMetrics()
 
     for ig in ignored:
-        prune_group(db, os_client, ig)
+        prune_group(db, ig)
 
     for group in groups:
         last = cursors.get_cursor(group) or 0
@@ -153,7 +138,6 @@ def _process_groups(
                 str | None,
             ],
         ] = {}
-        docs: dict[str, dict[str, object]] = {}
         parts: dict[str, list[tuple[int, str, str, int]]] = {}
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
@@ -198,14 +182,6 @@ def _process_groups(
                     combined_size,
                     combined_posted,
                 )
-                body = docs.get(dedupe_key, {"norm_title": dedupe_key})
-                if combined_tags:
-                    body["tags"] = combined_tags
-                if combined_size > 0:
-                    body["size_bytes"] = combined_size
-                if combined_posted:
-                    body["posted_at"] = combined_posted
-                docs[dedupe_key] = body
             else:
                 releases[dedupe_key] = (
                     dedupe_key,
@@ -216,27 +192,12 @@ def _process_groups(
                     size,
                     posted_at,
                 )
-                body: dict[str, object] = {"norm_title": dedupe_key}
-                if category:
-                    body["category"] = category
-                if language:
-                    body["language"] = language
-                if tags:
-                    body["tags"] = tags
-                if group:
-                    body["source_group"] = group
-                if size > 0:
-                    body["size_bytes"] = size
-                if posted_at:
-                    body["posted_at"] = posted_at
-                docs[dedupe_key] = body
             if message_id:
                 seg_num = extract_segment_number(subject)
                 parts.setdefault(dedupe_key, []).append(
                     (seg_num, message_id.strip("<>"), group, size)
                 )
         db_latency = 0.0
-        os_latency = 0.0
         inserted: set[str] = set()
         if releases:
             db_start = time.monotonic()
@@ -248,9 +209,6 @@ def _process_groups(
                 inserted = {r[0] for r in releases.values()}
             metrics["inserted"] = len(inserted)
 
-        changed: set[str] = set()
-        part_counts: dict[str, int] = {}
-        has_parts_flags: dict[str, bool] = {}
         if db is not None:
             try:
                 cur = db.cursor()
@@ -287,38 +245,20 @@ def _process_groups(
                     ]
                     combined_segments = existing_segments + new_segments
                     total_size = sum(s for _n, _m, _g, s in combined_segments)
-                    part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
                             json.dumps(combined_segments),
                             has_parts,
-                            part_counts[title],
+                            len(combined_segments),
                             total_size,
                             title,
                         ),
                     )
-                    has_parts_flags[title] = has_parts
-                    docs.setdefault(title, {})["size_bytes"] = total_size
-                    changed.add(title)
                 db.commit()
             except Exception:
                 pass
-
-        changed |= inserted
-        for title in changed:
-            doc = docs.get(title)
-            if doc is None:
-                continue
-            count = part_counts.get(title, len(parts.get(title, [])))
-            doc["part_count"] = count
-            doc["has_parts"] = has_parts_flags.get(title, count > 0)
-        to_index = [(doc_id, docs[doc_id]) for doc_id in changed if doc_id in docs]
-        if to_index:
-            os_start = time.monotonic()
-            bulk_index_releases(os_client, to_index)
-            os_latency = time.monotonic() - os_start
         cursors.set_cursor(group, current)
         metrics["deduplicated"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
@@ -333,7 +273,6 @@ def _process_groups(
             if metrics["processed"]
             else 0.0
         )
-        avg_os_ms = round((os_latency * 1000) / len(to_index), 3) if to_index else 0.0
         metrics["average_database_latency_ms"] = avg_db_ms
         metrics["cursor"] = current
         metrics["high_water"] = high
@@ -366,16 +305,10 @@ def _process_groups(
         if metrics["inserted"] == 0:
             cursors.mark_irrelevant(group)
         sleep_ms = 0
-        if os_breaker.is_open():
-            sleep_ms = max(sleep_ms, int(CB_RESET_SECONDS * 500))
-        if INGEST_SLEEP_MS > 0 and (
-            avg_db_ms > INGEST_DB_LATENCY_MS or avg_os_ms > INGEST_OS_LATENCY_MS
-        ):
+        if INGEST_SLEEP_MS > 0 and avg_db_ms > INGEST_DB_LATENCY_MS:
             ratio = 1.0
             if avg_db_ms > INGEST_DB_LATENCY_MS and INGEST_DB_LATENCY_MS > 0:
                 ratio = max(ratio, avg_db_ms / INGEST_DB_LATENCY_MS)
-            if avg_os_ms > INGEST_OS_LATENCY_MS and INGEST_OS_LATENCY_MS > 0:
-                ratio = max(ratio, avg_os_ms / INGEST_OS_LATENCY_MS)
             sleep_ms = max(sleep_ms, int(INGEST_SLEEP_MS * ratio))
         if sleep_ms > 0:
             time.sleep(sleep_ms / 1000)
@@ -422,12 +355,10 @@ def run_once() -> float:
 
     client = NNTPClient()
     db = None
-    os_client: object | None = None
     try:
         client.connect()
         db = connect_db()
-        os_client = connect_opensearch()
-        delay = _process_groups(client, db, os_client, groups, ignored)
+        delay = _process_groups(client, db, groups, ignored)
         last_run = time.time()
         return delay
     finally:
@@ -438,19 +369,6 @@ def run_once() -> float:
         if db is not None:
             try:
                 db.close()
-            except Exception:
-                pass
-        if os_client is not None:
-            try:
-                close = getattr(os_client, "close", None)
-                if callable(close):
-                    close()
-                else:
-                    transport = getattr(os_client, "transport", None)
-                    if transport is not None:
-                        tclose = getattr(transport, "close", None)
-                        if callable(tclose):
-                            tclose()
             except Exception:
                 pass
 

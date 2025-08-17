@@ -19,11 +19,11 @@ included in the log are described below.
 | Field | Description |
 | --- | --- |
 | `processed` | Headers processed in the batch. |
-| `inserted` | Releases stored in PostgreSQL. |
+| `inserted` | Releases written to the database. |
 | `deduplicated` | Releases skipped due to duplicate detection. |
 | `duration_ms` | Total processing time for the batch. |
 | `average_batch_ms` | Average processing time per header. |
-| `average_database_latency_ms` | Average PostgreSQL write latency per header. |
+| `average_database_latency_ms` | Average database write latency per header. |
 | `cursor` | Last article number processed. |
 | `high_water` | Highest article number available on the server. |
 | `remaining` | Articles still pending processing. |

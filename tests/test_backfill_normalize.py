@@ -38,7 +38,7 @@ def test_normalize_releases_merges_parts() -> None:
         None,
     )
 
-    normalize_releases(conn, os_client=None)
+    normalize_releases(conn)
 
     rows = conn.execute("SELECT norm_title, size_bytes FROM release").fetchall()
     assert rows == [("foo:2024-01-01", 300)]
