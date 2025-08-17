@@ -27,4 +27,3 @@ async def cache_rss(key: str, xml: str) -> None:
     from .config import search_ttl_seconds
 
     _CACHE[key] = (time.time() + search_ttl_seconds(), xml)
-

@@ -123,7 +123,7 @@ def _split_sql(sql: str) -> list[str]:
             buf.append(ch)
             i += 1
             continue
-        if ch == '$':
+        if ch == "$":
             m = re.match(r"\$[A-Za-z0-9_]*\$", sql[i:])
             if m:
                 tag = m.group(0)
@@ -131,8 +131,8 @@ def _split_sql(sql: str) -> list[str]:
                 buf.append(tag)
                 i += len(tag)
                 continue
-        if ch == ';':
-            stmt = ''.join(buf).strip()
+        if ch == ";":
+            stmt = "".join(buf).strip()
             if stmt:
                 statements.append(stmt)
             buf.clear()
@@ -142,7 +142,7 @@ def _split_sql(sql: str) -> list[str]:
         buf.append(ch)
         i += 1
 
-    stmt = ''.join(buf).strip()
+    stmt = "".join(buf).strip()
     if stmt:
         statements.append(stmt)
     return statements
