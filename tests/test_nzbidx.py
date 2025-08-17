@@ -156,15 +156,15 @@ def test_release_not_found_logs(monkeypatch, caplog) -> None:
     )
 
 
-def test_missing_release_parts_logs(monkeypatch, caplog) -> None:
-    """Releases without parts should emit a specific warning."""
+def test_missing_segments_logs(monkeypatch, caplog) -> None:
+    """Releases without segments should emit a specific warning."""
 
     class DummyCursor:
         def execute(self, *args, **kwargs):
             pass
 
         def fetchone(self):
-            return ("[]",)
+            return (None,)
 
     class DummyConn:
         def cursor(self):
@@ -181,12 +181,12 @@ def test_missing_release_parts_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(
-            newznab.NzbFetchError, match="release has no release_part rows"
+            newznab.NzbFetchError, match="release has no segments"
         ):
             nzb_builder.build_nzb_for_release("noparts")
 
     assert any(
-        rec.message == "missing_release_parts" and rec.release_id == "noparts"
+        rec.message == "missing_segments" and rec.release_id == "noparts"
         for rec in caplog.records
     )
 

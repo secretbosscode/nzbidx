@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 from nzbidx_api import backfill_release_parts as backfill_mod
+import json
 
 
 def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
@@ -17,29 +18,18 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
             id INTEGER PRIMARY KEY,
             norm_title TEXT,
             source_group TEXT,
-            has_parts BOOLEAN
+            has_parts BOOLEAN,
+            segments TEXT,
+            part_count INT
         )
         """
     )
     cur.execute(
-        """
-        CREATE TABLE release_part (
-            release_id INTEGER,
-            number INT,
-            message_id TEXT,
-            source_group TEXT,
-            size_bytes INT
-        )
-        """
+        "INSERT INTO release (id, norm_title, source_group, has_parts, part_count) VALUES (1, 'r1', 'g1', 1, 0)"
     )
     cur.execute(
-        "INSERT INTO release (id, norm_title, source_group, has_parts) VALUES (1, 'r1', 'g1', 1)"
-    )
-    cur.execute(
-        "INSERT INTO release (id, norm_title, source_group, has_parts) VALUES (2, 'r2', 'g1', 1)"
-    )
-    cur.execute(
-        "INSERT INTO release_part (release_id, number, message_id, source_group, size_bytes) VALUES (2, 1, 'm2', 'g1', 10)"
+        "INSERT INTO release (id, norm_title, source_group, has_parts, segments, part_count) VALUES (2, 'r2', 'g1', 1, ?, 1)",
+        ('[{"number":1,"message_id":"m2","group":"g1","size":10}]',),
     )
     conn.commit()
     conn.close()
@@ -54,8 +44,11 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
 
     conn2 = sqlite3.connect(dbfile)
     cur2 = conn2.cursor()
-    cur2.execute("SELECT COUNT(*) FROM release_part WHERE release_id = 1")
-    assert cur2.fetchone()[0] == 1
-    cur2.execute("SELECT COUNT(*) FROM release_part WHERE release_id = 2")
-    assert cur2.fetchone()[0] == 1
+    cur2.execute("SELECT segments FROM release WHERE id = 1")
+    seg1 = json.loads(cur2.fetchone()[0])
+    assert seg1[0]["message_id"] == "m1"
+    cur2.execute("SELECT segments FROM release WHERE id = 2")
+    seg2 = json.loads(cur2.fetchone()[0])
+    assert seg2[0]["message_id"] == "m2"
     conn2.close()
+

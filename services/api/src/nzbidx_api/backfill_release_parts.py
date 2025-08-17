@@ -1,7 +1,8 @@
-"""Backfill release_part rows for existing releases."""
+"""Backfill segment metadata for existing releases."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import xml.etree.ElementTree as ET
@@ -33,10 +34,10 @@ def backfill_release_parts(
     progress_cb: Optional[Callable[[int], None]] = None,
     release_ids: Optional[Iterable[int]] = None,
 ) -> int:
-    """Populate ``release_part`` rows for existing releases.
+    """Populate segment metadata for existing releases.
 
     A ``progress_cb`` may be supplied to receive the number of processed
-    releases after each successful iteration.  ``release_ids`` may restrict the
+    releases after each successful iteration. ``release_ids`` may restrict the
     job to a specific set of releases.
     """
     conn = connect_db()
@@ -51,10 +52,6 @@ def backfill_release_parts(
         base_sql += f" WHERE id IN ({placeholders})"
         params = ids
     cur.execute(f"{base_sql} ORDER BY id", params)
-    insert_sql = (
-        "INSERT INTO release_part (release_id, number, message_id, source_group, size_bytes) "
-        f"VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})"
-    )
     processed = 0
     to_delete: list[tuple[int, str]] = []
     while True:
@@ -76,12 +73,18 @@ def backfill_release_parts(
                 log.info("no_segments", extra={"id": rel_id})
                 to_delete.append((rel_id, norm_title))
                 continue
-            conn.executemany(
-                insert_sql,
-                [
-                    (rel_id, num, msg_id, group or "", size)
-                    for num, msg_id, size in segments
-                ],
+            seg_data = [
+                {
+                    "number": num,
+                    "message_id": msg_id,
+                    "group": group or "",
+                    "size": size,
+                }
+                for num, msg_id, size in segments
+            ]
+            conn.execute(
+                f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder} WHERE id = {placeholder}",
+                (json.dumps(seg_data), True, len(seg_data), rel_id),
             )
             processed += 1
             if progress_cb:

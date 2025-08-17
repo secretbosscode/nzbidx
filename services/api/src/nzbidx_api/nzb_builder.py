@@ -26,31 +26,39 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         cur = conn.cursor()
         placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
         cur.execute(
-            f"SELECT parts FROM release_with_parts WHERE norm_title = {placeholder}",
+            f"SELECT segments FROM release WHERE norm_title = {placeholder}",
             (release_id,),
         )
         row = cur.fetchone()
         if not row:
             log.warning("release_not_found", extra={"release_id": release_id})
             raise LookupError("release not found")
-        parts = row[0] or []
-        if isinstance(parts, str):
-            try:
-                parts = json.loads(parts)
-            except Exception:
-                parts = []
-        if not parts:
-            log.warning("missing_release_parts", extra={"release_id": release_id})
-            raise LookupError("release has no release_part rows")
-        return [
-            (
-                int(p.get("segment_number")),
-                str(p.get("message_id")),
-                str(p.get("group_name")),
-                int(p.get("size_bytes") or 0),
+        seg_data = row[0]
+        if not seg_data:
+            log.warning("missing_segments", extra={"release_id": release_id})
+            raise LookupError("release has no segments")
+        try:
+            data = (
+                json.loads(seg_data)
+                if isinstance(seg_data, (str, bytes))
+                else seg_data
             )
-            for p in parts
-        ]
+        except Exception:
+            data = []
+        segments: List[Tuple[int, str, str, int]] = []
+        for seg in data or []:
+            segments.append(
+                (
+                    int(seg.get("number", 0)),
+                    str(seg.get("message_id", "")),
+                    str(seg.get("group", "")),
+                    int(seg.get("size", 0) or 0),
+                )
+            )
+        if not segments:
+            log.warning("missing_segments", extra={"release_id": release_id})
+            raise LookupError("release has no segments")
+        return segments
     except LookupError:
         raise
     except Exception as exc:
@@ -118,7 +126,7 @@ def build_nzb_for_release(release_id: str) -> str:
             raise newznab.NzbFetchError("no segments found")
     except LookupError as exc:
         msg = (
-            f"{exc}. To populate missing release parts, run "
+            f"{exc}. To populate missing segments, run "
             "scripts/backfill_release_parts.py"
         )
         raise newznab.NzbFetchError(msg) from exc

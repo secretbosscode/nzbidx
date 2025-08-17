@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # ruff: noqa: E402
-"""Backfill release_part rows from existing releases.
+"""Backfill segment data for existing releases.
 
 The helper iterates over all releases, fetches NZB segment metadata via
-``build_nzb_for_release`` and stores the individual segment details in the
-``release_part`` table. Releases that no longer resolve to any segments are
-removed from storage and pruned from the search index.
+``build_nzb_for_release`` and stores the segment details in the ``release``
+table. Releases that no longer resolve to any segments are removed from storage
+and pruned from the search index.
 """
 
 from __future__ import annotations
@@ -30,10 +30,9 @@ def _auto_mode() -> None:
     cur.execute(
         """
         SELECT r.id FROM release r
-        LEFT JOIN release_part rp ON rp.release_id = r.id
-        WHERE r.has_parts AND rp.release_id IS NULL
+        WHERE r.has_parts AND r.segments IS NULL
         ORDER BY r.id
-        """
+        """,
     )
     ids = [row[0] for row in cur.fetchall()]
     conn.close()
@@ -48,7 +47,7 @@ def main(
     parser.add_argument(
         "--auto",
         action="store_true",
-        help="process only releases marked with has_parts but missing release_part rows",
+        help="process only releases marked with has_parts but missing segments",
     )
     args = parser.parse_args(argv)
     logging.basicConfig(
@@ -62,3 +61,4 @@ def main(
 
 if __name__ == "__main__":
     main()
+
