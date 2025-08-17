@@ -1,0 +1,24 @@
+name: pre-commit
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }} --depth=1
+      - uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: "--files $(git diff --name-only origin/${{ github.base_ref }}...HEAD | tr '\n' ' ')"
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: apply pre-commit fixes"
+          branch: ${{ github.head_ref }}

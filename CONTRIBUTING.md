@@ -2,6 +2,7 @@
 
 - Use issues and pull requests for changes.
 - Format code with `black` and lint with `ruff`.
+- Pull requests run `pre-commit` and may push formatting fixes to your branch.
 - Run tests for affected services before submitting a PR.
 - Prune merged branches with `make prune` to keep the repository tidy.
 
