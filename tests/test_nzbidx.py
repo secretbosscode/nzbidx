@@ -148,7 +148,7 @@ def test_release_not_found_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="release not found"):
-            nzb_builder.build_nzb_for_release("MISSING")
+            nzb_builder.build_nzb_for_release("missing")
 
     assert any(
         rec.message == "release_not_found" and rec.release_id == "missing"
@@ -181,7 +181,7 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
-            nzb_builder.build_nzb_for_release("NOPARTS")
+            nzb_builder.build_nzb_for_release("noparts")
 
     assert any(
         rec.message == "missing_segments" and rec.release_id == "noparts"
@@ -189,16 +189,33 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
     )
 
 
-def test_lookup_error_recommends_backfill_tool(monkeypatch) -> None:
-    """LookupError should suggest running the backfill script."""
+def test_lookup_error_missing_segments_suggests_backfill(monkeypatch) -> None:
+    """Missing segments should suggest running the backfill script."""
+
+    def _missing(_rid: str):
+        raise LookupError("release has no segments")
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
+    with pytest.raises(newznab.NzbFetchError) as excinfo:
+        nzb_builder.build_nzb_for_release("missing")
+    msg = str(excinfo.value)
+    assert "scripts/backfill_release_parts.py" in msg
+    assert "release has no segments" in msg
+
+
+def test_lookup_error_not_found_mentions_normalisation(monkeypatch) -> None:
+    """Not found errors explain normalisation."""
 
     def _missing(_rid: str):
         raise LookupError("release not found")
 
     monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
     with pytest.raises(newznab.NzbFetchError) as excinfo:
-        nzb_builder.build_nzb_for_release("MISSING")
-    assert "scripts/backfill_release_parts.py" in str(excinfo.value)
+        nzb_builder.build_nzb_for_release("missing")
+    msg = str(excinfo.value)
+    assert "release not found" in msg
+    assert "scripts/backfill_release_parts.py" not in msg
+    assert "release ID is normalized" in msg
 
 
 def test_db_query_failure_logs(monkeypatch, caplog) -> None:
@@ -229,7 +246,7 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="database query failed"):
-            nzb_builder.build_nzb_for_release("BROKEN")
+            nzb_builder.build_nzb_for_release("broken")
 
     assert any(
         rec.message == "db_query_failed"

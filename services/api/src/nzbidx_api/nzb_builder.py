@@ -12,7 +12,6 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
-from nzbidx_ingest.parsers import normalize_subject
 from . import config
 
 log = logging.getLogger(__name__)
@@ -118,17 +117,24 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
 
-    release_id = normalize_subject(release_id).lower()
     log.info("starting nzb build for release %s", release_id)
     try:
         segments = _segments_from_db(release_id)
         if not segments:
             raise newznab.NzbFetchError("no segments found")
     except LookupError as exc:
-        msg = (
-            f"{exc}. Release IDs are normalize_subject(title).lower():<posted-date>. "
-            "To populate missing segments, run scripts/backfill_release_parts.py"
-        )
+        err = str(exc).lower()
+        if "not found" in err:
+            msg = (
+                "release not found. The backfill script may remove invalid releases; "
+                "verify that the release ID is normalized."
+            )
+        else:
+            msg = (
+                "release has no segments. To populate missing segments, run scripts/"
+                "backfill_release_parts.py. The backfill script may remove invalid "
+                "releases; verify that the release ID is normalized."
+            )
         raise newznab.NzbFetchError(msg) from exc
     except Exception as exc:
         raise newznab.NzbFetchError("database query failed") from exc

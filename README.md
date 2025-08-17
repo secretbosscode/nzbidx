@@ -166,6 +166,12 @@ existing releases:
 The script inserts segment metadata for each release and drops entries that no
 longer resolve via NNTP.
 
+If NZB retrieval reports `release has no segments`, run the helper to
+repopulate the record. A `release not found` error means the release was
+removed—either never ingested or pruned as invalid. The backfill script may
+remove releases that no longer resolve, so verify the release ID is normalized
+before retrying.
+
 To repair any future releases that lose their segment metadata, schedule the
 auto mode which scans for entries with `has_parts=true` but missing `segments`:
 

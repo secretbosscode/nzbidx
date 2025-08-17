@@ -121,9 +121,9 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Usage:** pass the ID to `t=getnzb` requests.
 
 ## Backfilling segments
-- **Symptoms:** NZB requests return `404` with `nzb fetch failed: no segments for release`.
-- **Checks:** missing data in the `segments` column for affected releases.
-- **Actions:** populate segments with `docker compose exec nzbidx python scripts/backfill_release_parts.py`.
+- **Symptoms:** NZB requests return `404` with `nzb fetch failed: release has no segments` or `nzb fetch failed: release not found`.
+- **Checks:** missing data in the `segments` column or the release absent; ensure the release ID is normalized.
+- **Actions:** repopulate segments with `docker compose exec nzbidx python scripts/backfill_release_parts.py`. The helper prunes invalid releases, so verify the ID before retrying.
 
 ## OpenSearch orphan cleanup
 - **Symptoms:** documents exist in `nzbidx-releases` without matching rows in the `release` table.
