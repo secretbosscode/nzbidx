@@ -1,5 +1,12 @@
 # NZBidx API
 
+## Schema Initialization
+
+The API loads `schema.sql` on startup. When available, the optional
+`sqlparse` module splits the file into individual statements. If `sqlparse`
+is absent, a built-in splitter handles common PostgreSQL quoting constructs
+such as single quotes and dollar-quoted function bodies.
+
 ## NNTP Group Selection and Timeouts
 
 `build_nzb_for_release` connects to the configured NNTP server and searches for
