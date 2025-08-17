@@ -9,13 +9,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
+from nzbidx_ingest.main import insert_release, CATEGORY_MAP, index_release  # type: ignore
 
 
 def test_insert_release_filters_surrogates() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
     )
     inserted = insert_release(
         conn,
@@ -25,84 +25,75 @@ def test_insert_release_filters_surrogates() -> None:
         ["tag\udc80"],
         "alt.binaries.example",
         123,
+        "2024-02-01T00:00:00+00:00",
     )
     assert inserted == {"foobar"}
     row = conn.execute(
-        "SELECT norm_title, category, language, tags, source_group, size_bytes FROM release",
+        "SELECT norm_title, category, language, tags, source_group, size_bytes, posted_at FROM release",
     ).fetchone()
-    assert row == ("foobar", "cat", "en", "tag", "alt.binaries.example", 123)
+    assert row == (
+        "foobar",
+        "cat",
+        "en",
+        "tag",
+        "alt.binaries.example",
+        123,
+        "2024-02-01T00:00:00+00:00",
+    )
 
 
 def test_insert_release_defaults() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
     )
-    inserted = insert_release(conn, "foo", None, None, None, None, None)
+    inserted = insert_release(conn, "foo", None, None, None, None, None, None)
     assert inserted == {"foo"}
     row = conn.execute(
-        "SELECT norm_title, category, language, tags, source_group, size_bytes FROM release",
+        "SELECT norm_title, category, language, tags, source_group, size_bytes, posted_at FROM release",
     ).fetchone()
-    assert row == ("foo", CATEGORY_MAP["other"], "und", "", None, None)
+    assert row == ("foo", CATEGORY_MAP["other"], "und", "", None, None, None)
 
 
 def test_insert_release_batch() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
     )
     releases = [
-        ("foo", None, None, None, None, None),
-        ("bar", "cat", "en", ["tag"], "alt.binaries.example", 456),
-        ("foo", None, None, None, None, None),
+        ("foo", None, None, None, None, None, None),
+        (
+            "bar",
+            "cat",
+            "en",
+            ["tag"],
+            "alt.binaries.example",
+            456,
+            "2024-02-01T00:00:00+00:00",
+        ),
+        ("foo", None, None, None, None, None, None),
     ]
     inserted = insert_release(conn, releases=releases)
     assert inserted == {"foo", "bar"}
     rows = conn.execute(
-        "SELECT norm_title, size_bytes FROM release ORDER BY norm_title"
+        "SELECT norm_title, size_bytes, posted_at FROM release ORDER BY norm_title"
     ).fetchall()
-    assert rows == [("bar", 456), ("foo", None)]
+    assert rows == [
+        ("bar", 456, "2024-02-01T00:00:00+00:00"),
+        ("foo", None, None),
+    ]
 
 
-def test_insert_release_updates_existing_row() -> None:
-    class PGCursor(sqlite3.Cursor):
-        def execute(self, sql: str, params: object = ()):
-            return super().execute(sql.replace("%s", "?"), params)
+def test_index_release_includes_posted_at() -> None:
+    captured: dict[str, object] = {}
 
-        def executemany(self, sql: str, seq_of_params: object):
-            return super().executemany(sql.replace("%s", "?"), seq_of_params)
+    class DummyClient:
+        def index(self, *, index: str, id: str, body: dict[str, object], refresh: bool) -> None:  # type: ignore[override]
+            captured["body"] = body
 
-    class PGConn(sqlite3.Connection):
-        __module__ = "psycopg"
-
-        def cursor(self, *args: object, **kwargs: object) -> PGCursor:  # type: ignore[override]
-            return super().cursor(factory=PGCursor)
-
-    conn = sqlite3.connect(":memory:", factory=PGConn)
-    conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
-    )
-    inserted = insert_release(
-        conn,
+    index_release(
+        DummyClient(),
         "foo",
-        "cat",
-        "en",
-        ["tag"],
-        "alt.binaries.example",
-        123,
+        posted_at="2024-02-01T00:00:00+00:00",
     )
-    assert inserted == {"foo"}
-    inserted = insert_release(
-        conn,
-        "foo",
-        None,
-        "fr",
-        ["tag2"],
-        None,
-        None,
-    )
-    assert inserted == set()
-    row = conn.execute(
-        "SELECT norm_title, category, language, tags, source_group, size_bytes FROM release",
-    ).fetchone()
-    assert row == ("foo", "cat", "fr", "tag2", "alt.binaries.example", 123)
+    assert captured["body"]["posted_at"] == "2024-02-01T00:00:00+00:00"

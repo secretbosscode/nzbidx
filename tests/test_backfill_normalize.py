@@ -15,7 +15,7 @@ from scripts.normalize_releases import normalize_releases  # type: ignore
 def test_normalize_releases_merges_parts() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT)"
+        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
     )
     insert_release(
         conn,
@@ -25,6 +25,7 @@ def test_normalize_releases_merges_parts() -> None:
         None,
         None,
         100,
+        None,
     )
     insert_release(
         conn,
@@ -34,6 +35,7 @@ def test_normalize_releases_merges_parts() -> None:
         None,
         None,
         200,
+        None,
     )
 
     normalize_releases(conn, os_client=None)

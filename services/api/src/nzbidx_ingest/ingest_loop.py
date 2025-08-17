@@ -41,6 +41,7 @@ except Exception:  # pragma: no cover - fallback when api pkg missing
 
     os_breaker = _DummyBreaker()
 from email.utils import parsedate_to_datetime
+from datetime import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,7 @@ def _process_groups(
                 list[str] | None,
                 str | None,
                 int | None,
+                str | None,
             ],
         ] = {}
         docs: dict[str, dict[str, object]] = {}
@@ -167,9 +169,12 @@ def _process_groups(
             norm_title = norm_title.lower()
             posted = header.get("date")
             day_bucket = ""
+            posted_at = None
             if posted:
                 try:
-                    day_bucket = parsedate_to_datetime(str(posted)).strftime("%Y-%m-%d")
+                    dt = parsedate_to_datetime(str(posted)).astimezone(timezone.utc)
+                    posted_at = dt.isoformat()
+                    day_bucket = dt.strftime("%Y-%m-%d")
                 except Exception:
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
@@ -178,9 +183,12 @@ def _process_groups(
             tags = tags or []
             existing = releases.get(dedupe_key)
             if existing:
-                _, ex_cat, ex_lang, ex_tags, ex_group, ex_size = existing
+                _, ex_cat, ex_lang, ex_tags, ex_group, ex_size, ex_posted = existing
                 combined_size = (ex_size or 0) + size
                 combined_tags = sorted(set(ex_tags or []).union(tags))
+                combined_posted = ex_posted
+                if posted_at and (not ex_posted or posted_at < ex_posted):
+                    combined_posted = posted_at
                 releases[dedupe_key] = (
                     dedupe_key,
                     ex_cat,
@@ -188,12 +196,15 @@ def _process_groups(
                     combined_tags,
                     ex_group,
                     combined_size,
+                    combined_posted,
                 )
                 body = docs.get(dedupe_key, {"norm_title": dedupe_key})
                 if combined_tags:
                     body["tags"] = combined_tags
                 if combined_size > 0:
                     body["size_bytes"] = combined_size
+                if combined_posted:
+                    body["posted_at"] = combined_posted
                 docs[dedupe_key] = body
             else:
                 releases[dedupe_key] = (
@@ -203,6 +214,7 @@ def _process_groups(
                     tags,
                     group,
                     size,
+                    posted_at,
                 )
                 body: dict[str, object] = {"norm_title": dedupe_key}
                 if category:
@@ -215,6 +227,8 @@ def _process_groups(
                     body["source_group"] = group
                 if size > 0:
                     body["size_bytes"] = size
+                if posted_at:
+                    body["posted_at"] = posted_at
                 docs[dedupe_key] = body
             if message_id:
                 seg_num = extract_segment_number(subject)

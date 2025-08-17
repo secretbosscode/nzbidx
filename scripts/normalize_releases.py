@@ -29,14 +29,22 @@ def normalize_releases(
 
     cur = conn.cursor()
     cur.execute(
-        "SELECT norm_title, category, language, tags, source_group, size_bytes FROM release"
+        "SELECT norm_title, category, language, tags, source_group, size_bytes, posted_at FROM release"
     )
     rows = cur.fetchall()
 
     aggregated: dict[str, dict[str, Any]] = {}
     date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-    for norm_title, category, language, tags, source_group, size_bytes in rows:
+    for (
+        norm_title,
+        category,
+        language,
+        tags,
+        source_group,
+        size_bytes,
+        posted_at,
+    ) in rows:
         title = norm_title or ""
         date: str | None = None
         if ":" in title:
@@ -56,6 +64,7 @@ def normalize_releases(
                 "tags": set(tag_list),
                 "source_group": source_group,
                 "size_bytes": int(size_bytes or 0),
+                "posted_at": posted_at,
             }
             continue
         agg["size_bytes"] += int(size_bytes or 0)
@@ -66,9 +75,15 @@ def normalize_releases(
             agg["language"] = language
         if not agg["source_group"] and source_group:
             agg["source_group"] = source_group
+        if posted_at:
+            cur_posted = agg.get("posted_at")
+            if not cur_posted or posted_at < cur_posted:
+                agg["posted_at"] = posted_at
 
     releases: list[
-        tuple[str, str | None, str | None, list[str], str | None, int | None]
+        tuple[
+            str, str | None, str | None, list[str], str | None, int | None, str | None
+        ]
     ] = []
     docs: list[tuple[str, dict[str, object]]] = []
     for key, info in aggregated.items():
@@ -81,6 +96,7 @@ def normalize_releases(
                 tags_sorted,
                 info["source_group"],
                 info["size_bytes"],
+                info.get("posted_at"),
             )
         )
         body: dict[str, object] = {"norm_title": key}
@@ -94,6 +110,8 @@ def normalize_releases(
             body["source_group"] = info["source_group"]
         if info["size_bytes"]:
             body["size_bytes"] = info["size_bytes"]
+        if info.get("posted_at"):
+            body["posted_at"] = info["posted_at"]
         docs.append((key, body))
 
     with conn:

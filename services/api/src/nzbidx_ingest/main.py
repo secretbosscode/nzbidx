@@ -185,6 +185,7 @@ def connect_db() -> Any:
                             tags TEXT NOT NULL DEFAULT '',
                             source_group TEXT,
                             size_bytes BIGINT,
+                            posted_at TIMESTAMPTZ,
                             segments JSONB,
                             has_parts BOOLEAN NOT NULL DEFAULT FALSE,
                             part_count INT NOT NULL DEFAULT 0
@@ -195,6 +196,7 @@ def connect_db() -> Any:
                     "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT",
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0",
@@ -257,6 +259,7 @@ def connect_db() -> Any:
             tags TEXT NOT NULL DEFAULT '',
             source_group TEXT,
             size_bytes BIGINT,
+            posted_at TIMESTAMPTZ,
             segments TEXT,
             has_parts BOOLEAN NOT NULL DEFAULT 0,
             part_count INT NOT NULL DEFAULT 0
@@ -296,6 +299,7 @@ def insert_release(
     tags: Optional[list[str]] = None,
     group: Optional[str] = None,
     size_bytes: Optional[int] = None,
+    posted_at: Optional[str] = None,
     *,
     releases: Optional[
         Iterable[
@@ -306,6 +310,7 @@ def insert_release(
                 Optional[list[str]],
                 Optional[str],
                 Optional[int],
+                Optional[str],
             ]
         ]
     ] = None,
@@ -324,34 +329,55 @@ def insert_release(
             str,
             Optional[str],
             Optional[str],
-            Optional[list[str]],
+            list[str],
             Optional[str],
             Optional[int],
+            Optional[str],
         ]
     ] = []
     if releases is not None:
         for r in releases:
-            items.append(r)
+            n, c, lang, t, g, s, p = r
+            items.append((n, c, lang, list(t or []), g, s, p))
     elif norm_title is not None:
-        items.append((norm_title, category, language, tags, group, size_bytes))
+        items.append(
+            (
+                norm_title,
+                category,
+                language,
+                list(tags or []),
+                group,
+                size_bytes,
+                posted_at,
+            )
+        )
     else:
         return set()
 
-    prepped: list[
-        tuple[
-            str,
-            Optional[str],
-            Optional[str],
-            Optional[list[str]],
-            Optional[str],
-            Optional[int],
-        ]
+    cleaned: list[
+        tuple[str, str, str, str, Optional[str], Optional[int], Optional[str]]
     ] = []
     titles: list[str] = []
-    for n, c, lang, t, g, s in items:
+    for n, c, lang, t, g, s, p in items:
         cleaned_title = _clean(n) or ""
         titles.append(cleaned_title)
-        prepped.append((cleaned_title, c, lang, t, g, s))
+        cleaned_category = _clean(c) or CATEGORY_MAP["other"]
+        cleaned_language = _clean(lang) or "und"
+        cleaned_tags = ",".join(_clean(tag) or "" for tag in t)
+        cleaned_group = _clean(g)
+        size_val = s if isinstance(s, int) and s > 0 else None
+        cleaned_posted = _clean(p)
+        cleaned.append(
+            (
+                cleaned_title,
+                cleaned_category,
+                cleaned_language,
+                cleaned_tags,
+                cleaned_group,
+                size_val,
+                cleaned_posted,
+            )
+        )
 
     placeholders = ",".join(
         [
@@ -367,64 +393,29 @@ def insert_release(
         )
         existing = {row[0] for row in cur.fetchall()}
 
-    cleaned: list[
-        tuple[
-            str,
-            Optional[str],
-            Optional[str],
-            Optional[str],
-            Optional[str],
-            Optional[int],
-        ]
-    ] = []
-    for title, c, lang, t, g, s in prepped:
-        if title in existing:
-            cleaned_category = _clean(c)
-            cleaned_language = _clean(lang)
-            cleaned_tags = (
-                ",".join(_clean(tag) or "" for tag in t or [])
-                if t is not None
-                else None
-            )
-            cleaned_group = _clean(g)
-            size_val = s if isinstance(s, int) and s > 0 else None
-        else:
-            cleaned_category = _clean(c) or CATEGORY_MAP["other"]
-            cleaned_language = _clean(lang) or "und"
-            cleaned_tags = ",".join(_clean(tag) or "" for tag in t or [])
-            cleaned_group = _clean(g)
-            size_val = s if isinstance(s, int) and s > 0 else None
-        cleaned.append(
-            (
-                title,
-                cleaned_category,
-                cleaned_language,
-                cleaned_tags,
-                cleaned_group,
-                size_val,
-            )
-        )
-
-    inserted = {title for title, *_ in cleaned if title not in existing}
-    if cleaned:
+    to_insert = [row for row in cleaned if row[0] not in existing]
+    inserted = {row[0] for row in to_insert}
+    if to_insert:
         if conn.__class__.__module__.startswith("sqlite3"):
             cur.executemany(
-                "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group, size_bytes) VALUES (?, ?, ?, ?, ?, ?)",
-                cleaned,
+                "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group, size_bytes, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                to_insert,
             )
         else:
             cur.executemany(
-                (
-                    "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes) "
-                    "VALUES (%s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT (norm_title) DO UPDATE SET "
-                    "category = COALESCE(EXCLUDED.category, release.category), "
-                    "language = COALESCE(EXCLUDED.language, release.language), "
-                    "tags = COALESCE(EXCLUDED.tags, release.tags), "
-                    "source_group = COALESCE(EXCLUDED.source_group, release.source_group), "
-                    "size_bytes = COALESCE(EXCLUDED.size_bytes, release.size_bytes)"
-                ),
-                cleaned,
+                "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                to_insert,
+            )
+    # Ensure posted_at is updated for existing rows
+    if cleaned:
+        updates = [(row[6], row[0]) for row in cleaned if row[6]]
+        if updates:
+            placeholder = (
+                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+            )
+            cur.executemany(
+                f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder}",
+                updates,
             )
     conn.commit()
     return inserted
@@ -442,6 +433,7 @@ def index_release(
     tags: Optional[list[str]] = None,
     group: Optional[str] = None,
     size_bytes: Optional[int] = None,
+    posted_at: Optional[str] = None,
 ) -> None:
     """Index the release into OpenSearch (no-op if client is None)."""
     global _os_warned
@@ -458,6 +450,8 @@ def index_release(
         body["source_group"] = group
     if size_bytes is not None and size_bytes > 0:
         body["size_bytes"] = size_bytes
+    if posted_at:
+        body["posted_at"] = posted_at
     try:  # pragma: no cover - network errors
         client.index(
             index=OS_RELEASES_ALIAS,
@@ -499,17 +493,7 @@ def bulk_index_releases(
             continue
         payload = "\n".join(lines) + "\n"
         try:  # pragma: no cover - network errors
-            resp = client.bulk(body=payload, refresh=False)
-            if resp.get("errors"):
-                for item in resp.get("items", []):
-                    action = next(iter(item.values()))
-                    error = action.get("error")
-                    if error:
-                        reason = error.get("reason") if isinstance(error, dict) else str(error)
-                        logger.warning(
-                            "opensearch_bulk_item_failed",
-                            extra={"id": action.get("_id"), "error": reason},
-                        )
+            client.bulk(body=payload, refresh=False)
         except Exception as exc:  # pragma: no cover - network errors
             if not _os_warned:
                 logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
@@ -572,15 +556,12 @@ def prune_orphaned_releases(client: Optional[object], batch: int = 1000) -> int:
         while hits:
             missing: list[str] = []
             for hit in hits:
-                norm_title = hit.get("_id")
-                if norm_title is None:
+                rid = hit.get("_id")
+                if rid is None:
                     continue
-                cur.execute(
-                    f"SELECT 1 FROM release WHERE norm_title = {placeholder}",
-                    (norm_title,),
-                )
+                cur.execute(f"SELECT 1 FROM release WHERE id = {placeholder}", (rid,))
                 if cur.fetchone() is None:
-                    missing.append(norm_title)
+                    missing.append(rid)
             if missing:
                 try:
                     client.delete_by_query(
