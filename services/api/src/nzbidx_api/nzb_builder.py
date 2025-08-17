@@ -17,22 +17,9 @@ log = logging.getLogger(__name__)
 
 
 def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
-    try:
-        from nzbidx_ingest.main import connect_db  # type: ignore
-    except Exception:
-        return []
-    try:
-        conn = connect_db()
-    except Exception as exc:
-        log.warning(
-            "db_connection_failed",
-            extra={
-                "release_id": release_id,
-                "exception": exc.__class__.__name__,
-                "error": str(exc),
-            },
-        )
-        return []
+    from nzbidx_ingest.main import connect_db  # type: ignore
+
+    conn = connect_db()
     try:
         cur = conn.cursor()
         placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
@@ -51,7 +38,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         if not rows:
             raise LookupError("release has no release_part rows")
         return [(int(a), str(b), str(c), int(d or 0)) for a, b, c, d in rows]
-    except Exception as exc:
+    except LookupError as exc:
         log.warning(
             "db_query_failed",
             extra={
@@ -61,6 +48,16 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             },
         )
         return []
+    except Exception as exc:
+        log.warning(
+            "db_query_failed",
+            extra={
+                "release_id": release_id,
+                "exception": exc.__class__.__name__,
+                "error": str(exc),
+            },
+        )
+        raise
     finally:
         try:
             conn.close()

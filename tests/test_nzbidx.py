@@ -59,6 +59,7 @@ class DummyAsyncCache(DummyCache):
 
 def test_build_nzb_without_host(monkeypatch) -> None:
     monkeypatch.delenv("NNTP_HOST", raising=False)
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: [])
     with pytest.raises(newznab.NzbFetchError):
         nzb_builder.build_nzb_for_release("MyRelease")
 
@@ -677,7 +678,7 @@ def test_caps_xml_defaults(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
-def test_failed_fetch_cached(monkeypatch, cache_cls) -> None:
+def test_failed_fetch_not_cached(monkeypatch, cache_cls) -> None:
     cache = cache_cls()
     calls: list[str] = []
 
@@ -688,21 +689,17 @@ def test_failed_fetch_cached(monkeypatch, cache_cls) -> None:
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", boom)
 
     key = "nzb:123"
-    # first call populates failure sentinel
-    try:
+    # first call should surface the error and not cache a sentinel
+    with pytest.raises(RuntimeError):
         asyncio.run(newznab.get_nzb("123", cache))
-    except newznab.NzbFetchError:
-        pass
-    assert cache.store[key] == newznab.FAIL_SENTINEL
+    assert key not in cache.store
     assert calls == ["123"]
 
     calls.clear()
-    # second call should hit cache and not invoke builder
-    try:
+    # second call should invoke builder again
+    with pytest.raises(RuntimeError):
         asyncio.run(newznab.get_nzb("123", cache))
-    except newznab.NzbFetchError:
-        pass
-    assert calls == []
+    assert calls == ["123"]
 
 
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
@@ -929,8 +926,7 @@ def test_connect_db_creates_database(monkeypatch) -> None:
     assert any(stmt.startswith("CREATE DATABASE") for stmt in executed)
     assert hasattr(conn, "cursor")
 
-
-def test_connect_db_falls_back_to_sqlite(monkeypatch) -> None:
+def test_connect_db_missing_driver_raises(monkeypatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgres://user@host/db")
 
     def fake_create_engine(url: str, echo: bool = False, future: bool = True):
@@ -939,10 +935,14 @@ def test_connect_db_falls_back_to_sqlite(monkeypatch) -> None:
     monkeypatch.setattr(main, "create_engine", fake_create_engine)
     monkeypatch.setattr(main, "text", lambda s: s)
 
-    conn = connect_db()
-    # The fallback connection should be a functioning SQLite database.
-    conn.execute("SELECT 1")
-    assert conn.__class__.__module__.startswith("sqlite3")
+    with pytest.raises(RuntimeError, match="psycopg"):
+        connect_db()
+
+
+def test_connect_db_missing_env_raises(monkeypatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(RuntimeError):
+        connect_db()
 
 
 def test_nntp_client_uses_single_host_env(monkeypatch) -> None:

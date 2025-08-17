@@ -103,7 +103,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 
 ## Missing database driver
 - **Symptoms:** startup logs show `ModuleNotFoundError: No module named 'psycopg'`
-  or `psycopg_unavailable` and ingest falls back to SQLite.
+  or `psycopg_unavailable` and the application exits.
 - **Checks:** `pip show psycopg` or rebuild the service image.
 - **Actions:** install the driver with `pip install psycopg[binary]>=3.1` or
   rebuild the Docker image so it installs dependencies from `pyproject.toml`.
