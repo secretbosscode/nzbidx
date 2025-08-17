@@ -84,7 +84,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
     def _connect() -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT)"
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT)"
         )
         return conn
 
@@ -93,10 +93,11 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
 
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "example",
                 "other",
+                7000,
                 "und",
                 "",
                 "alt.test",
@@ -166,7 +167,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     def _connect() -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT)",
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT)",
         )
         return conn
 
@@ -175,10 +176,11 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
 
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "example",
                 "other",
+                7000,
                 "und",
                 "",
                 "alt.test",

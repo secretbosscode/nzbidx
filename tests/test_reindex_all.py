@@ -20,6 +20,7 @@ def test_reindex_all(monkeypatch) -> None:
             id INTEGER,
             norm_title TEXT,
             category TEXT,
+            category_id INT,
             language TEXT,
             tags TEXT,
             source_group TEXT,
@@ -31,10 +32,10 @@ def test_reindex_all(monkeypatch) -> None:
         """
     )
     conn.execute(
-        "INSERT INTO release VALUES (1, 'r1', 'c1', 'en', 'tag1,tag2', 'g1', 100, '2024-01-01T00:00:00Z', 1, 2)"
+        "INSERT INTO release (id, norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at, has_parts, part_count) VALUES (1, 'r1', 'c1', 1, 'en', 'tag1,tag2', 'g1', 100, '2024-01-01T00:00:00Z', 1, 2)"
     )
     conn.execute(
-        "INSERT INTO release VALUES (2, 'r2', 'c2', 'en', '', 'g2', 200, '2024-01-02T00:00:00Z', 0, 0)"
+        "INSERT INTO release (id, norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at, has_parts, part_count) VALUES (2, 'r2', 'c2', 2, 'en', '', 'g2', 200, '2024-01-02T00:00:00Z', 0, 0)"
     )
     conn.commit()
 
