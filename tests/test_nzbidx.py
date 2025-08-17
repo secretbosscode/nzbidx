@@ -194,6 +194,18 @@ def test_missing_release_parts_logs(monkeypatch, caplog) -> None:
     )
 
 
+def test_lookup_error_recommends_backfill_tool(monkeypatch) -> None:
+    """LookupError should suggest running the backfill script."""
+
+    def _missing(_rid: str):
+        raise LookupError("release not found")
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
+    with pytest.raises(newznab.NzbFetchError) as excinfo:
+        nzb_builder.build_nzb_for_release("missing")
+    assert "scripts/backfill_release_parts.py" in str(excinfo.value)
+
+
 def test_db_query_failure_logs(monkeypatch, caplog) -> None:
     """Database errors should be logged and wrapped."""
 
