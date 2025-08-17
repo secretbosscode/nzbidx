@@ -233,6 +233,9 @@ def _process_groups(
             elif result:
                 inserted = {r[0] for r in releases.values()}
             metrics["inserted"] = len(inserted)
+
+        changed: set[str] = set()
+        part_counts: dict[str, int] = {}
         if db is not None:
             try:
                 cur = db.cursor()
@@ -242,30 +245,52 @@ def _process_groups(
                 for title, segs in parts.items():
                     if not segs:
                         continue
-                    seg_data = [
-                        {
-                            "number": seg_num,
-                            "message_id": msgid,
-                            "group": grp,
-                            "size": size,
-                        }
-                        for seg_num, msgid, grp, size in segs
-                    ]
                     cur.execute(
-                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder} WHERE norm_title = {placeholder}",
-                        (json.dumps(seg_data), True, len(seg_data), title),
+                        f"SELECT segments, size_bytes FROM release WHERE norm_title = {placeholder}",
+                        (title,),
                     )
+                    row = cur.fetchone()
+                    existing_segments = []
+                    existing_size = 0
+                    if row:
+                        try:
+                            existing_segments = json.loads(row[0] or "[]")
+                        except Exception:
+                            existing_segments = []
+                        existing_size = int(row[1] or 0)
+                    existing_ids = {seg[1] for seg in existing_segments}
+                    new_segments = [
+                        (n, m, g, s) for n, m, g, s in segs if m not in existing_ids
+                    ]
+                    combined_segments = existing_segments + new_segments
+                    new_size = sum(s for _n, _m, _g, s in new_segments)
+                    total_size = existing_size + new_size
+                    part_counts[title] = len(combined_segments)
+                    cur.execute(
+                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                        (
+                            json.dumps(combined_segments),
+                            True,
+                            part_counts[title],
+                            total_size,
+                            title,
+                        ),
+                    )
+                    docs.setdefault(title, {})["size_bytes"] = total_size
+                    changed.add(title)
                 db.commit()
             except Exception:
                 pass
-        for title in inserted:
+
+        changed |= inserted
+        for title in changed:
             doc = docs.get(title)
             if doc is None:
                 continue
-            count = len(parts.get(title, []))
+            count = part_counts.get(title, len(parts.get(title, [])))
             doc["part_count"] = count
             doc["has_parts"] = count > 0
-        to_index = [(doc_id, docs[doc_id]) for doc_id in inserted if doc_id in docs]
+        to_index = [(doc_id, docs[doc_id]) for doc_id in changed if doc_id in docs]
         if to_index:
             os_start = time.monotonic()
             bulk_index_releases(os_client, to_index)
