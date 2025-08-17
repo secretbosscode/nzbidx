@@ -260,25 +260,32 @@ def _process_groups(
                     if not segs:
                         continue
                     cur.execute(
-                        f"SELECT segments, size_bytes FROM release WHERE norm_title = {placeholder}",
+                        f"SELECT segments FROM release WHERE norm_title = {placeholder}",
                         (title,),
                     )
                     row = cur.fetchone()
                     existing_segments = []
-                    existing_size = 0
                     if row:
                         try:
                             existing_segments = json.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
-                        existing_size = int(row[1] or 0)
+
+                    # Deduplicate newly fetched segments by message-id before merging.
+                    deduped: list[tuple[int, str, str, int]] = []
+                    seen_ids: set[str] = set()
+                    for n, m, g, s in segs:
+                        if m in seen_ids:
+                            continue
+                        seen_ids.add(m)
+                        deduped.append((n, m, g, s))
+
                     existing_ids = {seg[1] for seg in existing_segments}
                     new_segments = [
-                        (n, m, g, s) for n, m, g, s in segs if m not in existing_ids
+                        (n, m, g, s) for n, m, g, s in deduped if m not in existing_ids
                     ]
                     combined_segments = existing_segments + new_segments
-                    new_size = sum(s for _n, _m, _g, s in new_segments)
-                    total_size = existing_size + new_size
+                    total_size = sum(s for _n, _m, _g, s in combined_segments)
                     part_counts[title] = len(combined_segments)
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
