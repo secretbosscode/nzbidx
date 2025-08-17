@@ -133,3 +133,93 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
         [1, "m1", "alt.test", 100],
         [2, "m2", "alt.test", 150],
     ]
+
+
+def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
+    captured: list[tuple[str, dict[str, object]]] = []
+
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
+    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
+    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+
+    class DummyClient:
+        def connect(self) -> None:
+            pass
+
+        def high_water_mark(self, group: str) -> int:
+            return 1
+
+        def xover(self, group: str, start: int, end: int):
+            return [
+                {
+                    "subject": "Example (1/1)",
+                    ":bytes": "100",
+                    "message-id": "<m1>",
+                }
+            ]
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    db_path = tmp_path / "db.sqlite"
+
+    def _connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT)",
+        )
+        return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
+    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
+
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "example",
+                "other",
+                "und",
+                "",
+                "alt.test",
+                100,
+                0,
+                0,
+                json.dumps([]),
+            ),
+        )
+        conn.commit()
+
+    monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
+
+    def fake_bulk(_client, docs):
+        captured.extend(docs)
+
+    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
+
+    class _Existing(list):
+        def __init__(self) -> None:
+            super().__init__([(1, "m1", "alt.test", 100)])
+
+        def __add__(self, _other):
+            return []
+
+    def fake_loads(_s: str) -> list[tuple[int, str, str, int]]:
+        return _Existing()
+
+    monkeypatch.setattr(loop.json, "loads", fake_loads)
+
+    loop.run_once()
+
+    assert captured
+    doc_id, body = captured[0]
+    assert doc_id == "example"
+    assert body.get("has_parts") is False
+    assert body.get("part_count") == 0
+    with sqlite3.connect(db_path) as check:
+        row = check.execute(
+            "SELECT part_count, has_parts, segments FROM release WHERE norm_title = 'example'",
+        ).fetchone()
+    assert row[0] == 0
+    assert row[1] == 0
+    assert row[2] == "[]"

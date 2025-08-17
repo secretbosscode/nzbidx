@@ -250,6 +250,7 @@ def _process_groups(
 
         changed: set[str] = set()
         part_counts: dict[str, int] = {}
+        has_parts_flags: dict[str, bool] = {}
         if db is not None:
             try:
                 cur = db.cursor()
@@ -287,16 +288,18 @@ def _process_groups(
                     combined_segments = existing_segments + new_segments
                     total_size = sum(s for _n, _m, _g, s in combined_segments)
                     part_counts[title] = len(combined_segments)
+                    has_parts = bool(combined_segments)
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
                             json.dumps(combined_segments),
-                            True,
+                            has_parts,
                             part_counts[title],
                             total_size,
                             title,
                         ),
                     )
+                    has_parts_flags[title] = has_parts
                     docs.setdefault(title, {})["size_bytes"] = total_size
                     changed.add(title)
                 db.commit()
@@ -310,7 +313,7 @@ def _process_groups(
                 continue
             count = part_counts.get(title, len(parts.get(title, [])))
             doc["part_count"] = count
-            doc["has_parts"] = count > 0
+            doc["has_parts"] = has_parts_flags.get(title, count > 0)
         to_index = [(doc_id, docs[doc_id]) for doc_id in changed if doc_id in docs]
         if to_index:
             os_start = time.monotonic()
