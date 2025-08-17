@@ -166,6 +166,15 @@ existing releases:
 The script inserts segment metadata for each release and drops entries that no
 longer resolve via NNTP.
 
+To repair any future releases that lose their segment metadata, schedule the
+auto mode which scans for entries with `has_parts=true` but no `release_part`
+rows:
+
+    docker compose exec nzbidx python scripts/backfill_release_parts.py --auto
+
+The helper reuses the backfill logic to repopulate missing segments or mark
+unrecoverable releases as unavailable.
+
 An authenticated admin endpoint can also trigger the job asynchronously:
 
     curl -X POST -H 'X-Api-Key: dev' http://localhost:8080/api/admin/backfill
