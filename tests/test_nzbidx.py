@@ -362,7 +362,7 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
-        with pytest.raises(newznab.NzbDatabaseError, match="boom"):
+        with pytest.raises(newznab.NzbDatabaseError, match="database query failed"):
             nzb_builder.build_nzb_for_release("broken")
 
     assert any(
