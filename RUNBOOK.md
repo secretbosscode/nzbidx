@@ -108,6 +108,18 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Actions:** install the driver with `pip install psycopg[binary]>=3.1` or
   rebuild the Docker image so it installs dependencies from `pyproject.toml`.
 
+## Release IDs
+- **Definition:** `normalize_subject(title).lower():<posted-date>` where
+  `<posted-date>` is `YYYY-MM-DD`.
+- **Example:**
+  ```python
+  from nzbidx_ingest.parsers import normalize_subject
+
+  subject = "Example.part01.rar"
+  release_id = f"{normalize_subject(subject).lower()}:2025-08-17"
+  ```
+- **Usage:** pass the ID to `t=getnzb` requests.
+
 ## Backfilling segments
 - **Symptoms:** NZB requests return `404` with `nzb fetch failed: no segments for release`.
 - **Checks:** missing data in the `segments` column for affected releases.
