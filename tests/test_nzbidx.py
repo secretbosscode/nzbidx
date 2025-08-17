@@ -10,7 +10,6 @@ import sqlite3
 import threading
 import time
 import sys
-from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
+from nzbidx_api import nzb_builder, newznab  # type: ignore
 from nzbidx_api import db as api_db  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
@@ -32,6 +31,11 @@ from nzbidx_ingest.main import (
     _infer_category,
     connect_db,
 )  # type: ignore
+
+
+class DummyResult:
+    def first(self):  # pragma: no cover - trivial
+        return None
 
 
 class DummyCache:
@@ -485,6 +489,7 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
             body_holder["body"] = kwargs["body"]
             return {"hits": {"hits": []}}
 
+
 def test_getnzb_timeout(monkeypatch) -> None:
     """Slow NZB generation should return 504 after timeout."""
 
@@ -671,8 +676,9 @@ def test_connect_db_postgres(monkeypatch) -> None:
     calls: dict[str, str] = {}
 
     class DummyConn:
-        def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
+        def execute(self, stmt: str) -> DummyResult:  # pragma: no cover - trivial
             calls["stmt"] = stmt
+            return DummyResult()
 
         def commit(self) -> None:  # pragma: no cover - trivial
             return None
@@ -727,8 +733,9 @@ def test_connect_db_postgres_single_slash(monkeypatch) -> None:
     calls: dict[str, str] = {}
 
     class DummyConn:
-        def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
+        def execute(self, stmt: str) -> DummyResult:  # pragma: no cover - trivial
             calls["stmt"] = stmt
+            return DummyResult()
 
         def commit(self) -> None:  # pragma: no cover - trivial
             return None
@@ -784,8 +791,9 @@ def test_connect_db_creates_database(monkeypatch) -> None:
     executed: list[str] = []
 
     class DummyConn:
-        def execute(self, stmt: str) -> None:  # pragma: no cover - trivial
+        def execute(self, stmt: str) -> DummyResult:  # pragma: no cover - trivial
             executed.append(stmt)
+            return DummyResult()
 
         def commit(self) -> None:  # pragma: no cover - trivial
             return None
