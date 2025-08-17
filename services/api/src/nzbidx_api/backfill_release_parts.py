@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import xml.etree.ElementTree as ET
-from typing import Callable, Optional
+from typing import Callable, Iterable, Optional
 
 from nzbidx_ingest.main import bulk_index_releases, connect_db, connect_opensearch
 from nzbidx_api.nzb_builder import NZB_XMLNS, build_nzb_for_release
@@ -29,17 +29,28 @@ def _fetch_segments(release_id: str) -> list[tuple[int, str, int]]:
     return segments
 
 
-def backfill_release_parts(progress_cb: Optional[Callable[[int], None]] = None) -> int:
+def backfill_release_parts(
+    progress_cb: Optional[Callable[[int], None]] = None,
+    release_ids: Optional[Iterable[int]] = None,
+) -> int:
     """Populate ``release_part`` rows for existing releases.
 
     A ``progress_cb`` may be supplied to receive the number of processed
-    releases after each successful iteration.
+    releases after each successful iteration.  ``release_ids`` may restrict the
+    job to a specific set of releases.
     """
     conn = connect_db()
     os_client = connect_opensearch()
     cur = conn.cursor()
-    cur.execute("SELECT id, norm_title, source_group FROM release ORDER BY id")
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    base_sql = "SELECT id, norm_title, source_group FROM release"
+    params: list[int] | tuple[int, ...] = []
+    if release_ids:
+        ids = list(release_ids)
+        placeholders = ",".join([placeholder] * len(ids))
+        base_sql += f" WHERE id IN ({placeholders})"
+        params = ids
+    cur.execute(f"{base_sql} ORDER BY id", params)
     insert_sql = (
         "INSERT INTO release_part (release_id, number, message_id, source_group, size_bytes) "
         f"VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})"

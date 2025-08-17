@@ -10,6 +10,7 @@ removed from storage and pruned from the search index.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 from pathlib import Path
@@ -19,13 +20,44 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_api.backfill_release_parts import backfill_release_parts
+from nzbidx_ingest.main import connect_db
 
 
-def main() -> None:  # pragma: no cover - integration script
+def _auto_mode() -> None:
+    """Backfill only releases missing segment rows."""
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT r.id FROM release r
+        LEFT JOIN release_part rp ON rp.release_id = r.id
+        WHERE r.has_parts AND rp.release_id IS NULL
+        ORDER BY r.id
+        """
+    )
+    ids = [row[0] for row in cur.fetchall()]
+    conn.close()
+    if ids:
+        backfill_release_parts(release_ids=ids)
+
+
+def main(
+    argv: list[str] | None = None,
+) -> None:  # pragma: no cover - integration script
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="process only releases marked with has_parts but missing release_part rows",
+    )
+    args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    backfill_release_parts()
+    if args.auto:
+        _auto_mode()
+    else:
+        backfill_release_parts()
 
 
 if __name__ == "__main__":
