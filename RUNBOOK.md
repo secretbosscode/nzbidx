@@ -14,6 +14,45 @@ install `psycopg[binary] >= 3.1` from the service `pyproject.toml` files. The
 `pg_trgm` and `vector` extensions must be installed by a superuser; the init
 script at `db/init/schema.sql` handles this during database provisioning.
 
+## Release table partitioning
+The `release` table must be partitioned by `category_id` so partitions can be
+maintained independently. Create the table and partitions:
+
+```sql
+CREATE TABLE IF NOT EXISTS release (
+    id BIGSERIAL PRIMARY KEY,
+    norm_title TEXT,
+    category TEXT,
+    category_id INT,
+    language TEXT NOT NULL DEFAULT 'und',
+    tags TEXT NOT NULL DEFAULT '',
+    source_group TEXT,
+    size_bytes BIGINT,
+    segments JSONB,
+    has_parts BOOLEAN NOT NULL DEFAULT FALSE,
+    part_count INT NOT NULL DEFAULT 0
+) PARTITION BY RANGE (category_id);
+
+CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
+    FOR VALUES FROM (2000) TO (3000);
+CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
+    FOR VALUES FROM (3000) TO (4000);
+CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
+    FOR VALUES FROM (5000) TO (6000);
+CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
+    FOR VALUES FROM (6000) TO (7000);
+CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
+    FOR VALUES FROM (7000) TO (8000);
+CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
+```
+
+To convert existing deployments with an unpartitioned table, run the migration
+script:
+
+```bash
+python scripts/migrate_release_partitions.py
+```
+
 ## Breaker stuck open
 - **Symptoms:** search endpoints return empty arrays or `503` for NZB retrieval.
 - **Checks:** `curl -fsS localhost:8080/health | jq .breaker` shows `open`.
