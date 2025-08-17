@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+import pytest
 
 import nzbidx_ingest.cursors as cursors
 import nzbidx_ingest.config as config
@@ -54,3 +55,16 @@ def test_cursor_postgres_dsn(monkeypatch):
     insert_stmt = next(stmt for stmt, _ in executed if stmt.startswith("INSERT"))
     select_stmt = next(stmt for stmt, _ in executed if stmt.startswith("SELECT"))
     assert "%s" in insert_stmt and "%s" in select_stmt
+
+
+def test_conn_sqlite_path_no_name_error(tmp_path, monkeypatch):
+    db_path = tmp_path / "conn.sqlite"
+    monkeypatch.setenv("CURSOR_DB", str(db_path))
+    importlib.reload(config)
+    importlib.reload(cursors)
+    try:
+        conn = cursors._conn()
+    except NameError as e:
+        pytest.fail(f"_conn raised NameError: {e}")
+    else:
+        conn.close()
