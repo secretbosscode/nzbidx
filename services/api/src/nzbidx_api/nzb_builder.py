@@ -104,9 +104,7 @@ def build_nzb_for_release(release_id: str) -> str:
     try:
         segments = _segments_from_db(release_id)
     except LookupError as exc:
-        raise newznab.NzbFetchError(str(exc))
+        raise newznab.NzbFetchError(str(exc)) from exc
     except Exception as exc:
         raise newznab.NzbFetchError("database query failed") from exc
-    if not segments:
-        raise newznab.NzbFetchError("no segments for release")
     return _build_xml_from_segments(release_id, segments)
