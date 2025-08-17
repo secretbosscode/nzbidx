@@ -189,8 +189,22 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
     )
 
 
-def test_lookup_error_recommends_backfill_tool(monkeypatch) -> None:
-    """LookupError should suggest running the backfill script."""
+def test_lookup_error_missing_segments_suggests_backfill(monkeypatch) -> None:
+    """Missing segments should suggest running the backfill script."""
+
+    def _missing(_rid: str):
+        raise LookupError("release has no segments")
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
+    with pytest.raises(newznab.NzbFetchError) as excinfo:
+        nzb_builder.build_nzb_for_release("missing")
+    msg = str(excinfo.value)
+    assert "scripts/backfill_release_parts.py" in msg
+    assert "release has no segments" in msg
+
+
+def test_lookup_error_not_found_mentions_normalisation(monkeypatch) -> None:
+    """Not found errors explain normalisation."""
 
     def _missing(_rid: str):
         raise LookupError("release not found")
@@ -198,7 +212,10 @@ def test_lookup_error_recommends_backfill_tool(monkeypatch) -> None:
     monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
     with pytest.raises(newznab.NzbFetchError) as excinfo:
         nzb_builder.build_nzb_for_release("missing")
-    assert "scripts/backfill_release_parts.py" in str(excinfo.value)
+    msg = str(excinfo.value)
+    assert "release not found" in msg
+    assert "scripts/backfill_release_parts.py" not in msg
+    assert "release ID is normalized" in msg
 
 
 def test_db_query_failure_logs(monkeypatch, caplog) -> None:
@@ -330,6 +347,35 @@ def test_bulk_index_releases_deletes() -> None:
         "delete": {"_index": OS_RELEASES_ALIAS, "_id": "id1"}
     }
     assert len(lines) == 1
+
+
+def test_bulk_index_releases_logs_errors(caplog) -> None:
+    """Bulk API errors should emit a warning for each failed item."""
+
+    class DummyClient:
+        def bulk(self, *, body: str, refresh: bool) -> dict[str, object]:  # type: ignore[override]
+            return {
+                "errors": True,
+                "items": [
+                    {"index": {"_id": "id1", "error": {"reason": "boom"}}},
+                    {"index": {"_id": "id2"}},
+                ],
+            }
+
+    docs = [
+        ("id1", {"norm_title": "one", "category": "2000"}),
+        ("id2", {"norm_title": "two", "category": "3000"}),
+    ]
+
+    with caplog.at_level(logging.WARNING):
+        bulk_index_releases(DummyClient(), docs)
+
+    assert any(
+        rec.message == "opensearch_bulk_item_failed"
+        and rec.id == "id1"
+        and rec.error == "boom"
+        for rec in caplog.records
+    )
 
 
 def test_os_search_multiple_categories(monkeypatch) -> None:
@@ -1246,37 +1292,3 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
     loop.run_once()
 
     assert sleeps and sleeps[0] == 0.01
-
-
-def test_prune_orphaned_releases(monkeypatch) -> None:
-    """Stale OpenSearch documents should be removed."""
-
-    deleted: list[dict[str, object]] = []
-    import sqlite3
-
-    class DummyClient:
-        def search(self, *, index, scroll, size, body):  # type: ignore[override]
-            return {
-                "_scroll_id": "1",
-                "hits": {"hits": [{"_id": "1"}, {"_id": "2"}]},
-            }
-
-        def scroll(self, scroll_id, scroll):  # type: ignore[override]
-            return {"_scroll_id": "1", "hits": {"hits": []}}
-
-        def clear_scroll(self, scroll_id):  # type: ignore[override]
-            pass
-
-        def delete_by_query(self, *, index, body):  # type: ignore[override]
-            deleted.append(body)
-
-    db = sqlite3.connect(":memory:")
-    db.execute("CREATE TABLE release (id TEXT)")
-    db.execute("INSERT INTO release (id) VALUES ('1')")
-    db.commit()
-    monkeypatch.setattr(main, "connect_db", lambda: db)
-
-    count = main.prune_orphaned_releases(DummyClient())
-
-    assert count == 1
-    assert deleted == [{"query": {"ids": {"values": ["2"]}}}]

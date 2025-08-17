@@ -123,10 +123,18 @@ def build_nzb_for_release(release_id: str) -> str:
         if not segments:
             raise newznab.NzbFetchError("no segments found")
     except LookupError as exc:
-        msg = (
-            f"{exc}. To populate missing segments, run "
-            "scripts/backfill_release_parts.py"
-        )
+        err = str(exc).lower()
+        if "not found" in err:
+            msg = (
+                "release not found. The backfill script may remove invalid releases; "
+                "verify that the release ID is normalized."
+            )
+        else:
+            msg = (
+                "release has no segments. To populate missing segments, run scripts/"
+                "backfill_release_parts.py. The backfill script may remove invalid "
+                "releases; verify that the release ID is normalized."
+            )
         raise newznab.NzbFetchError(msg) from exc
     except Exception as exc:
         raise newznab.NzbFetchError("database query failed") from exc

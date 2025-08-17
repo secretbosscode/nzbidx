@@ -166,6 +166,12 @@ existing releases:
 The script inserts segment metadata for each release and drops entries that no
 longer resolve via NNTP.
 
+If NZB retrieval reports `release has no segments`, run the helper to
+repopulate the record. A `release not found` error means the release was
+removed—either never ingested or pruned as invalid. The backfill script may
+remove releases that no longer resolve, so verify the release ID is normalized
+before retrying.
+
 To repair any future releases that lose their segment metadata, schedule the
 auto mode which scans for entries with `has_parts=true` but missing `segments`:
 
@@ -373,6 +379,30 @@ The application uses the `psycopg` driver for PostgreSQL connections. The Docker
 images install it from `pyproject.toml`, but local environments may need to run
 `pip install psycopg[binary]>=3.1`. Without the driver the ingest worker will
 log `psycopg_unavailable` and fall back to SQLite.
+
+## Release IDs
+
+Releases are addressed by a stable ID combining the normalized title and the
+date the post was seen.  The ID format is
+``normalize_subject(title).lower():<posted-date>`` where `<posted-date>` is in
+`YYYY-MM-DD` form.
+
+Derive an ID from a raw subject:
+
+```python
+from nzbidx_ingest.parsers import normalize_subject
+
+subject = "[01/15] - Some.Release.part01.rar"
+title = normalize_subject(subject)
+release_id = f"{title.lower()}:2025-08-17"
+```
+
+Use the resulting ID with the `t=getnzb` endpoint (URL-encoded if needed):
+
+```bash
+curl -H 'X-Api-Key: dev' \
+  'http://localhost:8080/api?t=getnzb&id=some%20release:2025-08-17'
+```
 
 ## Backfilling segments
 

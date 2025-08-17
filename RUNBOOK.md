@@ -108,10 +108,28 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Actions:** install the driver with `pip install psycopg[binary]>=3.1` or
   rebuild the Docker image so it installs dependencies from `pyproject.toml`.
 
+## Release IDs
+- **Definition:** `normalize_subject(title).lower():<posted-date>` where
+  `<posted-date>` is `YYYY-MM-DD`.
+- **Example:**
+  ```python
+  from nzbidx_ingest.parsers import normalize_subject
+
+  subject = "Example.part01.rar"
+  release_id = f"{normalize_subject(subject).lower()}:2025-08-17"
+  ```
+- **Usage:** pass the ID to `t=getnzb` requests.
+
 ## Backfilling segments
-- **Symptoms:** NZB requests return `404` with `nzb fetch failed: no segments for release`.
-- **Checks:** missing data in the `segments` column for affected releases.
-- **Actions:** populate segments with `docker compose exec nzbidx python scripts/backfill_release_parts.py`.
+- **Symptoms:** NZB requests return `404` with `nzb fetch failed: release has no segments` or `nzb fetch failed: release not found`.
+- **Checks:** missing data in the `segments` column or the release absent; ensure the release ID is normalized.
+- **Actions:** repopulate segments with `docker compose exec nzbidx python scripts/backfill_release_parts.py`. The helper prunes invalid releases, so verify the ID before retrying.
+
+## OpenSearch orphan cleanup
+- **Symptoms:** documents exist in `nzbidx-releases` without matching rows in the `release` table.
+- **Checks:** `python scripts/check_os_orphans.py` logs the number of orphans.
+- **Actions:** remove them with `python scripts/check_os_orphans.py --prune`.
+- **Schedule:** run nightly via cron, e.g., `0 4 * * * python scripts/check_os_orphans.py --prune`.
 
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`

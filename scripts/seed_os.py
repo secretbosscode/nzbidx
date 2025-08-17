@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 from opensearchpy import OpenSearch
 from nzbidx_common.os import OS_RELEASES_ALIAS
+from nzbidx_api import main as api_main
 
 
 def main() -> None:
@@ -14,6 +15,11 @@ def main() -> None:
     load_dotenv()
     url = os.environ["OPENSEARCH_URL"]
     client = OpenSearch(url)
+
+    client.indices.put_index_template(
+        name="nzbidx-releases-template",
+        body=api_main.build_index_template(),
+    )
 
     movies = os.getenv("MOVIES_CAT_ID", "2000")
     tv = os.getenv("TV_CAT_ID", "5000")
