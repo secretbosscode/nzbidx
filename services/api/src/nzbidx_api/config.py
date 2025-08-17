@@ -108,7 +108,6 @@ def nntp_total_timeout_seconds() -> int:
     return _int_env("NNTP_TOTAL_TIMEOUT", 600)
 
 
-
 @lru_cache()
 def request_id_header() -> str:
     """Header name used for request correlation."""
@@ -143,8 +142,6 @@ def retry_base_ms() -> int:
 def retry_jitter_ms() -> int:
     """Additional random jitter applied to retries in milliseconds."""
     return _int_env("RETRY_JITTER_MS", 200)
-
-
 
 
 def validate_nntp_config() -> List[str]:
