@@ -119,7 +119,6 @@ from .newznab import (
     TV_CATEGORY_IDS,
     AUDIO_CATEGORY_IDS,
     BOOKS_CATEGORY_IDS,
-    ADULT_CATEGORY_ID,
     expand_category_ids,
 )
 from .api_key import ApiKeyMiddleware
@@ -623,7 +622,7 @@ def _os_search(
             # Block adult content by default unless explicitly allowed
             must_not: list[dict[str, object]] = []
             if not adult_content_allowed():
-                must_not.append({"prefix": {"category": str(ADULT_CATEGORY_ID)[0]}})
+                must_not.append({"prefix": {"category": str(newznab.ADULT_CATEGORY_ID)[0]}})
 
             query: dict[str, object] = {"must": must}
             if filters:
