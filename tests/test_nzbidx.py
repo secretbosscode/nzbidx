@@ -271,7 +271,7 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
-        with pytest.raises(newznab.NzbFetchError, match="database query failed"):
+        with pytest.raises(newznab.NzbDatabaseError, match="boom"):
             nzb_builder.build_nzb_for_release("broken")
 
     assert any(
@@ -827,6 +827,26 @@ def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
     }
 
 
+def test_getnzb_database_error_returns_503(monkeypatch) -> None:
+    """Database errors should return 503 and not be cached."""
+
+    def db_error_build(_release_id: str) -> str:
+        raise newznab.NzbDatabaseError("db down")
+
+    monkeypatch.setattr(
+        newznab.nzb_builder, "build_nzb_for_release", db_error_build
+    )
+    cache = DummyAsyncCache()
+    monkeypatch.setattr(api_main, "cache", cache)
+    req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
+    resp = asyncio.run(api_main.api(req))
+    assert resp.status_code == 503
+    assert json.loads(resp.body) == {
+        "error": {"code": "nzb_unavailable", "message": "database query failed"}
+    }
+    assert "nzb:1" not in cache.store
+
+
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     """NZB downloads should include a content-disposition header."""
 
@@ -913,6 +933,21 @@ def test_failed_fetch_not_cached(monkeypatch, cache_cls) -> None:
     with pytest.raises(RuntimeError):
         asyncio.run(newznab.get_nzb("123", cache))
     assert calls == ["123"]
+
+
+@pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
+def test_database_error_not_cached(monkeypatch, cache_cls) -> None:
+    cache = cache_cls()
+
+    def db_error(_release_id: str) -> str:
+        raise newznab.NzbDatabaseError("db down")
+
+    monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error)
+
+    key = "nzb:123"
+    with pytest.raises(newznab.NzbDatabaseError):
+        asyncio.run(newznab.get_nzb("123", cache))
+    assert key not in cache.store
 
 
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])

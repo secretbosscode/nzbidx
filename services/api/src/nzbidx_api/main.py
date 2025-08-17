@@ -116,6 +116,7 @@ from .newznab import (
     caps_xml,
     get_nzb,
     NzbFetchError,
+    NzbDatabaseError,
     NntpConfigError,
     NntpNoArticlesError,
     is_adult_category,
@@ -141,6 +142,7 @@ from .errors import (
     breaker_open,
     nzb_timeout,
     nzb_not_found,
+    nzb_unavailable,
 )
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
@@ -935,6 +937,12 @@ async def api(request: Request) -> Response:
             )
         except CircuitOpenError:
             return breaker_open()
+        except NzbDatabaseError as exc:
+            logger.error(
+                "nzb database query failed",
+                extra={"release_id": release_id, "error": str(exc)},
+            )
+            return nzb_unavailable("database query failed")
         except NzbFetchError as exc:
             msg = NNTP_ERROR_MESSAGES.get(type(exc), str(exc))
             logger.warning(

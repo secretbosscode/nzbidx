@@ -48,6 +48,10 @@ class NntpNoArticlesError(NzbFetchError):
     """Raised when no matching NNTP articles are found."""
 
 
+class NzbDatabaseError(Exception):
+    """Raised when database queries fail while fetching NZB data."""
+
+
 def adult_content_allowed() -> bool:
     """Return ``True`` if XXX content may be shown."""
     allow_xxx = os.getenv("ALLOW_XXX", "true").lower() != "false"
@@ -295,6 +299,8 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
 
     try:
         xml = await asyncio.to_thread(nzb_builder.build_nzb_for_release, release_id)
+    except NzbDatabaseError:
+        raise
     except NzbFetchError:
         if cache:
             try:
