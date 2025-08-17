@@ -212,6 +212,28 @@ def connect_db() -> Any:
                         """
                     ),
                     "CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx ON release_part (release_id, segment_number)",
+                    "DROP VIEW IF EXISTS release_with_parts",
+                    (
+                        """
+                        CREATE VIEW release_with_parts AS
+                        SELECT r.*,
+                               COALESCE(
+                                   json_agg(
+                                       json_build_object(
+                                           'segment_number', rp.segment_number,
+                                           'message_id', rp.message_id,
+                                           'group_name', rp.group_name,
+                                           'size_bytes', rp.size_bytes
+                                       )
+                                       ORDER BY rp.segment_number
+                                   ) FILTER (WHERE rp.segment_number IS NOT NULL),
+                                   '[]'::json
+                               ) AS parts
+                        FROM release r
+                        LEFT JOIN release_part rp ON rp.release_id = r.id
+                        GROUP BY r.id
+                        """
+                    ),
                 ):
                     try:
                         conn.execute(text(stmt))
@@ -294,6 +316,27 @@ def connect_db() -> Any:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx ON release_part (release_id, segment_number)"
+    )
+    conn.execute("DROP VIEW IF EXISTS release_with_parts")
+    conn.execute(
+        """
+        CREATE VIEW release_with_parts AS
+        SELECT r.*,
+               COALESCE(
+                   json_group_array(
+                       json_object(
+                           'segment_number', rp.segment_number,
+                           'message_id', rp.message_id,
+                           'group_name', rp.group_name,
+                           'size_bytes', rp.size_bytes
+                       )
+                       ORDER BY rp.segment_number
+                   ), '[]'
+               ) AS parts
+        FROM release r
+        LEFT JOIN release_part rp ON rp.release_id = r.id
+        GROUP BY r.id
+        """
     )
     return conn
 

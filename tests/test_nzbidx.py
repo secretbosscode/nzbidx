@@ -164,10 +164,7 @@ def test_missing_release_parts_logs(monkeypatch, caplog) -> None:
             pass
 
         def fetchone(self):
-            return (1,)
-
-        def fetchall(self):
-            return []
+            return ("[]",)
 
     class DummyConn:
         def cursor(self):

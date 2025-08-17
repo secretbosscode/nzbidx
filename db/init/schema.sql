@@ -50,28 +50,21 @@ CREATE TABLE IF NOT EXISTS release_part (
 CREATE INDEX IF NOT EXISTS release_part_rel_seg_idx
     ON release_part (release_id, segment_number);
 
-CREATE OR REPLACE FUNCTION update_release_part_stats()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE release
-        SET part_count = part_count + 1,
-            size_bytes = COALESCE(size_bytes, 0) + NEW.size_bytes,
-            has_parts = TRUE
-        WHERE id = NEW.release_id;
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE release
-        SET part_count = GREATEST(part_count - 1, 0),
-            size_bytes = GREATEST(COALESCE(size_bytes, 0) - OLD.size_bytes, 0),
-            has_parts = (part_count - 1) > 0
-        WHERE id = OLD.release_id;
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER release_part_stats_trg
-AFTER INSERT OR DELETE ON release_part
-FOR EACH ROW EXECUTE FUNCTION update_release_part_stats();
+DROP VIEW IF EXISTS release_with_parts;
+CREATE VIEW release_with_parts AS
+SELECT r.*,
+       COALESCE(
+           json_agg(
+               json_build_object(
+                   'segment_number', rp.segment_number,
+                   'message_id', rp.message_id,
+                   'group_name', rp.group_name,
+                   'size_bytes', rp.size_bytes
+               )
+               ORDER BY rp.segment_number
+           ) FILTER (WHERE rp.segment_number IS NOT NULL),
+           '[]'::json
+       ) AS parts
+FROM release r
+LEFT JOIN release_part rp ON rp.release_id = r.id
+GROUP BY r.id;
