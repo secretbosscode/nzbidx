@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+
 import sys
 from pathlib import Path
 
@@ -8,12 +10,24 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api import backfill_release_parts as backfill_mod
-import json
 
 
-def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
-    """Only releases listed via ``release_ids`` should be processed."""
+class DummyClient:
+    def high_water_mark(self, group: str) -> int:
+        assert group == "alt.test"
+        return 2
 
+    def xover(self, group: str, start: int, end: int):
+        return [
+            {"subject": "My Release (1/2)", "message-id": "<m1>", "bytes": 10},
+            {"subject": "My Release (2/2)", "message-id": "<m2>", "bytes": 15},
+        ]
+
+    def body_size(self, message_id: str) -> int:  # pragma: no cover - not used
+        return 0
+
+
+def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
     dbfile = tmp_path / "test.db"
     conn = sqlite3.connect(dbfile)
     cur = conn.cursor()
@@ -30,11 +44,7 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
         """
     )
     cur.execute(
-        "INSERT INTO release (id, norm_title, source_group, has_parts, part_count) VALUES (1, 'r1', 'g1', 1, 0)"
-    )
-    cur.execute(
-        "INSERT INTO release (id, norm_title, source_group, has_parts, segments, part_count) VALUES (2, 'r2', 'g1', 1, ?, 1)",
-        ('[{"number":1,"message_id":"m2","group":"g1","size":10}]',),
+        "INSERT INTO release (id, norm_title, source_group, has_parts, part_count) VALUES (1, 'my release', 'alt.test', 1, 0)"
     )
     conn.commit()
     conn.close()
@@ -42,20 +52,17 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
     monkeypatch.setattr(backfill_mod, "connect_opensearch", lambda: None)
     monkeypatch.setattr(backfill_mod, "bulk_index_releases", lambda *a, **k: None)
-    monkeypatch.setattr(
-        backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)]
-    )
+    monkeypatch.setattr(backfill_mod, "NNTPClient", lambda: DummyClient())
 
     processed = backfill_mod.backfill_release_parts(release_ids=[1])
     assert processed == 1
 
     conn2 = sqlite3.connect(dbfile)
     cur2 = conn2.cursor()
-    cur2.execute("SELECT segments FROM release WHERE id = 1")
-    seg1 = json.loads(cur2.fetchone()[0])
-    assert seg1[0]["message_id"] == "m1"
-    cur2.execute("SELECT segments FROM release WHERE id = 2")
-    seg2 = json.loads(cur2.fetchone()[0])
-    assert seg2[0]["message_id"] == "m2"
+    cur2.execute("SELECT segments, part_count FROM release WHERE id = 1")
+    seg_json, part_count = cur2.fetchone()
+    segments = json.loads(seg_json)
+    assert segments[0]["message_id"] == "m1"
+    assert segments[1]["message_id"] == "m2"
+    assert part_count == 2
     conn2.close()
-
