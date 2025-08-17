@@ -17,8 +17,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       NZBIDX_USE_STD_JSON: ${NZBIDX_USE_STD_JSON:-1} # set to 0 to enable orjson
       DATABASE_URL: postgres://nzbidx:nzbidx@postgres:5432/nzbidx
@@ -26,7 +24,6 @@ services:
       PGUSER: nzbidx
       PGPASSWORD: nzbidx
       POSTGRES_PORT: 5432
-      REDIS_URL: redis://redis:6379/0
       API_KEYS: dev
       SAFESEARCH: "off"
       ALLOW_XXX: "true"
@@ -50,23 +47,6 @@ services:
       - ./db/init/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  redis:
-    image: redis:8-alpine
-    environment:
-      REDIS_DISABLE_PERSISTENCE: ${REDIS_DISABLE_PERSISTENCE:-}
-    volumes:
-      - ${REDIS_DATA_DIR:-redis-data}:${REDIS_DATA_DIR:-/data}
-    command: >
-      sh -c 'if [ "$${REDIS_DISABLE_PERSISTENCE}" = "1" ] || [ "$${REDIS_DISABLE_PERSISTENCE}" = "true" ] || [ "$${REDIS_DISABLE_PERSISTENCE}" = "TRUE" ] || [ "$${REDIS_DISABLE_PERSISTENCE}" = "True" ]; then
-        redis-server --dir ${REDIS_DATA_DIR:-/data} --save "" --appendonly no --maxmemory 256mb --maxmemory-policy volatile-lru;
-      else
-        redis-server --dir ${REDIS_DATA_DIR:-/data} --maxmemory 256mb --maxmemory-policy volatile-lru;
-      fi'
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

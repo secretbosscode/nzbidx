@@ -56,7 +56,6 @@ services:
   nzbidx:
     environment:
       DATABASE_URL: postgresql+asyncpg://nzbidx:nzbidx@host.docker.internal:5432/nzbidx
-      OPENSEARCH_URL: http://host.docker.internal:30003
     depends_on: []
 ```
 
@@ -72,7 +71,6 @@ If your OpenSearch or ElasticSearch instance requires authentication, embed
 credentials in the URL:
 
 ```yaml
-OPENSEARCH_URL: http://user:password@host.docker.internal:30003
 ```
 
 Both the ingest worker and the API must use the **same persistent database**
@@ -97,8 +95,6 @@ faster serializer once compatible.
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Superuser applied to `schema.sql` during init | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
-| `OPENSEARCH_URL` | OpenSearch endpoint; include `user:pass@` if authentication is required | `http://opensearch:9200` |
-| `OPENSEARCH_TIMEOUT_SECONDS` | Timeout in seconds for OpenSearch connections | `2` |
 | `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
 | `SAFESEARCH` | `on` hides adult categories | `off` |
 | `ALLOW_XXX` | `true` enables the XXX category | `true` |
@@ -116,7 +112,6 @@ faster serializer once compatible.
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
-| `INGEST_OS_BULK` | Releases per OpenSearch bulk request | `100` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
 
 > **Note**: To avoid premature API timeouts during NZB generation, ensure

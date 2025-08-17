@@ -64,24 +64,10 @@ INGEST_POLL_MAX_SECONDS: int = int(os.getenv("INGEST_POLL_MAX_SECONDS", "60"))
 DETECT_LANGUAGE: int = int(os.getenv("DETECT_LANGUAGE", "1"))
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
-# Base delay applied when database or OpenSearch latency exceeds
-# thresholds. Set to ``0`` to disable adaptive backoff.
+# Base delay applied when database latency exceeds thresholds. Set to ``0`` to
+# disable adaptive backoff.
 INGEST_SLEEP_MS: int = int(os.getenv("INGEST_SLEEP_MS", "1000"))
 INGEST_DB_LATENCY_MS: int = int(os.getenv("INGEST_DB_LATENCY_MS", "1200"))
-INGEST_OS_LATENCY_MS: int = int(os.getenv("INGEST_OS_LATENCY_MS", "1200"))
-INGEST_OS_BULK: int = int(os.getenv("INGEST_OS_BULK", "100"))
 # Emit ingest batch metrics at INFO level every N batches. Set to 0 to disable.
 INGEST_LOG_EVERY: int = int(os.getenv("INGEST_LOG_EVERY", "100"))
 RELEASE_PART_MAX_RELEASES: int = int(os.getenv("RELEASE_PART_MAX_RELEASES", "100000"))
-
-
-def opensearch_timeout_seconds() -> int:
-    """Timeout in seconds for OpenSearch connections."""
-    value = os.getenv("OPENSEARCH_TIMEOUT_SECONDS")
-    if value is None:
-        return 2
-    try:
-        return int(value)
-    except ValueError:
-        logger.warning("Invalid OPENSEARCH_TIMEOUT_SECONDS=%r, using default 2", value)
-        return 2

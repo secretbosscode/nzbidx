@@ -32,12 +32,6 @@ else:  # pragma: no cover - prefers orjson when available
             ),
         )
 
-# Optional redis dependency
-try:  # pragma: no cover - import guard
-    from redis.asyncio import Redis
-except Exception:  # pragma: no cover - optional dependency
-    Redis = None  # type: ignore
-
 # Starlette (with safe fallbacks for tests/minimal envs)
 try:  # pragma: no cover - import guard
     from starlette.applications import Starlette
@@ -148,7 +142,6 @@ from .config import (
 from .metrics_log import start as start_metrics, inc_api_5xx
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
-from .utils import maybe_await
 
 _stop_metrics: Callable[[], None] | None = None
 _ingest_stop: threading.Event | None = None
@@ -296,9 +289,6 @@ def _git_sha() -> str:
 
 BUILD = os.getenv("GIT_SHA", _git_sha())
 
-cache: Optional[Redis] = None
-
-
 class TimingMiddleware(BaseHTTPMiddleware):
     """Log timing for ``/api`` responses."""
 
@@ -326,59 +316,11 @@ class TimingMiddleware(BaseHTTPMiddleware):
         return response
 
 
-async def init_cache_async() -> None:
-    """Connect to Redis for caching NZB documents."""
-    global cache
-    if Redis is None:
-        return
-    url = os.getenv("REDIS_URL", "redis://redis:6379/0")
-    try:
-        client = Redis.from_url(url)
-        await maybe_await(client.ping())
-        if os.getenv("REDIS_DISABLE_PERSISTENCE") in {"1", "true", "TRUE", "True"}:
-            try:
-                await maybe_await(client.config_set("save", ""))
-                await maybe_await(client.config_set("appendonly", "no"))
-            except Exception as exc:
-                logger.warning("Failed to disable Redis persistence: %s", exc)
-        cache = client
-        logger.info("Redis ready")
-    except Exception as exc:  # pragma: no cover - optional dependency
-        logger.warning("Redis unavailable: %s", exc)
-
-
-def init_cache() -> None:
-    """Synchronous wrapper for tests to initialize Redis."""
-    asyncio.run(init_cache_async())
-
-
-async def shutdown() -> None:
-    """Close global connections on shutdown."""
-    global cache
-    if cache:
-        try:
-            await maybe_await(cache.close())  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        cache = None
-
-
 async def health(request: Request) -> ORJSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
     payload = {"status": "ok", "db": db_status, "request_id": req_id}
-    if cache:
-        start = time.monotonic()
-        try:  # pragma: no cover - network errors
-            await maybe_await(cache.ping())
-            payload["redis"] = "ok"
-        except Exception:
-            payload["redis"] = "down"
-        payload["redis_latency_ms"] = int((time.monotonic() - start) * 1000)
-    else:
-        payload["redis"] = "down"
-        payload["redis_latency_ms"] = 0
     last = getattr(ingest_loop, "last_run", 0.0)
     payload["ingest_last_run"] = int(last)
     age = time.time() - last if last else None
@@ -398,14 +340,6 @@ async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
     payload = {"request_id": req_id, "breaker": {}}
-    if cache:
-        try:  # pragma: no cover - network errors
-            await maybe_await(cache.ping())
-            payload["redis"] = "ok"
-        except Exception:
-            payload["redis"] = "down"
-    else:
-        payload["redis"] = "down"
     payload["breaker"]["os"] = os_breaker.state()
     return ORJSONResponse(payload)
 
@@ -676,13 +610,11 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
-        if cache is None:
-            await init_cache_async()
         logger.info("fetching nzb", extra={"release_id": release_id})
         start = time.perf_counter()
         try:
             xml = await asyncio.wait_for(
-                get_nzb(release_id, cache),
+                get_nzb(release_id, None),
                 timeout=nzb_timeout_seconds(),
             )
             duration_ms = int((time.perf_counter() - start) * 1000)
@@ -750,13 +682,11 @@ app = Starlette(
     routes=routes,
     on_startup=[
         apply_schema,
-        init_cache_async,
         start_ingest,
         lambda: _set_stop(start_metrics()),
     ],
     on_shutdown=[
         stop_ingest,
-        shutdown,
         lambda: _stop_metrics() if _stop_metrics else None,
     ],
     middleware=middleware,
