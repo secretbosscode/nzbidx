@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Callable, Iterable, Optional
 
-from nzbidx_ingest.main import bulk_index_releases, connect_db, connect_opensearch
+from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.nntp_client import NNTPClient
 from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
 
@@ -64,7 +64,6 @@ def backfill_release_parts(
     job to a specific set of releases.
     """
     conn = connect_db()
-    os_client = connect_opensearch()
     cur = conn.cursor()
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     base_sql = "SELECT id, norm_title, source_group FROM release"
@@ -81,7 +80,6 @@ def backfill_release_parts(
         rows = cur.fetchmany(BATCH_SIZE)
         if not rows:
             break
-        to_index: list[tuple[str, dict[str, object]]] = []
         for rel_id, norm_title, group in rows:
             try:
                 segments = _fetch_segments(norm_title, group or "")
@@ -116,17 +114,6 @@ def backfill_release_parts(
                 ),
                 (json.dumps(seg_data), True, len(seg_data), total_size, rel_id),
             )
-            to_index.append(
-                (
-                    norm_title,
-                    {
-                        "norm_title": norm_title,
-                        "has_parts": True,
-                        "part_count": len(seg_data),
-                        "size_bytes": total_size,
-                    },
-                )
-            )
             processed += 1
             if progress_cb:
                 try:
@@ -134,18 +121,13 @@ def backfill_release_parts(
                 except Exception:  # pragma: no cover - progress callback errors
                     log.exception("progress_callback_failed")
         conn.commit()
-        if to_index:
-            bulk_index_releases(os_client, to_index)
         if to_delete:
             ids = [r for r, _ in to_delete]
-            titles = [t for _, t in to_delete]
             placeholders = ",".join([placeholder] * len(ids))
             conn.execute(f"DELETE FROM release WHERE id IN ({placeholders})", ids)
             conn.commit()
-            bulk_index_releases(os_client, [(t, None) for t in titles])
             log.info("deleted %d invalid releases", len(ids))
             to_delete.clear()
-        to_index.clear()
         log.info("processed %d releases", processed)
     conn.close()
     return processed

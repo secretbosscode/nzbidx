@@ -7,7 +7,6 @@
 - Add admin takedown endpoint for removing releases from the search index.
 - Default to SafeSearch off and enable XXX content unless explicitly disabled.
 - Bundle nntplib from CPython and remove its deprecation guard to ensure Python 3.13 compatibility.
-- Handle OpenSearch clusters without Index Lifecycle Management by skipping ILM configuration.
 - Consolidate ingest into the API application and remove the separate ingest service.
 - Ensure release `language` and `tags` columns have non-null defaults.
 - Include `langdetect` dependency for automatic language detection.

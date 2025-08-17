@@ -33,11 +33,9 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
     monkeypatch.setattr(
         loop, "insert_release", lambda _db, releases: {r[0] for r in releases}
     )
-    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_args, **_kwargs: None)
 
     with caplog.at_level(logging.INFO):
         loop.run_once()
@@ -53,9 +51,9 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
     assert not hasattr(record, "deduped")
 
 
-def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> None:
-    captured: list[tuple[str, dict[str, object]]] = []
 
+
+def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
@@ -89,41 +87,18 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
 
     with _connect() as conn:
         conn.execute(
             "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                "example",
-                "other",
-                7000,
-                "und",
-                "",
-                "alt.test",
-                100,
-                1,
-                1,
-                json.dumps([(1, "m1", "alt.test", 100)]),
-            ),
+            ("example", "other", 7000, "und", "", "alt.test", 100, 1, 1, json.dumps([(1, "m1", "alt.test", 100)])),
         )
         conn.commit()
 
     monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
 
-    def fake_bulk(_client, docs):
-        captured.extend(docs)
-
-    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
-
     loop.run_once()
 
-    assert captured
-    doc_id, body = captured[0]
-    assert doc_id == "example"
-    assert body.get("has_parts") is True
-    assert body.get("size_bytes") == 250
-    assert body.get("part_count") == 2
     with sqlite3.connect(db_path) as check:
         row = check.execute(
             "SELECT size_bytes, part_count, segments FROM release WHERE norm_title = 'example'"
@@ -137,7 +112,6 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
 
 
 def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
-    captured: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
@@ -172,7 +146,6 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
 
     with _connect() as conn:
         conn.execute(
@@ -194,11 +167,6 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
 
-    def fake_bulk(_client, docs):
-        captured.extend(docs)
-
-    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
-
     class _Existing(list):
         def __init__(self) -> None:
             super().__init__([(1, "m1", "alt.test", 100)])
@@ -213,11 +181,6 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
 
     loop.run_once()
 
-    assert captured
-    doc_id, body = captured[0]
-    assert doc_id == "example"
-    assert body.get("has_parts") is False
-    assert body.get("part_count") == 0
     with sqlite3.connect(db_path) as check:
         row = check.execute(
             "SELECT part_count, has_parts, segments FROM release WHERE norm_title = 'example'",

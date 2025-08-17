@@ -17,8 +17,6 @@ COPY db/init/schema.sql services/api/src/db/init/schema.sql
 # PostgreSQL driver is included in the final image.
 RUN pip install --no-cache-dir -e services/api
 
-COPY nzbidx_common/ nzbidx_common
-
 USER nzbidx
 VOLUME /tmp
 
