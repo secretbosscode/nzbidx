@@ -19,7 +19,8 @@ except Exception:  # pragma: no cover - optional dependency
     AsyncEngine = None  # type: ignore
     create_async_engine = None  # type: ignore
 
-# Optional sqlparse dependency for parsing schema statements
+# Optional sqlparse dependency for parsing schema statements.  When unavailable
+# a lightweight internal splitter handles common PostgreSQL quoting constructs.
 try:  # pragma: no cover - import guard
     import sqlparse
 except Exception:  # pragma: no cover - optional dependency
@@ -39,88 +40,85 @@ else:  # pragma: no cover - no sqlalchemy available
 
 
 def _split_sql(sql: str) -> list[str]:
-    """Split SQL script into individual statements.
+    """Split ``sql`` into statements without breaking quoted blocks.
 
-    When ``sqlparse`` is available, it is used for correctness.  Otherwise a
-    tiny state machine is employed which understands basic quoting rules and
-    PostgreSQL dollar-quoted blocks so that semicolons inside functions or
-    strings do not prematurely terminate statements.
+    The parser scans the string and splits only on semicolons that are outside
+    single quotes, double quotes and PostgreSQL dollar-quoted blocks such as
+    ``$$`` or ``$tag$``.  It is intentionally simple and serves as a fallback
+    when :mod:`sqlparse` is not installed.
     """
 
-    if sqlparse:  # pragma: no cover - exercised when dependency installed
-        return [s.strip() for s in sqlparse.split(sql) if s.strip()]
-
     statements: list[str] = []
-    current: list[str] = []
+    buf: list[str] = []
+    i = 0
+    n = len(sql)
     in_single = False
     in_double = False
-    dollar_tag: str | None = None
-    i = 0
-    length = len(sql)
-    while i < length:
+    dollar: str | None = None
+
+    while i < n:
         ch = sql[i]
-        if in_single:
-            current.append(ch)
+        if dollar:
+            if sql.startswith(dollar, i):
+                buf.append(dollar)
+                i += len(dollar)
+                dollar = None
+            else:
+                buf.append(ch)
+                i += 1
+        elif in_single:
+            buf.append(ch)
             if ch == "'":
-                # handle escaped '' inside strings
-                if i + 1 < length and sql[i + 1] == "'":
-                    current.append("'")
-                    i += 1
+                if i + 1 < n and sql[i + 1] == "'":
+                    buf.append("'")
+                    i += 2
                 else:
                     in_single = False
-            i += 1
-            continue
-        if in_double:
-            current.append(ch)
-            if ch == '"':
-                if i + 1 < length and sql[i + 1] == '"':
-                    current.append('"')
                     i += 1
+            else:
+                i += 1
+        elif in_double:
+            buf.append(ch)
+            if ch == '"':
+                if i + 1 < n and sql[i + 1] == '"':
+                    buf.append('"')
+                    i += 2
                 else:
                     in_double = False
-            i += 1
-            continue
-        if dollar_tag is not None:
-            if sql.startswith(dollar_tag, i):
-                current.append(dollar_tag)
-                i += len(dollar_tag)
-                dollar_tag = None
+                    i += 1
             else:
-                current.append(ch)
                 i += 1
-            continue
+        else:
+            if ch == "'":
+                in_single = True
+                buf.append(ch)
+                i += 1
+            elif ch == '"':
+                in_double = True
+                buf.append(ch)
+                i += 1
+            elif ch == '$':
+                end = sql.find('$', i + 1)
+                if end != -1:
+                    tag = sql[i : end + 1]
+                    if tag and all(c.isalnum() or c == '_' for c in tag[1:-1]):
+                        dollar = tag
+                        buf.append(tag)
+                        i = end + 1
+                        continue
+                buf.append(ch)
+                i += 1
+            elif ch == ';':
+                stmt = ''.join(buf).strip()
+                if stmt:
+                    statements.append(stmt)
+                buf = []
+                i += 1
+            else:
+                buf.append(ch)
+                i += 1
 
-        # Outside of any quoted context
-        if ch == "'":
-            in_single = True
-            current.append(ch)
-            i += 1
-            continue
-        if ch == '"':
-            in_double = True
-            current.append(ch)
-            i += 1
-            continue
-        if ch == "$":
-            j = i + 1
-            while j < length and (sql[j].isalnum() or sql[j] == "_"):
-                j += 1
-            if j < length and sql[j] == "$":
-                dollar_tag = sql[i : j + 1]
-                current.append(dollar_tag)
-                i = j + 1
-                continue
-        if ch == ";":
-            stmt = "".join(current).strip()
-            if stmt:
-                statements.append(stmt)
-            current = []
-            i += 1
-            continue
-        current.append(ch)
-        i += 1
-
-    stmt = "".join(current).strip()
+    stmt = ''.join(buf).strip()
     if stmt:
         statements.append(stmt)
     return statements
@@ -133,7 +131,10 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     sql = (
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
     )
-    statements = _split_sql(sql)
+    if sqlparse:
+        statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
+    else:  # pragma: no cover - sqlparse not installed
+        statements = _split_sql(sql)
 
     async def _apply(conn: Any) -> None:
         for stmt in statements:
