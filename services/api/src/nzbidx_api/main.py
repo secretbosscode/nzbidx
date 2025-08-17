@@ -209,28 +209,43 @@ class JsonFormatter(logging.Formatter):
         return orjson.dumps(payload).decode()
 
 
+_LOG_LOCK = threading.Lock()
+
+
 def setup_logging() -> None:
-    handler = logging.StreamHandler()
-    log_format = os.getenv("LOG_FORMAT", "plain")
-    if log_format.lower() == "json":
-        handler.setFormatter(JsonFormatter())
-    else:
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     root = logging.getLogger()
-    root.handlers.clear()
-    root.addHandler(handler)
-    root.addFilter(LogSanitizerFilter())
-    level = os.getenv("LOG_LEVEL", "INFO").upper()
-    root.setLevel(getattr(logging, level, logging.INFO))
+    if getattr(root, "_nzbidx_logging_configured", False):
+        return
+    with _LOG_LOCK:
+        if getattr(root, "_nzbidx_logging_configured", False):
+            return
 
-    # Quiet overly chatty third-party libraries so logs stay readable.
-    for name in ("urllib3", "opensearchpy", "httpx"):
-        logging.getLogger(name).setLevel(logging.WARNING)
+        handler = logging.StreamHandler()
+        log_format = os.getenv("LOG_FORMAT", "plain")
+        if log_format.lower() == "json":
+            handler.setFormatter(JsonFormatter())
+        else:
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+            )
+        handler.addFilter(LogSanitizerFilter())
 
-    # Forward uvicorn's access logs through the root for consistent JSON formatting.
-    access = logging.getLogger("uvicorn.access")
-    access.handlers.clear()
-    access.propagate = True
+        root.handlers.clear()
+        root.addHandler(handler)
+        level = os.getenv("LOG_LEVEL", "INFO").upper()
+        root.setLevel(getattr(logging, level, logging.INFO))
+
+        # Quiet overly chatty third-party libraries so logs stay readable.
+        for name in ("urllib3", "opensearchpy", "httpx"):
+            logging.getLogger(name).setLevel(logging.WARNING)
+
+        # Forward uvicorn's access logs through the same handler without propagating.
+        access = logging.getLogger("uvicorn.access")
+        access.handlers.clear()
+        access.propagate = False
+        access.addHandler(handler)
+
+        root._nzbidx_logging_configured = True
 
 
 setup_logging()

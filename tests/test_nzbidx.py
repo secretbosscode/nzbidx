@@ -120,8 +120,8 @@ def test_build_nzb_missing_segments_raises(monkeypatch) -> None:
         nzb_builder.build_nzb_for_release("MyRelease")
 
 
-def test_segments_from_db_missing_release_logs(monkeypatch, caplog) -> None:
-    """Missing release should emit a structured warning."""
+def test_release_not_found_logs(monkeypatch, caplog) -> None:
+    """Missing release should emit a specific warning."""
 
     class DummyCursor:
         def execute(self, *args, **kwargs):
@@ -147,13 +147,87 @@ def test_segments_from_db_missing_release_logs(monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
-        rows = nzb_builder._segments_from_db("missing")
+        with pytest.raises(newznab.NzbFetchError, match="release not found"):
+            nzb_builder.build_nzb_for_release("missing")
 
-    assert rows == []
+    assert any(
+        rec.message == "release_not_found" and rec.release_id == "missing"
+        for rec in caplog.records
+    )
+
+
+def test_missing_release_parts_logs(monkeypatch, caplog) -> None:
+    """Releases without parts should emit a specific warning."""
+
+    class DummyCursor:
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchone(self):
+            return (1,)
+
+        def fetchall(self):
+            return []
+
+    class DummyConn:
+        def cursor(self):
+            return DummyCursor()
+
+        def close(self):
+            pass
+
+    DummyConn.__module__ = "sqlite3"
+
+    def _connect() -> DummyConn:
+        return DummyConn()
+
+    monkeypatch.setattr(main, "connect_db", _connect)
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(
+            newznab.NzbFetchError, match="release has no release_part rows"
+        ):
+            nzb_builder.build_nzb_for_release("noparts")
+
+    assert any(
+        rec.message == "missing_release_parts" and rec.release_id == "noparts"
+        for rec in caplog.records
+    )
+
+
+def test_db_query_failure_logs(monkeypatch, caplog) -> None:
+    """Database errors should be logged and wrapped."""
+
+    class DummyCursor:
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+        def fetchone(self):
+            return (1,)
+
+        def fetchall(self):
+            return []
+
+    class DummyConn:
+        def cursor(self):
+            return DummyCursor()
+
+        def close(self):
+            pass
+
+    DummyConn.__module__ = "sqlite3"
+
+    def _connect() -> DummyConn:
+        return DummyConn()
+
+    monkeypatch.setattr(main, "connect_db", _connect)
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(newznab.NzbFetchError, match="database query failed"):
+            nzb_builder.build_nzb_for_release("broken")
+
     assert any(
         rec.message == "db_query_failed"
-        and rec.release_id == "missing"
-        and rec.exception == "LookupError"
+        and rec.release_id == "broken"
+        and rec.exception == "RuntimeError"
         for rec in caplog.records
     )
 
