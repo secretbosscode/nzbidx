@@ -349,6 +349,35 @@ def test_bulk_index_releases_deletes() -> None:
     assert len(lines) == 1
 
 
+def test_bulk_index_releases_logs_errors(caplog) -> None:
+    """Bulk API errors should emit a warning for each failed item."""
+
+    class DummyClient:
+        def bulk(self, *, body: str, refresh: bool) -> dict[str, object]:  # type: ignore[override]
+            return {
+                "errors": True,
+                "items": [
+                    {"index": {"_id": "id1", "error": {"reason": "boom"}}},
+                    {"index": {"_id": "id2"}},
+                ],
+            }
+
+    docs = [
+        ("id1", {"norm_title": "one", "category": "2000"}),
+        ("id2", {"norm_title": "two", "category": "3000"}),
+    ]
+
+    with caplog.at_level(logging.WARNING):
+        bulk_index_releases(DummyClient(), docs)
+
+    assert any(
+        rec.message == "opensearch_bulk_item_failed"
+        and rec.id == "id1"
+        and rec.error == "boom"
+        for rec in caplog.records
+    )
+
+
 def test_os_search_multiple_categories(monkeypatch) -> None:
     """Multiple categories should yield a ``terms`` filter."""
     captured: dict[str, object] = {}
