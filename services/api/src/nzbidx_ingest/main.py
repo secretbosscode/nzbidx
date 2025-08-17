@@ -479,6 +479,75 @@ def prune_group(conn: Any, client: Optional[object], group: str) -> None:
             logger.warning("opensearch_prune_failed", extra={"group": group})
 
 
+def prune_orphaned_releases(client: Optional[object], batch: int = 1000) -> int:
+    """Remove OpenSearch documents without a matching DB record.
+
+    Returns the number of deleted documents.  ``client`` should be an
+    :class:`OpenSearch`-compatible instance.  When ``client`` is ``None`` or any
+    errors occur, the function exits early and returns ``0``.
+    """
+
+    if not client:
+        return 0
+
+    deleted = 0
+    try:
+        conn = connect_db()
+    except Exception:
+        logger.warning("prune_orphaned_connect_failed")
+        return 0
+
+    cur = conn.cursor()
+    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+
+    try:
+        resp = client.search(
+            index=OS_RELEASES_ALIAS,
+            scroll="1m",
+            size=batch,
+            body={"query": {"match_all": {}}, "_source": False},
+        )
+    except Exception:
+        logger.warning("opensearch_scan_failed")
+        conn.close()
+        return 0
+
+    scroll_id = resp.get("_scroll_id")
+    hits = resp.get("hits", {}).get("hits", [])
+
+    try:
+        while hits:
+            missing: list[str] = []
+            for hit in hits:
+                rid = hit.get("_id")
+                if rid is None:
+                    continue
+                cur.execute(f"SELECT 1 FROM release WHERE id = {placeholder}", (rid,))
+                if cur.fetchone() is None:
+                    missing.append(rid)
+            if missing:
+                try:
+                    client.delete_by_query(
+                        index=OS_RELEASES_ALIAS,
+                        body={"query": {"ids": {"values": missing}}},
+                    )
+                    deleted += len(missing)
+                except Exception:
+                    logger.warning("opensearch_delete_failed")
+            resp = client.scroll(scroll_id=scroll_id, scroll="1m")
+            scroll_id = resp.get("_scroll_id")
+            hits = resp.get("hits", {}).get("hits", [])
+    finally:
+        try:
+            if scroll_id:
+                client.clear_scroll(scroll_id=scroll_id)
+        except Exception:
+            pass
+        conn.close()
+
+    return deleted
+
+
 def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
