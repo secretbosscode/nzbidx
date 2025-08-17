@@ -279,7 +279,7 @@ def _process_groups(
                             rows,
                         )
                 db.commit()
-                prune_release_parts(db)
+                prune_release_parts(db, client=os_client)
             except Exception:
                 pass
         for title in inserted:

@@ -185,7 +185,9 @@ def connect_db() -> Any:
                             language TEXT NOT NULL DEFAULT 'und',
                             tags TEXT NOT NULL DEFAULT '',
                             source_group TEXT,
-                            size_bytes BIGINT
+                            size_bytes BIGINT,
+                            has_parts BOOLEAN NOT NULL DEFAULT FALSE,
+                            part_count INT NOT NULL DEFAULT 0
                         )
                         """
                     ),
@@ -193,6 +195,8 @@ def connect_db() -> Any:
                     "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT",
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE",
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0",
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
                     (
@@ -264,7 +268,9 @@ def connect_db() -> Any:
             language TEXT NOT NULL DEFAULT 'und',
             tags TEXT NOT NULL DEFAULT '',
             source_group TEXT,
-            size_bytes BIGINT
+            size_bytes BIGINT,
+            has_parts BOOLEAN NOT NULL DEFAULT 0,
+            part_count INT NOT NULL DEFAULT 0
         )
         """
     )
@@ -484,7 +490,9 @@ def bulk_index_releases(
 
 
 def prune_release_parts(
-    conn: Any, max_releases: int = RELEASE_PART_MAX_RELEASES
+    conn: Any,
+    max_releases: int = RELEASE_PART_MAX_RELEASES,
+    client: Optional[object] = None,
 ) -> None:
     """Retain ``max_releases`` worth of segment data."""
     if max_releases <= 0:
@@ -499,7 +507,18 @@ def prune_release_parts(
         return
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute(f"DELETE FROM release_part WHERE release_id < {placeholder}", (cutoff,))
+    cur.execute(
+        f"UPDATE release SET has_parts = FALSE, part_count = 0 WHERE id < {placeholder}",
+        (cutoff,),
+    )
+    cur.execute(
+        f"SELECT norm_title FROM release WHERE id < {placeholder}",
+        (cutoff,),
+    )
+    titles = [row[0] for row in cur.fetchall()]
     conn.commit()
+    if client and titles:
+        bulk_index_releases(client, [(t, None) for t in titles])
 
 
 def prune_group(conn: Any, client: Optional[object], group: str) -> None:
