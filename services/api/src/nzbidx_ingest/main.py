@@ -493,7 +493,24 @@ def bulk_index_releases(
             continue
         payload = "\n".join(lines) + "\n"
         try:  # pragma: no cover - network errors
-            client.bulk(body=payload, refresh=False)
+            response = client.bulk(body=payload, refresh=False)
+            if response.get("errors"):
+                for item in response.get("items", []):
+                    for info in item.values():
+                        error = info.get("error")  # type: ignore[union-attr]
+                        if error:
+                            reason = (
+                                error.get("reason")
+                                if isinstance(error, dict)
+                                else str(error)
+                            )
+                            logger.warning(
+                                "opensearch_bulk_item_failed",
+                                extra={
+                                    "id": info.get("_id"),
+                                    "error": reason,
+                                },
+                            )
         except Exception as exc:  # pragma: no cover - network errors
             if not _os_warned:
                 logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
@@ -559,7 +576,9 @@ def prune_orphaned_releases(client: Optional[object], batch: int = 1000) -> int:
                 rid = hit.get("_id")
                 if rid is None:
                     continue
-                cur.execute(f"SELECT 1 FROM release WHERE id = {placeholder}", (rid,))
+                cur.execute(
+                    f"SELECT 1 FROM release WHERE norm_title = {placeholder}", (rid,)
+                )
                 if cur.fetchone() is None:
                     missing.append(rid)
             if missing:
