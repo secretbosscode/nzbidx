@@ -938,7 +938,7 @@ async def api(request: Request) -> Response:
         except CircuitOpenError:
             return breaker_open()
         except NzbDatabaseError as exc:
-            logger.error(
+            logger.exception(
                 "nzb database query failed",
                 extra={"release_id": release_id, "error": str(exc)},
             )
