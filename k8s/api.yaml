@@ -16,8 +16,8 @@ spec:
       - name: api
         image: nzbidx:latest
         env:
-        - name: OPENSEARCH_URL
-          value: http://opensearch:9200
+        - name: REDIS_URL
+          value: redis://redis:6379/0
         - name: DATABASE_URL
           value: postgresql://postgres:postgres@postgres:5432/postgres
         - name: NNTP_TOTAL_TIMEOUT

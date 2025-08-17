@@ -64,20 +64,6 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
         rows = check.execute("SELECT norm_title, size_bytes FROM release").fetchall()
     assert rows == [("release", 300)]
 
-    class DummySearchClient:
-        def search(self, **kwargs):
-            return {"hits": {"hits": [{"_id": doc_id, "_source": body}]}}
-
-    def dummy_call_with_retry(_breaker, _dep, func, **kwargs):
-        return func(**kwargs)
-
-    monkeypatch.setattr(search_mod, "call_with_retry", dummy_call_with_retry)
-    monkeypatch.setattr(search_mod, "start_span", lambda name: nullcontext())
-
-    items = search_mod.search_releases(DummySearchClient(), {"must": []}, limit=1)
-    assert len(items) == 1
-    assert items[0]["size"] == "300"
-    assert items[0]["link"] == f"/api?t=getnzb&id={doc_id}"
 
 
 def test_normalize_subject_strips_parts() -> None:

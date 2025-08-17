@@ -1,42 +1,23 @@
-"""OpenSearch query helpers."""
+"""Database search helpers using PostgreSQL full text search."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from email.utils import format_datetime
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
-from .config import _int_env, search_timeout_ms
-from .middleware_circuit import CircuitOpenError, call_with_retry, os_breaker
-from .otel import start_span
-from nzbidx_common.os import OS_RELEASES_ALIAS
-
 try:  # pragma: no cover - optional dependency
-    from opensearchpy import OpenSearch
+    from sqlalchemy import text
 except Exception:  # pragma: no cover - optional dependency
-    OpenSearch = None  # type: ignore
+    text = None  # type: ignore
 
-try:  # pragma: no cover - optional dependency
-    from opensearchpy.exceptions import (
-        ConnectionError as OSConnectionError,
-        ConnectionTimeout,
-        TransportError,
-    )
-except Exception:  # pragma: no cover - optional dependency
-
-    class TransportError(Exception):
-        """Fallback when opensearch-py isn't installed."""
-
-    class OSConnectionError(TransportError):
-        """Fallback connection error."""
-
-    class ConnectionTimeout(OSConnectionError):
-        """Fallback timeout error."""
-
+from .config import _int_env
+from .db import engine
+from .newznab import ADULT_CATEGORY_ID, adult_content_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -44,17 +25,15 @@ MAX_LIMIT = _int_env("MAX_LIMIT", 100)
 MAX_OFFSET = _int_env("MAX_OFFSET", 10_000)
 
 
-def _format_pubdate(iso_str: str) -> str:
-    """Return ``iso_str`` converted to RFC 2822 format.
+def _format_pubdate(dt: datetime | str | None) -> str:
+    """Return ``dt`` converted to RFC 2822 format."""
 
-    ``iso_str`` is expected to be an ISO 8601 timestamp.  When parsing fails a
-    timestamp representing the current time is returned to satisfy RSS
-    requirements.
-    """
-
-    try:
-        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-    except ValueError:
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except ValueError:
+            dt = None
+    if dt is None:
         dt = datetime.now(timezone.utc)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -62,31 +41,17 @@ def _format_pubdate(iso_str: str) -> str:
 
 
 async def search_releases_async(
-    client: OpenSearch,
-    query: Dict[str, Any],
+    q: Optional[str],
     *,
+    category: Optional[str] = None,
+    tag: Optional[str] = None,
     limit: int,
     offset: int = 0,
-    sort: str | None = None,
-    api_key: str | None = None,
+    sort: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> List[Dict[str, str]]:
-    """Execute ``query`` against ``client`` and return RSS-style items.
+    """Search releases using PostgreSQL full text search."""
 
-    Parameters
-    ----------
-    client:
-        OpenSearch client instance.
-    query:
-        A boolean query dict to execute.
-    limit / offset:
-        Pagination controls.
-    sort:
-        Optional sort key. Accepted values are ``date`` (``posted_at``),
-        ``size`` (``size_bytes``) or any raw field name. Sorting is in
-        descending order.
-    api_key:
-        Optional API key appended to the item link.
-    """
     if limit < 0:
         raise ValueError("limit must be >= 0")
     if offset < 0:
@@ -95,78 +60,76 @@ async def search_releases_async(
         raise ValueError("limit too high")
     if offset > MAX_OFFSET:
         offset = MAX_OFFSET
-    query = dict(query)
-    filters = list(query.get("filter") or [])
-    filters.append({"term": {"has_parts": True}})
-    query["filter"] = filters
-    body: Dict[str, Any] = {
-        "query": {"bool": query},
-        "size": limit,
-        "from": offset,
-        "track_total_hits": False,
-    }
-    if sort:
-        field_map = {
-            "date": "posted_at",
-            "size": "size_bytes",
-            "title": "norm_title.keyword",
-        }
-        body["sort"] = [{field_map.get(sort, sort): {"order": "desc"}}]
-    try:
-        with start_span("opensearch.search"):
-            try:
-                result = await asyncio.to_thread(
-                    call_with_retry,
-                    os_breaker,
-                    "opensearch",
-                    client.search,
-                    index=OS_RELEASES_ALIAS,
-                    body=body,
-                    request_timeout=search_timeout_ms() / 1000,
-                )
-            except TypeError:
-                result = await asyncio.to_thread(
-                    call_with_retry,
-                    os_breaker,
-                    "opensearch",
-                    client.search,
-                    index=OS_RELEASES_ALIAS,
-                    body=body,
-                )
-    except CircuitOpenError:
-        logger.warning(
-            "breaker_open", extra={"dep": "opensearch", "breaker_state": "open"}
+
+    conditions = ["has_parts = TRUE"]
+    params: Dict[str, Any] = {"limit": limit, "offset": offset}
+
+    if q:
+        tokens = [t for t in re.split(r"\s+", q) if t]
+        tsquery = " & ".join(tokens)
+        conditions.append(
+            "to_tsvector('simple', coalesce(norm_title, '') || ' ' || coalesce(tags, '')) @@ to_tsquery('simple', :tsquery)"
         )
-        return []
-    except ConnectionTimeout as exc:
-        logger.error("opensearch_timeout", exc_info=exc)
-        raise TimeoutError("OpenSearch query timed out") from exc
-    except OSConnectionError as exc:
-        logger.error("opensearch_network_error", exc_info=exc)
-        raise ConnectionError("OpenSearch network error") from exc
-    except TransportError as exc:
-        logger.error("opensearch_query_error", exc_info=exc)
-        raise ValueError("OpenSearch query error") from exc
-    except Exception as exc:
-        logger.error("OpenSearch search failed", exc_info=exc)
-        raise
+        params["tsquery"] = tsquery
+
+    if category:
+        cats = [c.strip() for c in category.split(",") if c.strip()]
+        if cats:
+            if len(cats) == 1:
+                conditions.append("category = :category")
+                params["category"] = cats[0]
+            else:
+                conditions.append("category = ANY(:categories)")
+                params["categories"] = cats
+
+    if tag:
+        conditions.append("tags LIKE :tag")
+        params["tag"] = f"{tag}%"
+
+    if not adult_content_allowed():
+        conditions.append("left(category, 1) != :adult")
+        params["adult"] = str(ADULT_CATEGORY_ID)[0]
+
+    order_map = {
+        "date": "posted_at",
+        "size": "size_bytes",
+        "title": "norm_title",
+    }
+    sort_field = order_map.get(sort or "date", sort or "posted_at")
+
+    where_clause = " AND ".join(conditions)
+    sql = text(
+        f"""
+        SELECT id, norm_title, category, size_bytes, posted_at
+        FROM release
+        WHERE {where_clause}
+        ORDER BY {sort_field} DESC
+        LIMIT :limit OFFSET :offset
+        """
+    )
+
     items: List[Dict[str, str]] = []
-    for hit in result.get("hits", {}).get("hits", []):
-        src = hit.get("_source", {})
-        size = src.get("size_bytes")
+    if not engine or text is None:
+        return items
+
+    async with engine.connect() as conn:
+        result = await conn.execute(sql, params)
+        rows = result.fetchall()
+
+    for row in rows:
+        size = row.size_bytes
         if size is None or size <= 0:
             continue
-
-        release_id = hit.get("_id", "")
+        release_id = str(row.id)
         link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
         if api_key:
             link += f"&apikey={api_key}"
         items.append(
             {
-                "title": src.get("norm_title", ""),
-                "guid": hit.get("_id", ""),
-                "pubDate": _format_pubdate(src.get("posted_at", "")),
-                "category": src.get("category", ""),
+                "title": row.norm_title or "",
+                "guid": release_id,
+                "pubDate": _format_pubdate(row.posted_at),
+                "category": row.category or "",
                 "link": link,
                 "size": str(size),
             }
@@ -175,22 +138,26 @@ async def search_releases_async(
 
 
 def search_releases(
-    client: OpenSearch,
-    query: Dict[str, Any],
+    q: Optional[str],
     *,
+    category: Optional[str] = None,
+    tag: Optional[str] = None,
     limit: int,
     offset: int = 0,
-    sort: str | None = None,
-    api_key: str | None = None,
+    sort: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """Synchronous wrapper for tests."""
+
     return asyncio.run(
         search_releases_async(
-            client,
-            query,
+            q,
+            category=category,
+            tag=tag,
             limit=limit,
             offset=offset,
             sort=sort,
             api_key=api_key,
         )
     )
+
