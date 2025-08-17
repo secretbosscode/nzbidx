@@ -189,3 +189,18 @@ os_breaker: CircuitBreaker[object] = CircuitBreaker(
     max_failures=cb_failure_threshold(),
     reset_seconds=cb_reset_seconds(),
 )
+
+# Circuit breaker for the Redis cache layer
+redis_breaker: CircuitBreaker[object] = CircuitBreaker(
+    max_failures=cb_failure_threshold(),
+    reset_seconds=cb_reset_seconds(),
+)
+
+__all__ = [
+    "CircuitBreaker",
+    "CircuitOpenError",
+    "call_with_retry",
+    "call_with_retry_async",
+    "os_breaker",
+    "redis_breaker",
+]
