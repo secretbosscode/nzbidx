@@ -181,6 +181,7 @@ def connect_db() -> Any:
                             id BIGSERIAL PRIMARY KEY,
                             norm_title TEXT UNIQUE,
                             category TEXT,
+                            category_id INT,
                             language TEXT NOT NULL DEFAULT 'und',
                             tags TEXT NOT NULL DEFAULT '',
                             source_group TEXT,
@@ -189,9 +190,15 @@ def connect_db() -> Any:
                             segments JSONB,
                             has_parts BOOLEAN NOT NULL DEFAULT FALSE,
                             part_count INT NOT NULL DEFAULT 0
-                        )
+                        ) PARTITION BY RANGE (category_id)
                         """
                     ),
+                    "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
+                    "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
+                    "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
+                    "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000)",
+                    "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
+                    "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
                     "DROP INDEX IF EXISTS release_embedding_idx",
                     "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
@@ -200,8 +207,15 @@ def connect_db() -> Any:
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0",
+                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category_id INT",
+                    "CREATE INDEX IF NOT EXISTS release_category_idx ON release (category)",
+                    "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)",
+                    "CREATE INDEX IF NOT EXISTS release_language_idx ON release (language)",
+                    "CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_ops)",
+                    "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops)",
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
+                    "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
                 ):
                     try:
                         conn.execute(text(stmt))
@@ -255,6 +269,7 @@ def connect_db() -> Any:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             norm_title TEXT UNIQUE,
             category TEXT,
+            category_id INT,
             language TEXT NOT NULL DEFAULT 'und',
             tags TEXT NOT NULL DEFAULT '',
             source_group TEXT,
@@ -271,6 +286,18 @@ def connect_db() -> Any:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
     )
     return conn
 
@@ -355,13 +382,17 @@ def insert_release(
         return set()
 
     cleaned: list[
-        tuple[str, str, str, str, Optional[str], Optional[int], Optional[str]]
+        tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[str]]
     ] = []
     titles: list[str] = []
     for n, c, lang, t, g, s, p in items:
         cleaned_title = _clean(n) or ""
         titles.append(cleaned_title)
         cleaned_category = _clean(c) or CATEGORY_MAP["other"]
+        try:
+            cleaned_category_id = int(cleaned_category)
+        except ValueError:
+            cleaned_category_id = int(CATEGORY_MAP["other"])
         cleaned_language = _clean(lang) or "und"
         cleaned_tags = ",".join(_clean(tag) or "" for tag in t)
         cleaned_group = _clean(g)
@@ -371,6 +402,7 @@ def insert_release(
             (
                 cleaned_title,
                 cleaned_category,
+                cleaned_category_id,
                 cleaned_language,
                 cleaned_tags,
                 cleaned_group,
@@ -398,17 +430,17 @@ def insert_release(
     if to_insert:
         if conn.__class__.__module__.startswith("sqlite3"):
             cur.executemany(
-                "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group, size_bytes, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 to_insert,
             )
         else:
             cur.executemany(
-                "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO UPDATE SET posted_at = EXCLUDED.posted_at",
                 to_insert,
             )
     # Ensure posted_at is updated for existing rows
     if cleaned:
-        updates = [(row[6], row[0]) for row in cleaned if row[6]]
+        updates = [(row[7], row[0]) for row in cleaned if row[7]]
         if updates:
             placeholder = (
                 "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
