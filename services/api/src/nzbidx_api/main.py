@@ -126,7 +126,7 @@ from .search_cache import cache_rss, get_cached_rss
 from .search import MAX_LIMIT, MAX_OFFSET, search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
-from .middleware_circuit import CircuitOpenError, redis_breaker
+from .middleware_circuit import CircuitOpenError, os_breaker
 from .otel import current_trace_id, setup_tracing
 from .errors import (
     invalid_params,
@@ -412,7 +412,7 @@ async def status(request: Request) -> ORJSONResponse:
             payload["redis"] = "down"
     else:
         payload["redis"] = "down"
-    payload["breaker"]["redis"] = redis_breaker.state()
+    payload["breaker"]["os"] = os_breaker.state()
     return ORJSONResponse(payload)
 
 
