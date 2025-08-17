@@ -8,13 +8,11 @@ import time
 import asyncio
 import inspect
 from types import SimpleNamespace
-from importlib import resources
 from pathlib import Path
 from typing import Optional, Callable
 
 import threading
 from nzbidx_ingest import ingest_loop
-from nzbidx_ingest.main import prune_orphaned_releases
 
 # Default to the standard library JSON module unless explicitly disabled
 if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
@@ -119,7 +117,6 @@ from .newznab import (
     TV_CATEGORY_IDS,
     AUDIO_CATEGORY_IDS,
     BOOKS_CATEGORY_IDS,
-    ADULT_CATEGORY_ID,
     expand_category_ids,
 )
 from .api_key import ApiKeyMiddleware
