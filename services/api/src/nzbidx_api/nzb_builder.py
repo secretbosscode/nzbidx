@@ -126,7 +126,9 @@ def build_nzb_for_release(release_id: str) -> str:
                 try:
                     segments = _segments_from_db(release_id)
                 except LookupError:
-                    log.warning("auto_backfill_failed", extra={"release_id": release_id})
+                    log.warning(
+                        "auto_backfill_failed", extra={"release_id": release_id}
+                    )
                     raise
             else:
                 raise
