@@ -40,13 +40,17 @@ else:  # pragma: no cover - no sqlalchemy available
 
 
 def _split_sql(sql: str) -> list[str]:
-    """Split ``sql`` into statements without breaking quoted blocks.
+    """Split ``sql`` into individual statements.
 
-    The parser scans the string and splits only on semicolons that are outside
-    single quotes, double quotes and PostgreSQL dollar-quoted blocks such as
-    ``$$`` or ``$tag$``.  It is intentionally simple and serves as a fallback
-    when :mod:`sqlparse` is not installed.
+    The implementation intentionally handles only a small subset of PostgreSQL
+    syntax but correctly preserves semicolons that appear inside quoted strings
+    or dollar-quoted PL/pgSQL blocks.  It also skips over line comments (``--``)
+    and C-style block comments (``/* ... */``) so that any semicolons contained
+    within them do not terminate a statement.  The function is designed as a
+    lightweight fallback when :mod:`sqlparse` is not available.
     """
+
+    import re
 
     statements: list[str] = []
     buf: list[str] = []
@@ -54,69 +58,89 @@ def _split_sql(sql: str) -> list[str]:
     n = len(sql)
     in_single = False
     in_double = False
-    dollar: str | None = None
+    line_comment = False
+    block_comment = False
+    dollars: list[str] = []
 
     while i < n:
         ch = sql[i]
-        if dollar:
-            if sql.startswith(dollar, i):
-                buf.append(dollar)
-                i += len(dollar)
-                dollar = None
-            else:
-                buf.append(ch)
-                i += 1
-        elif in_single:
+        nxt = sql[i : i + 2]
+
+        if line_comment:
             buf.append(ch)
+            i += 1
+            if ch == "\n":
+                line_comment = False
+            continue
+        if block_comment:
+            buf.append(ch)
+            i += 1
+            if nxt == "*/":
+                buf.append("/")
+                i += 1
+                block_comment = False
+            continue
+        if dollars:
+            tag = dollars[-1]
+            if sql.startswith(tag, i):
+                buf.append(tag)
+                i += len(tag)
+                dollars.pop()
+                continue
+            buf.append(ch)
+            i += 1
+            continue
+        if in_single:
+            buf.append(ch)
+            i += 1
             if ch == "'":
-                if i + 1 < n and sql[i + 1] == "'":
-                    buf.append("'")
-                    i += 2
-                else:
-                    in_single = False
-                    i += 1
-            else:
-                i += 1
-        elif in_double:
+                in_single = False
+            continue
+        if in_double:
             buf.append(ch)
+            i += 1
             if ch == '"':
-                if i + 1 < n and sql[i + 1] == '"':
-                    buf.append('"')
-                    i += 2
-                else:
-                    in_double = False
-                    i += 1
-            else:
-                i += 1
-        else:
-            if ch == "'":
-                in_single = True
-                buf.append(ch)
-                i += 1
-            elif ch == '"':
-                in_double = True
-                buf.append(ch)
-                i += 1
-            elif ch == '$':
-                end = sql.find('$', i + 1)
-                if end != -1:
-                    tag = sql[i : end + 1]
-                    if tag and all(c.isalnum() or c == '_' for c in tag[1:-1]):
-                        dollar = tag
-                        buf.append(tag)
-                        i = end + 1
-                        continue
-                buf.append(ch)
-                i += 1
-            elif ch == ';':
-                stmt = ''.join(buf).strip()
-                if stmt:
-                    statements.append(stmt)
-                buf = []
-                i += 1
-            else:
-                buf.append(ch)
-                i += 1
+                in_double = False
+            continue
+
+        if nxt == "--":
+            line_comment = True
+            buf.append(nxt)
+            i += 2
+            continue
+        if nxt == "/*":
+            block_comment = True
+            buf.append(nxt)
+            i += 2
+            continue
+        if ch == "'":
+            in_single = True
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == '$':
+            m = re.match(r"\$[A-Za-z0-9_]*\$", sql[i:])
+            if m:
+                tag = m.group(0)
+                dollars.append(tag)
+                buf.append(tag)
+                i += len(tag)
+                continue
+        if ch == ';':
+            stmt = ''.join(buf).strip()
+            if stmt:
+                statements.append(stmt)
+            buf.clear()
+            i += 1
+            continue
+
+        buf.append(ch)
+        i += 1
 
     stmt = ''.join(buf).strip()
     if stmt:
