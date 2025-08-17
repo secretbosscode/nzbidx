@@ -312,6 +312,20 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
     assert body_holder["body"]["sort"] == [{"posted_at": {"order": "desc"}}]
 
 
+def test_search_negative_limit() -> None:
+    """Negative ``limit`` values should raise ``ValueError``."""
+
+    with pytest.raises(ValueError, match="limit must be >= 0"):
+        search_mod.search_releases(object(), {"must": []}, limit=-1)
+
+
+def test_search_negative_offset() -> None:
+    """Negative ``offset`` values should raise ``ValueError``."""
+
+    with pytest.raises(ValueError, match="offset must be >= 0"):
+        search_mod.search_releases(object(), {"must": []}, limit=1, offset=-1)
+
+
 def test_bulk_index_releases_builds_payload() -> None:
     """Bulk payload should include action and source pairs."""
 
