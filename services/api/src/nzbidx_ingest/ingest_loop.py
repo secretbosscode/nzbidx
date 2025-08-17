@@ -273,6 +273,18 @@ def _process_groups(
                             "INSERT OR IGNORE INTO release_part (release_id, segment_number, message_id, group_name, size_bytes) VALUES (?, ?, ?, ?, ?)",
                             rows,
                         )
+                        stats: dict[int, list[int]] = {}
+                        for rid, _seg, _msg, _grp, size in rows:
+                            if rid not in stats:
+                                stats[rid] = [0, 0]
+                            stats[rid][0] += 1
+                            if size:
+                                stats[rid][1] += size
+                        for rid, (cnt, sz) in stats.items():
+                            cur.execute(
+                                "UPDATE release SET has_parts = TRUE, part_count = part_count + ?, size_bytes = COALESCE(size_bytes, 0) + ? WHERE id = ?",
+                                (cnt, sz, rid),
+                            )
                     else:
                         cur.executemany(
                             "INSERT INTO release_part (release_id, segment_number, message_id, group_name, size_bytes) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
