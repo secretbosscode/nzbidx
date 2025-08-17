@@ -42,11 +42,6 @@ try:  # pragma: no cover - import guard
 except Exception:  # pragma: no cover - optional dependency
     OpenSearch = None  # type: ignore
 
-try:  # pragma: no cover - import guard
-    from redis.asyncio import Redis
-except Exception:  # pragma: no cover - optional dependency
-    Redis = None  # type: ignore
-
 # Starlette (with safe fallbacks for tests/minimal envs)
 try:  # pragma: no cover - import guard
     from starlette.applications import Starlette
@@ -135,11 +130,10 @@ from .search_cache import cache_rss, get_cached_rss
 from .search import MAX_LIMIT, MAX_OFFSET, search_releases
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
-from .middleware_circuit import CircuitOpenError, os_breaker, redis_breaker
+from .middleware_circuit import os_breaker
 from .otel import current_trace_id, setup_tracing
 from .errors import (
     invalid_params,
-    breaker_open,
     nzb_timeout,
     nzb_not_found,
     nzb_unavailable,
@@ -308,7 +302,6 @@ def _git_sha() -> str:
 BUILD = os.getenv("GIT_SHA", _git_sha())
 
 opensearch: Optional[OpenSearch] = None
-cache: Optional[Redis] = None
 
 
 async def _maybe_await(result):
@@ -445,47 +438,15 @@ def init_opensearch() -> None:
         logger.warning("OpenSearch unavailable: %s", exc)
 
 
-async def init_cache_async() -> None:
-    """Connect to Redis for caching NZB documents."""
-    global cache
-    if Redis is None:
-        return
-    url = os.getenv("REDIS_URL", "redis://redis:6379/0")
-    try:
-        client = Redis.from_url(url)
-        await _maybe_await(client.ping())
-        if os.getenv("REDIS_DISABLE_PERSISTENCE") in {"1", "true", "TRUE", "True"}:
-            try:
-                await _maybe_await(client.config_set("save", ""))
-                await _maybe_await(client.config_set("appendonly", "no"))
-            except Exception as exc:
-                logger.warning("Failed to disable Redis persistence: %s", exc)
-        cache = client
-        logger.info("Redis ready")
-    except Exception as exc:  # pragma: no cover - optional dependency
-        logger.warning("Redis unavailable: %s", exc)
-
-
-def init_cache() -> None:
-    """Synchronous wrapper for tests to initialize Redis."""
-    asyncio.run(init_cache_async())
-
-
 async def shutdown() -> None:
     """Close global connections on shutdown."""
-    global opensearch, cache
+    global opensearch
     if opensearch:
         try:
             opensearch.close()  # type: ignore[attr-defined]
         except Exception:
             pass
         opensearch = None
-    if cache:
-        try:
-            await _maybe_await(cache.close())  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        cache = None
 
 
 async def health(request: Request) -> ORJSONResponse:
@@ -504,17 +465,6 @@ async def health(request: Request) -> ORJSONResponse:
     else:
         payload["os"] = "down"
         payload["opensearch_latency_ms"] = 0
-    if cache:
-        start = time.monotonic()
-        try:  # pragma: no cover - network errors
-            await _maybe_await(cache.ping())
-            payload["redis"] = "ok"
-        except Exception:
-            payload["redis"] = "down"
-        payload["redis_latency_ms"] = int((time.monotonic() - start) * 1000)
-    else:
-        payload["redis"] = "down"
-        payload["redis_latency_ms"] = 0
     last = getattr(ingest_loop, "last_run", 0.0)
     payload["ingest_last_run"] = int(last)
     age = time.time() - last if last else None
@@ -542,16 +492,7 @@ async def status(request: Request) -> ORJSONResponse:
             payload["os"] = "down"
     else:
         payload["os"] = "down"
-    if cache:
-        try:  # pragma: no cover - network errors
-            await _maybe_await(cache.ping())
-            payload["redis"] = "ok"
-        except Exception:
-            payload["redis"] = "down"
-    else:
-        payload["redis"] = "down"
     payload["breaker"]["os"] = os_breaker.state()
-    payload["breaker"]["redis"] = redis_breaker.state()
     return ORJSONResponse(payload)
 
 
@@ -921,13 +862,11 @@ async def api(request: Request) -> Response:
         release_id = params.get("id")
         if not release_id:
             return invalid_params("missing id")
-        if cache is None:
-            await init_cache_async()
         logger.info("fetching nzb", extra={"release_id": release_id})
         start = time.perf_counter()
         try:
             xml = await asyncio.wait_for(
-                get_nzb(release_id, cache),
+                get_nzb(release_id, None),
                 timeout=nzb_timeout_seconds(),
             )
             duration_ms = int((time.perf_counter() - start) * 1000)
@@ -935,8 +874,6 @@ async def api(request: Request) -> Response:
                 "nzb fetched",
                 extra={"release_id": release_id, "duration_ms": duration_ms},
             )
-        except CircuitOpenError:
-            return breaker_open()
         except NzbDatabaseError as exc:
             logger.exception(
                 "nzb database query failed",
@@ -997,7 +934,6 @@ app = Starlette(
     on_startup=[
         apply_schema,
         init_opensearch,
-        init_cache_async,
         start_ingest,
         lambda: _set_stop(start_metrics()),
     ],
