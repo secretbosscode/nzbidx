@@ -14,6 +14,7 @@ from typing import List, Tuple
 
 from . import config
 from .db import get_connection
+from .backfill_release_parts import backfill_release_parts
 
 log = logging.getLogger(__name__)
 
@@ -41,15 +42,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             data = (
                 json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
-        except Exception as exc:
-            log.warning(
-                "invalid_segments_json",
-                extra={
-                    "release_id": release_id,
-                    "exception": exc.__class__.__name__,
-                    "error": str(exc),
-                },
-            )
+        except Exception:
             data = []
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
@@ -76,9 +69,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "error": str(exc),
             },
         )
-        from . import newznab
-
-        raise newznab.NzbDatabaseError(str(exc)) from exc
+        raise
 
 
 def _build_xml_from_segments(
@@ -120,7 +111,39 @@ def build_nzb_for_release(release_id: str) -> str:
 
     log.info("starting nzb build for release %s", release_id)
     try:
-        segments = _segments_from_db(release_id)
+        try:
+            segments = _segments_from_db(release_id)
+        except LookupError as exc:
+            err = str(exc).lower()
+            if "has no segments" in err:
+                try:
+                    backfill_release_parts(release_ids=[release_id])
+                except Exception as bf_exc:  # pragma: no cover - unexpected
+                    log.warning(
+                        "auto_backfill_error",
+                        extra={"release_id": release_id, "error": str(bf_exc)},
+                    )
+                try:
+                    segments = _segments_from_db(release_id)
+                except LookupError:
+                    log.warning("auto_backfill_failed", extra={"release_id": release_id})
+                    raise
+            else:
+                raise
+
+        if not segments:
+            raise newznab.NzbFetchError("no segments found")
+        max_segments = config.nzb_max_segments()
+        if len(segments) > max_segments:
+            log.warning(
+                "segment_limit_exceeded",
+                extra={
+                    "release_id": release_id,
+                    "segment_count": len(segments),
+                    "limit": max_segments,
+                },
+            )
+            raise newznab.NzbFetchError("segment count exceeds limit")
     except LookupError as exc:
         err = str(exc).lower()
         if "not found" in err:
@@ -135,22 +158,6 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is normalized."
             )
         raise newznab.NzbFetchError(msg) from exc
-    except newznab.NzbDatabaseError:
-        raise
     except Exception as exc:
-        raise newznab.NzbDatabaseError(str(exc)) from exc
-
-    if not segments:
-        raise newznab.NzbFetchError("no segments found")
-    max_segments = config.nzb_max_segments()
-    if len(segments) > max_segments:
-        log.warning(
-            "segment_limit_exceeded",
-            extra={
-                "release_id": release_id,
-                "segment_count": len(segments),
-                "limit": max_segments,
-            },
-        )
-        raise newznab.NzbFetchError("segment count exceeds limit")
+        raise newznab.NzbFetchError("database query failed") from exc
     return _build_xml_from_segments(release_id, segments)
