@@ -262,7 +262,8 @@ async def get_nzb(release_id: str, cache: Optional[Redis]) -> str:
     retrieved from there on subsequent calls. Failed fetch attempts are cached
     under the same key using ``FAIL_SENTINEL`` for ``FAIL_TTL`` seconds to reduce
     hammering of upstream resources. Any :class:`NzbFetchError` raised by the
-    builder is re-raised so callers can handle it explicitly.
+    builder is re-raised so callers can handle it explicitly. Any
+    :class:`NzbDatabaseError` from the builder is propagated unchanged.
     """
 
     import inspect
