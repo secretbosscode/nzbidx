@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -19,18 +18,6 @@ except ImportError:  # pragma: no cover - optional dependency
         return None
 
 
-try:
-    from nzbidx_common.os import OS_RELEASES_ALIAS  # type: ignore
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    # ``nzbidx_common`` is an optional sibling package providing shared
-    # constants.  The tests run the ingest package in isolation, so fall back
-    # to the default alias if the package is not available on ``sys.path``.
-    OS_RELEASES_ALIAS = "nzbidx-releases"
-
-from .config import (
-    INGEST_OS_BULK,
-    opensearch_timeout_seconds,
-)
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
@@ -300,22 +287,6 @@ def connect_db() -> Any:
     return conn
 
 
-def connect_opensearch() -> Optional[object]:
-    """Return an OpenSearch client if available, else None."""
-    url = os.getenv("OPENSEARCH_URL", "http://opensearch:9200")
-    try:
-        from opensearchpy import OpenSearch  # type: ignore
-
-        return OpenSearch(url, timeout=opensearch_timeout_seconds())
-    except Exception as exc:  # pragma: no cover - optional dependency
-        logger.info(
-            "OpenSearch unavailable: %s",
-            str(exc),
-            extra={"event": "opensearch_unavailable", "error": str(exc)},
-        )
-        return None
-
-
 def insert_release(
     conn: Any,
     norm_title: str | None = None,
@@ -451,187 +422,12 @@ def insert_release(
     return inserted
 
 
-_os_warned = False
-
-
-def index_release(
-    client: Optional[object],
-    norm_title: str,
-    *,
-    category: Optional[str] = None,
-    language: Optional[str] = None,
-    tags: Optional[list[str]] = None,
-    group: Optional[str] = None,
-    size_bytes: Optional[int] = None,
-    posted_at: Optional[str] = None,
-) -> None:
-    """Index the release into OpenSearch (no-op if client is None)."""
-    global _os_warned
-    if not client:
-        return
-    body: dict[str, object] = {"norm_title": norm_title}
-    if category:
-        body["category"] = category
-    if language:
-        body["language"] = language
-    if tags:
-        body["tags"] = tags
-    if group:
-        body["source_group"] = group
-    if size_bytes is not None and size_bytes > 0:
-        body["size_bytes"] = size_bytes
-    if posted_at:
-        body["posted_at"] = posted_at
-    try:  # pragma: no cover - network errors
-        client.index(
-            index=OS_RELEASES_ALIAS,
-            id=norm_title,
-            body=body,
-            refresh=False,
-        )
-    except Exception as exc:  # pragma: no cover - network errors
-        if not _os_warned:
-            logger.warning("opensearch_index_failed", extra={"error": str(exc)})
-            _os_warned = True
-
-
-def bulk_index_releases(
-    client: Optional[object],
-    docs: list[tuple[str, dict[str, object] | None]],
-) -> None:
-    """Index multiple releases into OpenSearch using the bulk API.
-
-    Passing ``None`` as the document body issues a delete operation for the
-    corresponding identifier.
-    """
-    global _os_warned
-    if not client or not docs:
-        return
-    for i in range(0, len(docs), INGEST_OS_BULK):
-        lines: list[str] = []
-        for doc_id, body in docs[i : i + INGEST_OS_BULK]:
-            if body is None:
-                lines.append(
-                    json.dumps({"delete": {"_index": OS_RELEASES_ALIAS, "_id": doc_id}})
-                )
-                continue
-            lines.append(
-                json.dumps({"index": {"_index": OS_RELEASES_ALIAS, "_id": doc_id}})
-            )
-            lines.append(json.dumps(body))
-        if not lines:
-            continue
-        payload = "\n".join(lines) + "\n"
-        try:  # pragma: no cover - network errors
-            resp = client.bulk(body=payload, refresh=False)
-        except Exception as exc:  # pragma: no cover - network errors
-            if not _os_warned:
-                logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
-                _os_warned = True
-        else:
-            if (
-                isinstance(resp, dict)
-                and resp.get("errors")
-                and isinstance(resp.get("items"), list)
-            ):
-                for item in resp["items"]:
-                    info = item.get("index") or item.get("delete") or {}
-                    err = info.get("error")
-                    if err:
-                        logger.warning(
-                            "opensearch_bulk_item_failed",
-                            extra={
-                                "id": info.get("_id"),
-                                "error": err.get("reason", str(err)),
-                            },
-                        )
-
-
-def prune_group(conn: Any, client: Optional[object], group: str) -> None:
+def prune_group(conn: Any, group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
     cur = conn.cursor()
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
-    if client:
-        try:  # pragma: no cover - network errors
-            client.delete_by_query(
-                index=OS_RELEASES_ALIAS,
-                body={"query": {"term": {"source_group": group}}},
-            )
-        except Exception:
-            logger.warning("opensearch_prune_failed", extra={"group": group})
-
-
-def prune_orphaned_releases(client: Optional[object], batch: int = 1000) -> int:
-    """Remove OpenSearch documents without a matching DB record.
-
-    Returns the number of deleted documents.  ``client`` should be an
-    :class:`OpenSearch`-compatible instance.  When ``client`` is ``None`` or any
-    errors occur, the function exits early and returns ``0``.
-    """
-
-    if not client:
-        return 0
-
-    deleted = 0
-    try:
-        conn = connect_db()
-    except Exception:
-        logger.warning("prune_orphaned_connect_failed")
-        return 0
-
-    cur = conn.cursor()
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-
-    try:
-        resp = client.search(
-            index=OS_RELEASES_ALIAS,
-            scroll="1m",
-            size=batch,
-            body={"query": {"match_all": {}}, "_source": False},
-        )
-    except Exception:
-        logger.warning("opensearch_scan_failed")
-        conn.close()
-        return 0
-
-    scroll_id = resp.get("_scroll_id")
-    hits = resp.get("hits", {}).get("hits", [])
-
-    try:
-        while hits:
-            missing: list[str] = []
-            for hit in hits:
-                rid = hit.get("_id")
-                if rid is None:
-                    continue
-                cur.execute(
-                    f"SELECT 1 FROM release WHERE norm_title = {placeholder}", (rid,)
-                )
-                if cur.fetchone() is None:
-                    missing.append(rid)
-            if missing:
-                try:
-                    client.delete_by_query(
-                        index=OS_RELEASES_ALIAS,
-                        body={"query": {"ids": {"values": missing}}},
-                    )
-                    deleted += len(missing)
-                except Exception:
-                    logger.warning("opensearch_delete_failed")
-            resp = client.scroll(scroll_id=scroll_id, scroll="1m")
-            scroll_id = resp.get("_scroll_id")
-            hits = resp.get("hits", {}).get("hits", [])
-    finally:
-        try:
-            if scroll_id:
-                client.clear_scroll(scroll_id=scroll_id)
-        except Exception:
-            pass
-        conn.close()
-
-    return deleted
 
 
 def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:

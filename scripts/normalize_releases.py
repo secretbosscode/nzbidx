@@ -6,26 +6,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from nzbidx_ingest.main import (
-    connect_db,
-    connect_opensearch,
-    insert_release,
-    bulk_index_releases,
-)
+from nzbidx_ingest.main import connect_db, insert_release
 from nzbidx_ingest.parsers import normalize_subject
 
 
-_SENTINEL = object()
-
-
-def normalize_releases(
-    conn: Any | None = None, os_client: object | None = _SENTINEL
-) -> None:
-    """Normalize ``release`` rows and update storage backends."""
+def normalize_releases(conn: Any | None = None) -> None:
+    """Normalize ``release`` rows."""
     if conn is None:
         conn = connect_db()
-    if os_client is _SENTINEL:
-        os_client = connect_opensearch()
 
     cur = conn.cursor()
     cur.execute(
@@ -85,7 +73,6 @@ def normalize_releases(
             str, str | None, str | None, list[str], str | None, int | None, str | None
         ]
     ] = []
-    docs: list[tuple[str, dict[str, object]]] = []
     for key, info in aggregated.items():
         tags_sorted = sorted(info["tags"])
         releases.append(
@@ -99,26 +86,10 @@ def normalize_releases(
                 info.get("posted_at"),
             )
         )
-        body: dict[str, object] = {"norm_title": key}
-        if info["category"]:
-            body["category"] = info["category"]
-        if info["language"]:
-            body["language"] = info["language"]
-        if tags_sorted:
-            body["tags"] = tags_sorted
-        if info["source_group"]:
-            body["source_group"] = info["source_group"]
-        if info["size_bytes"]:
-            body["size_bytes"] = info["size_bytes"]
-        if info.get("posted_at"):
-            body["posted_at"] = info["posted_at"]
-        docs.append((key, body))
 
     with conn:
         conn.execute("DELETE FROM release")
         insert_release(conn, releases=releases)
-
-    bulk_index_releases(os_client, docs)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution
