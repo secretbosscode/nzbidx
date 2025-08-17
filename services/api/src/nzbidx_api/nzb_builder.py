@@ -9,12 +9,32 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
 from . import config
 from .db import get_connection
 from .backfill_release_parts import backfill_release_parts
+
+# Collect database exception types that should be handled.  Optional
+# dependencies are imported lazily so tests can run without them installed.
+DB_EXCEPTIONS: list[type[Exception]] = [sqlite3.Error]
+try:  # pragma: no cover - optional dependency
+    from asyncpg.exceptions import PostgresError as AsyncpgPostgresError
+
+    DB_EXCEPTIONS.append(AsyncpgPostgresError)
+except Exception:  # pragma: no cover - asyncpg not installed
+    pass
+
+try:  # pragma: no cover - optional dependency
+    import psycopg
+
+    DB_EXCEPTIONS.append(psycopg.Error)  # type: ignore[attr-defined]
+except Exception:  # pragma: no cover - psycopg not installed
+    pass
+
+DB_EXCEPTIONS = tuple(DB_EXCEPTIONS)
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +83,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         return segments
     except LookupError:
         raise
-    except Exception as exc:
+    except DB_EXCEPTIONS as exc:
         log.warning(
             "db_query_failed",
             extra={
@@ -71,6 +91,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "exception": exc.__class__.__name__,
                 "error": str(exc),
             },
+            exc_info=True,
         )
         raise newznab.NzbDatabaseError(str(exc)) from exc
 
@@ -167,6 +188,14 @@ def build_nzb_for_release(release_id: str) -> str:
         raise
     except newznab.NzbDatabaseError:
         raise
-    except Exception as exc:
-        raise newznab.NzbDatabaseError("database query failed") from exc
+    except DB_EXCEPTIONS as exc:
+        log.exception(
+            "db_query_failed",
+            extra={
+                "release_id": release_id,
+                "exception": exc.__class__.__name__,
+                "error": str(exc),
+            },
+        )
+        raise newznab.NzbDatabaseError(str(exc)) from exc
     return _build_xml_from_segments(release_id, segments)
