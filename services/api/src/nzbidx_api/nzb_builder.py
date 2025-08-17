@@ -68,7 +68,9 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "error": str(exc),
             },
         )
-        raise
+        from . import newznab
+
+        raise newznab.NzbDatabaseError(str(exc)) from exc
 
 
 def _build_xml_from_segments(
@@ -111,19 +113,6 @@ def build_nzb_for_release(release_id: str) -> str:
     log.info("starting nzb build for release %s", release_id)
     try:
         segments = _segments_from_db(release_id)
-        if not segments:
-            raise newznab.NzbFetchError("no segments found")
-        max_segments = config.nzb_max_segments()
-        if len(segments) > max_segments:
-            log.warning(
-                "segment_limit_exceeded",
-                extra={
-                    "release_id": release_id,
-                    "segment_count": len(segments),
-                    "limit": max_segments,
-                },
-            )
-            raise newznab.NzbFetchError("segment count exceeds limit")
     except LookupError as exc:
         err = str(exc).lower()
         if "not found" in err:
@@ -138,6 +127,22 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is normalized."
             )
         raise newznab.NzbFetchError(msg) from exc
+    except newznab.NzbDatabaseError:
+        raise
     except Exception as exc:
-        raise newznab.NzbFetchError("database query failed") from exc
+        raise newznab.NzbDatabaseError(str(exc)) from exc
+
+    if not segments:
+        raise newznab.NzbFetchError("no segments found")
+    max_segments = config.nzb_max_segments()
+    if len(segments) > max_segments:
+        log.warning(
+            "segment_limit_exceeded",
+            extra={
+                "release_id": release_id,
+                "segment_count": len(segments),
+                "limit": max_segments,
+            },
+        )
+        raise newznab.NzbFetchError("segment count exceeds limit")
     return _build_xml_from_segments(release_id, segments)
