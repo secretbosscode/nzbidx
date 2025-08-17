@@ -165,3 +165,33 @@ async def analyze(table: str | None = None) -> None:
     if table:
         stmt += f" {table}"
     await _maintenance(stmt)
+
+
+# ---------------------------------------------------------------------------
+# Synchronous connection helpers
+# ---------------------------------------------------------------------------
+
+_conn: Optional[Any] = None
+
+
+def get_connection() -> Any:
+    """Return a persistent database connection for synchronous callers."""
+
+    global _conn
+    if _conn is None:
+        from nzbidx_ingest.main import connect_db  # type: ignore
+
+        _conn = connect_db()
+    return _conn
+
+
+def close_connection() -> None:
+    """Close the persistent synchronous connection if it exists."""
+
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        except Exception:
+            pass
+        _conn = None

@@ -23,6 +23,7 @@ sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api import nzb_builder, newznab, search as search_mod  # type: ignore
+from nzbidx_api import db as api_db  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
 from nzbidx_ingest.main import (
@@ -55,6 +56,13 @@ class DummyAsyncCache(DummyCache):
         if isinstance(value, str):
             value = value.encode("utf-8")
         self.store[key] = value
+
+
+@pytest.fixture(autouse=True)
+def _reset_db_conn() -> None:
+    api_db.close_connection()
+    yield
+    api_db.close_connection()
 
 
 def test_build_nzb_without_host(monkeypatch) -> None:
@@ -124,6 +132,12 @@ def test_release_not_found_logs(monkeypatch, caplog) -> None:
     """Missing release should emit a specific warning."""
 
     class DummyCursor:
+        def __enter__(self):  # type: ignore[override]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[override]
+            pass
+
         def execute(self, *args, **kwargs):
             pass
 
@@ -160,6 +174,12 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
     """Releases without segments should emit a specific warning."""
 
     class DummyCursor:
+        def __enter__(self):  # type: ignore[override]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[override]
+            pass
+
         def execute(self, *args, **kwargs):
             pass
 
@@ -222,6 +242,12 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
     """Database errors should be logged and wrapped."""
 
     class DummyCursor:
+        def __enter__(self):  # type: ignore[override]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[override]
+            pass
+
         def execute(self, *args, **kwargs):
             raise RuntimeError("boom")
 
@@ -254,6 +280,47 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
         and rec.exception == "RuntimeError"
         for rec in caplog.records
     )
+
+
+def test_repeated_nzb_fetch_reuses_db_connection(monkeypatch) -> None:
+    """Subsequent NZB builds should reuse the same DB connection."""
+
+    calls = 0
+    seg_data = json.dumps(
+        [{"number": 1, "message_id": "m1", "group": "g", "size": 123}]
+    )
+
+    class DummyCursor:
+        def __enter__(self):  # type: ignore[override]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[override]
+            pass
+
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchone(self):
+            return (seg_data,)
+
+    class DummyConn:
+        def cursor(self):
+            return DummyCursor()
+
+        def close(self):
+            pass
+
+    def _connect() -> DummyConn:
+        nonlocal calls
+        calls += 1
+        return DummyConn()
+
+    monkeypatch.setattr(main, "connect_db", _connect)
+
+    nzb_builder.build_nzb_for_release("MyRelease")
+    nzb_builder.build_nzb_for_release("MyRelease")
+
+    assert calls == 1
 
 
 def test_builds_nzb_from_db(monkeypatch) -> None:
