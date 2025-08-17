@@ -20,6 +20,22 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - optional dependency
     OpenSearch = None  # type: ignore
 
+try:  # pragma: no cover - optional dependency
+    from opensearchpy.exceptions import (
+        ConnectionError as OSConnectionError,
+        ConnectionTimeout,
+        TransportError,
+    )
+except Exception:  # pragma: no cover - optional dependency
+    class TransportError(Exception):
+        """Fallback when opensearch-py isn't installed."""
+
+    class OSConnectionError(TransportError):
+        """Fallback connection error."""
+
+    class ConnectionTimeout(OSConnectionError):
+        """Fallback timeout error."""
+
 logger = logging.getLogger(__name__)
 
 MAX_LIMIT = _int_env("MAX_LIMIT", 100)
@@ -96,36 +112,42 @@ async def search_releases_async(
         body["sort"] = [{field_map.get(sort, sort): {"order": "desc"}}]
     try:
         with start_span("opensearch.search"):
-            result = await asyncio.to_thread(
-                call_with_retry,
-                os_breaker,
-                "opensearch",
-                client.search,
-                index=OS_RELEASES_ALIAS,
-                body=body,
-                request_timeout=search_timeout_ms() / 1000,
-            )
+            try:
+                result = await asyncio.to_thread(
+                    call_with_retry,
+                    os_breaker,
+                    "opensearch",
+                    client.search,
+                    index=OS_RELEASES_ALIAS,
+                    body=body,
+                    request_timeout=search_timeout_ms() / 1000,
+                )
+            except TypeError:
+                result = await asyncio.to_thread(
+                    call_with_retry,
+                    os_breaker,
+                    "opensearch",
+                    client.search,
+                    index=OS_RELEASES_ALIAS,
+                    body=body,
+                )
     except CircuitOpenError:
         logger.warning(
             "breaker_open", extra={"dep": "opensearch", "breaker_state": "open"}
         )
         return []
-    except TypeError:
-        try:
-            result = await asyncio.to_thread(
-                call_with_retry,
-                os_breaker,
-                "opensearch",
-                client.search,
-                index=OS_RELEASES_ALIAS,
-                body=body,
-            )
-        except Exception as exc:
-            logger.warning("OpenSearch search failed: %s", exc)
-            return []
+    except ConnectionTimeout as exc:
+        logger.error("opensearch_timeout", exc_info=exc)
+        raise TimeoutError("OpenSearch query timed out") from exc
+    except OSConnectionError as exc:
+        logger.error("opensearch_network_error", exc_info=exc)
+        raise ConnectionError("OpenSearch network error") from exc
+    except TransportError as exc:
+        logger.error("opensearch_query_error", exc_info=exc)
+        raise ValueError("OpenSearch query error") from exc
     except Exception as exc:
-        logger.warning("OpenSearch search failed: %s", exc)
-        return []
+        logger.error("OpenSearch search failed", exc_info=exc)
+        raise
     items: List[Dict[str, str]] = []
     for hit in result.get("hits", {}).get("hits", []):
         src = hit.get("_source", {})
