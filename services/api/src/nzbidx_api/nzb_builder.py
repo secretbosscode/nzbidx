@@ -28,6 +28,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         )
         row = cur.fetchone()
         if not row:
+            log.warning("release_not_found", extra={"release_id": release_id})
             raise LookupError("release not found")
         rid = row[0]
         cur.execute(
@@ -36,18 +37,11 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         )
         rows = cur.fetchall()
         if not rows:
+            log.warning("missing_release_parts", extra={"release_id": release_id})
             raise LookupError("release has no release_part rows")
         return [(int(a), str(b), str(c), int(d or 0)) for a, b, c, d in rows]
-    except LookupError as exc:
-        log.warning(
-            "db_query_failed",
-            extra={
-                "release_id": release_id,
-                "exception": exc.__class__.__name__,
-                "error": str(exc),
-            },
-        )
-        return []
+    except LookupError:
+        raise
     except Exception as exc:
         log.warning(
             "db_query_failed",
@@ -105,7 +99,12 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
     log.info("starting nzb build for release %s", release_id)
-    segments = _segments_from_db(release_id)
+    try:
+        segments = _segments_from_db(release_id)
+    except LookupError as exc:
+        raise newznab.NzbFetchError(str(exc))
+    except Exception as exc:
+        raise newznab.NzbFetchError("database query failed") from exc
     if not segments:
         raise newznab.NzbFetchError("no segments for release")
     return _build_xml_from_segments(release_id, segments)
