@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import os  # used to ensure path exists for SQLite databases
 import sqlite3
 from typing import Any
 from urllib.parse import urlparse
