@@ -9,6 +9,14 @@ from typing import Dict, Optional, Tuple
 _CACHE: Dict[str, Tuple[float, str]] = {}
 
 
+def purge_expired() -> None:
+    """Delete any expired cache entries."""
+    now = time.time()
+    for key, (expires, _) in list(_CACHE.items()):
+        if expires < now:
+            del _CACHE[key]
+
+
 async def get_cached_rss(key: str) -> Optional[str]:
     """Return cached RSS XML for ``key`` if present and not expired."""
     entry = _CACHE.get(key)
@@ -26,4 +34,5 @@ async def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` using the configured TTL."""
     from .config import search_ttl_seconds
 
+    purge_expired()
     _CACHE[key] = (time.time() + search_ttl_seconds(), xml)

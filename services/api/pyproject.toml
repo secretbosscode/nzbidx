@@ -9,7 +9,6 @@ authors = [{ name = "NZBidx Contributors" }]
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
-    "opensearch-py",
     "httpx",
     "sqlalchemy>=2",
     "asyncpg",
@@ -28,5 +27,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "nzbidx_api" = ["schema.sql"]
-"nzbidx_api.opensearch" = ["*.json"]
 

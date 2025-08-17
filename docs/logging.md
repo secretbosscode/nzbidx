@@ -20,13 +20,10 @@ included in the log are described below.
 | --- | --- |
 | `processed` | Headers processed in the batch. |
 | `inserted` | Releases written to the database. |
-| `indexed` | Releases indexed into OpenSearch. |
 | `deduplicated` | Releases skipped due to duplicate detection. |
 | `duration_ms` | Total processing time for the batch. |
 | `average_batch_ms` | Average processing time per header. |
-| `opensearch_latency_ms` | Time spent bulk indexing into OpenSearch. |
 | `average_database_latency_ms` | Average database write latency per header. |
-| `average_opensearch_latency_ms` | Average OpenSearch indexing latency per document. |
 | `cursor` | Last article number processed. |
 | `high_water` | Highest article number available on the server. |
 | `remaining` | Articles still pending processing. |

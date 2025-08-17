@@ -9,7 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_ingest.main import insert_release, CATEGORY_MAP, index_release  # type: ignore
+from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
 
 
 def test_insert_release_filters_surrogates() -> None:
@@ -82,18 +82,3 @@ def test_insert_release_batch() -> None:
         ("bar", 456, "2024-02-01T00:00:00+00:00"),
         ("foo", None, None),
     ]
-
-
-def test_index_release_includes_posted_at() -> None:
-    captured: dict[str, object] = {}
-
-    class DummyClient:
-        def index(self, *, index: str, id: str, body: dict[str, object], refresh: bool) -> None:  # type: ignore[override]
-            captured["body"] = body
-
-    index_release(
-        DummyClient(),
-        "foo",
-        posted_at="2024-02-01T00:00:00+00:00",
-    )
-    assert captured["body"]["posted_at"] == "2024-02-01T00:00:00+00:00"

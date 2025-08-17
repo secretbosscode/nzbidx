@@ -160,4 +160,3 @@ def search_releases(
             api_key=api_key,
         )
     )
-
