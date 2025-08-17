@@ -19,8 +19,9 @@ log = logging.getLogger(__name__)
 def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
     from nzbidx_ingest.main import connect_db  # type: ignore
 
-    conn = connect_db()
+    conn = None
     try:
+        conn = connect_db()
         cur = conn.cursor()
         placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
         cur.execute(
@@ -53,10 +54,11 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         )
         raise
     finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def _build_xml_from_segments(
