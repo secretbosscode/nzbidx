@@ -5,27 +5,40 @@ from __future__ import annotations
 import json
 import logging
 import os
-import xml.etree.ElementTree as ET
 from typing import Callable, Iterable, Optional
 
 from nzbidx_ingest.main import bulk_index_releases, connect_db, connect_opensearch
-from nzbidx_api.nzb_builder import NZB_XMLNS, build_nzb_for_release
-import nzbidx_api.newznab as newznab
+from nzbidx_ingest.nntp_client import NNTPClient
+from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
 
 log = logging.getLogger(__name__)
 
 BATCH_SIZE = int(os.getenv("BACKFILL_BATCH_SIZE", "100"))
 
 
-def _fetch_segments(release_id: str) -> list[tuple[int, str, int]]:
+def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
     """Return ``(number, message_id, size)`` tuples for ``release_id``."""
-    xml = build_nzb_for_release(release_id)
-    root = ET.fromstring(xml)
+    client = NNTPClient()
+    try:
+        high = client.high_water_mark(group)
+        headers = client.xover(group, 0, high) if high > 0 else []
+    except Exception as exc:
+        raise ConnectionError(str(exc)) from exc
     segments: list[tuple[int, str, int]] = []
-    for seg in root.findall(f".//{{{NZB_XMLNS}}}segment"):
-        msg_id = (seg.text or "").strip()
-        size = int(seg.attrib.get("bytes", "0"))
-        number = int(seg.attrib.get("number", "0"))
+    target = release_id.lower()
+    for header in headers:
+        subject = str(header.get("subject", ""))
+        if normalize_subject(subject).lower() != target:
+            continue
+        msg_id = str(header.get("message-id") or "").strip("<>")
+        if not msg_id:
+            continue
+        size = int(header.get("bytes") or 0)
+        if size <= 0:
+            size = client.body_size(msg_id)
+        if size <= 0:
+            continue
+        number = extract_segment_number(subject)
         segments.append((number, msg_id, size))
     return segments
 
@@ -60,13 +73,16 @@ def backfill_release_parts(
             break
         for rel_id, norm_title, group in rows:
             try:
-                segments = _fetch_segments(norm_title)
-            except newznab.NzbFetchError:
-                log.warning("nntp_fetch_failed", extra={"id": rel_id})
-                to_delete.append((rel_id, norm_title))
+                segments = _fetch_segments(norm_title, group or "")
+            except ConnectionError as exc:
+                log.warning(
+                    "nntp_fetch_failed", extra={"id": rel_id, "group": group, "error": str(exc)}
+                )
                 continue
             except Exception as exc:  # pragma: no cover - unexpected
-                log.warning("unexpected_error", extra={"id": rel_id, "error": str(exc)})
+                log.warning(
+                    "unexpected_error", extra={"id": rel_id, "error": str(exc)}
+                )
                 to_delete.append((rel_id, norm_title))
                 continue
             if not segments:
