@@ -456,7 +456,17 @@ def bulk_index_releases(
             continue
         payload = "\n".join(lines) + "\n"
         try:  # pragma: no cover - network errors
-            client.bulk(body=payload, refresh=False)
+            resp = client.bulk(body=payload, refresh=False)
+            if resp.get("errors"):
+                for item in resp.get("items", []):
+                    action = next(iter(item.values()))
+                    error = action.get("error")
+                    if error:
+                        reason = error.get("reason") if isinstance(error, dict) else str(error)
+                        logger.warning(
+                            "opensearch_bulk_item_failed",
+                            extra={"id": action.get("_id"), "error": reason},
+                        )
         except Exception as exc:  # pragma: no cover - network errors
             if not _os_warned:
                 logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
