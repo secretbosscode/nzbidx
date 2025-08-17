@@ -287,7 +287,6 @@ def connect_db() -> Any:
     return conn
 
 
-
 def insert_release(
     conn: Any,
     norm_title: str | None = None,
@@ -429,6 +428,7 @@ def prune_group(conn: Any, group: str) -> None:
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
+
 
 def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""

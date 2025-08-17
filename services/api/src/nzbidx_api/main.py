@@ -289,6 +289,8 @@ def _git_sha() -> str:
 
 
 BUILD = os.getenv("GIT_SHA", _git_sha())
+
+
 class TimingMiddleware(BaseHTTPMiddleware):
     """Log timing for ``/api`` responses."""
 
@@ -314,8 +316,6 @@ class TimingMiddleware(BaseHTTPMiddleware):
         if response.status_code >= 500:
             inc_api_5xx()
         return response
-
-
 
 
 async def health(request: Request) -> ORJSONResponse:
