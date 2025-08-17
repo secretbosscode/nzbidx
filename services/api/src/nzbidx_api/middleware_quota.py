@@ -31,7 +31,7 @@ class QuotaMiddleware(BaseHTTPMiddleware):
         api_key = request.headers.get("X-Api-Key")
         if not api_key:
             return await call_next(request)
-        count = self.limiter.increment(api_key)
+        count = await self.limiter.increment(api_key)
         if count > self.limit:
             inc_rate_limited()
             return rate_limited()
