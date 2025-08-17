@@ -128,7 +128,8 @@ def test_apply_schema_handles_function_with_semicolons_without_sqlparse(monkeypa
             return None
 
         async def execute(self, stmt, params=None):
-            executed.append(stmt)
+            if not str(stmt).startswith("ALTER ROLE"):
+                executed.append(stmt)
 
         async def commit(self):
             return None
@@ -153,7 +154,7 @@ def test_apply_schema_handles_function_with_semicolons_without_sqlparse(monkeypa
     monkeypatch.setattr(db, "sqlparse", None)
 
     asyncio.run(db.apply_schema())
-
+    assert len(executed) == 2
     assert executed[0].startswith("CREATE TABLE")
     assert executed[1].startswith("CREATE OR REPLACE FUNCTION")
     assert "PERFORM 2;" in executed[1]
