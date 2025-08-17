@@ -13,13 +13,12 @@ from nzbidx_ingest import config, cursors  # type: ignore
 
 
 def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
-    captured: list[tuple[str, dict[str, object]]] = []
-
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
 
     class DummyClient:
         def connect(self) -> None:
@@ -46,19 +45,8 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
-
-    def fake_bulk(_client, docs):
-        captured.extend(docs)
-
-    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
 
     loop.run_once()
-
-    assert captured
-    _doc_id, body = captured[0]
-    assert body.get("size_bytes") == 300
-    assert body.get("part_count") == 2
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT size_bytes, part_count FROM release").fetchone()

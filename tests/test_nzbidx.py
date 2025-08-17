@@ -1068,7 +1068,6 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
     monkeypatch.setattr(
         loop,
         "insert_release",
@@ -1111,7 +1110,6 @@ def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
 
     loop.run_once()
 
@@ -1144,7 +1142,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: None)
 
     real_sleep = _time.sleep
     sleeps: list[float] = []

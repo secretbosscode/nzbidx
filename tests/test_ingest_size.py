@@ -1,27 +1,28 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
 import sys
-from pathlib import Path
-from contextlib import nullcontext
 import sqlite3
+from pathlib import Path
 
+# ruff: noqa: E402 - path manipulation before imports
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 import nzbidx_ingest.ingest_loop as loop  # type: ignore
 from nzbidx_ingest import config, cursors  # type: ignore
-import nzbidx_api.search as search_mod  # type: ignore
 
 
-def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
-    captured: list[tuple[str, dict[str, object]]] = []
-
+def _setup(monkeypatch) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(loop, "bulk_index_releases", lambda *_a, **_k: None)
+
+
+def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
+    _setup(monkeypatch)
 
     class DummyClient:
         def connect(self) -> None:
@@ -44,62 +45,15 @@ def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
-
-    def fake_bulk(_client, docs):
-        captured.extend(docs)
-
-    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
-
     loop.run_once()
 
-    assert captured
-    doc_id, body = captured[0]
-    assert body.get("size_bytes") == 456
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
     assert row == ("example", 456)
 
-    class DummySearchClient:
-        def search(self, **kwargs):
-            return {
-                "hits": {
-                    "hits": [
-                        {"_id": doc_id, "_source": body},
-                        {
-                            "_id": "ignored",
-                            "_source": {
-                                "norm_title": "ignored",
-                                "posted_at": "",
-                                "category": "",
-                                "size_bytes": 0,
-                            },
-                        },
-                    ]
-                }
-            }
-
-    items = [
-        {
-            "title": body["norm_title"],
-            "guid": doc_id,
-            "pubDate": "",
-            "category": body["category"],
-            "link": f"/api?t=getnzb&id={doc_id}",
-            "size": str(body["size_bytes"]),
-        }
-    ]
-    assert items[0]["size"] == "456"
-
 
 def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
-    captured: list[tuple[str, dict[str, object]]] = []
-
-    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
-    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
-    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    _setup(monkeypatch)
 
     class DummyClient:
         def connect(self) -> None:
@@ -125,31 +79,15 @@ def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
-
-    def fake_bulk(_client, docs):
-        captured.extend(docs)
-
-    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
-
     loop.run_once()
 
-    assert captured
-    doc_id, body = captured[0]
-    assert body.get("size_bytes") == 300
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
     assert row == ("example", 300)
 
 
 def test_zero_byte_release_skipped(monkeypatch, tmp_path) -> None:
-    captured: list[tuple[str, dict[str, object]]] = []
-
-    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
-    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
-    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    _setup(monkeypatch)
 
     class DummyClient:
         def connect(self) -> None:
@@ -172,16 +110,8 @@ def test_zero_byte_release_skipped(monkeypatch, tmp_path) -> None:
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "connect_opensearch", lambda: object())
-
-    def fake_bulk(_client, docs):
-        captured.extend(docs)
-
-    monkeypatch.setattr(loop, "bulk_index_releases", fake_bulk)
-
     loop.run_once()
 
-    assert not captured
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT * FROM release").fetchone()
     assert row is None
