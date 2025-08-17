@@ -6,7 +6,6 @@ Quick reference for common operational issues.
 - **API availability:** 99.9% success rate over 30d
 - **Breaker stability:** <1 forced reset per hour
 - **Ingest freshness:** lag <10k articles or <30m
-- **Snapshots:** at least one successful snapshot every 24h
 
 ## PostgreSQL requirements
 Connections to PostgreSQL require the `psycopg` driver. The Docker images
@@ -17,7 +16,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 ## Breaker stuck open
 - **Symptoms:** search endpoints return empty arrays or `503` for NZB retrieval.
 - **Checks:** `curl -fsS localhost:8080/health | jq .breaker` shows `open`.
-- **Actions:** verify OpenSearch is reachable. Reset with
+- **Actions:** verify required services are reachable. Reset with
   `docker compose restart nzbidx` once dependencies are healthy.
 - **Threshold hint:** alert if the breaker stays open >5m.
 - **PromQL:** `nzbidx_breaker_state == 1`
@@ -35,8 +34,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Symptoms:** sudden increase in `5xx` responses or alerts.
 - **Checks:**
   - Logs: `docker compose logs nzbidx`
-  - Dependencies: `curl -fsS localhost:8080/health`,
-    `docker compose exec opensearch curl -fsS localhost:9200/_cluster/health`,
+  - Dependencies: `curl -fsS localhost:8080/health`
   - Recent deploys: `git log -1 --oneline`
 - **Actions:** inspect upstream failures, roll back or redeploy.
 - **Threshold hint:** alert if 5xx rate >1% for 5m.
@@ -72,25 +70,6 @@ script at `db/init/schema.sql` handles this during database provisioning.
     annotations: {summary: "Ingest lagging"}
   ```
 
-## Snapshot failures
-- **Symptoms:** backup jobs error or snapshots missing.
-- **Checks:** `docker compose logs nzbidx | grep snapshot`,
-  `curl -fsS localhost:9200/_snapshot/_all`, `make snapshot-repo`.
-- **Actions:** ensure repository registered and credentials valid; rerun
-  `make snapshot-repo` and inspect OpenSearch logs.
-- **Threshold hint:** alert if no successful snapshot in 24h.
-- **PromQL:** `time() - nzbidx_snapshot_last_success > 86400`
-- **Alert rule:**
-  ```yaml
-  - alert: NZBidxSnapshotStale
-    expr: time() - nzbidx_snapshot_last_success > 86400
-    for: 10m
-    labels: {severity: ticket}
-    annotations: {summary: "No snapshot in 24h"}
-  ```
-- **Manual run:** `bash scripts/snapshot.sh`
-- **Retention:** set `OS_SNAP_KEEP` to limit repository size; `snapshot.sh` prunes older snapshots.
-
 ## Missing database extensions
 - **Symptoms:** warnings about `extension_unavailable` during API startup or errors
   referencing `pg_trgm` or `vector`.
@@ -124,12 +103,6 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Checks:** missing data in the `segments` column or the release absent; ensure the release ID is normalized.
 - **Actions:** repopulate segments with `docker compose exec nzbidx python scripts/backfill_release_parts.py`. The helper prunes invalid releases, so verify the ID before retrying.
 
-## OpenSearch orphan cleanup
-- **Symptoms:** documents exist in `nzbidx-releases` without matching rows in the `release` table.
-- **Checks:** `python scripts/check_os_orphans.py` logs the number of orphans.
-- **Actions:** remove them with `python scripts/check_os_orphans.py --prune`.
-- **Schedule:** run nightly via cron, e.g., `0 4 * * * python scripts/check_os_orphans.py --prune`.
-
 ## Full reindex
 - **Usage:** `python scripts/reindex_all.py`
 - **Runtime:** roughly 1 minute per 100k releases
@@ -138,5 +111,3 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - Smoke test: `scripts/smoke.sh`
 - Health check: `curl -fsS localhost:8080/health`
 - Logs: `docker compose logs -f nzbidx`
-- OpenSearch slow logs:
-  `docker compose exec opensearch tail -f /usr/share/opensearch/logs/opensearch_index_search_slowlog.log`

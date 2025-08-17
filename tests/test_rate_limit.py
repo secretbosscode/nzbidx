@@ -6,7 +6,7 @@ from nzbidx_api import rate_limit as rl  # type: ignore
 
 
 def test_in_memory_rate_limiter_counts() -> None:
-    """RateLimiter should track counts per key without Redis."""
+    """RateLimiter should track counts per key."""
 
     limiter = rl.RateLimiter(limit=5, window=60)
     assert asyncio.run(limiter.increment("1.2.3.4")) == 1
