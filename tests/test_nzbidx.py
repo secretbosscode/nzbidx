@@ -199,6 +199,7 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
         return DummyConn()
 
     monkeypatch.setattr(main, "connect_db", _connect)
+    monkeypatch.setattr(nzb_builder, "backfill_release_parts", lambda *a, **k: None)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
             nzb_builder.build_nzb_for_release("noparts")
@@ -216,6 +217,7 @@ def test_lookup_error_missing_segments_suggests_backfill(monkeypatch) -> None:
         raise LookupError("release has no segments")
 
     monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
+    monkeypatch.setattr(nzb_builder, "backfill_release_parts", lambda *a, **k: None)
     with pytest.raises(newznab.NzbFetchError) as excinfo:
         nzb_builder.build_nzb_for_release("missing")
     msg = str(excinfo.value)
@@ -236,6 +238,56 @@ def test_lookup_error_not_found_mentions_normalisation(monkeypatch) -> None:
     assert "release not found" in msg
     assert "scripts/backfill_release_parts.py" not in msg
     assert "release ID is normalized" in msg
+
+
+def test_auto_backfill_success(monkeypatch) -> None:
+    """Missing segments are auto-populated and NZB is returned."""
+
+    calls: dict[str, int] = {"count": 0}
+
+    def _segments(_rid: str):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise LookupError("release has no segments")
+        return [(1, "<m1>", "alt.test", 10)]
+
+    called: list[str] = []
+
+    def _backfill(*, release_ids=None, progress_cb=None):  # type: ignore[override]
+        called.extend(release_ids or [])
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
+    monkeypatch.setattr(nzb_builder, "backfill_release_parts", _backfill)
+
+    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    assert "m1" in xml
+    assert called == ["MyRelease"]
+    assert calls["count"] == 2
+
+
+def test_auto_backfill_failure(monkeypatch, caplog) -> None:
+    """If backfill doesn't populate segments, an error is raised."""
+
+    def _segments(_rid: str):
+        raise LookupError("release has no segments")
+
+    called: list[str] = []
+
+    def _backfill(*, release_ids=None, progress_cb=None):  # type: ignore[override]
+        called.extend(release_ids or [])
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
+    monkeypatch.setattr(nzb_builder, "backfill_release_parts", _backfill)
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
+            nzb_builder.build_nzb_for_release("Missing")
+
+    assert called == ["Missing"]
+    assert any(
+        rec.message == "auto_backfill_failed" and rec.release_id == "Missing"
+        for rec in caplog.records
+    )
 
 
 def test_db_query_failure_logs(monkeypatch, caplog) -> None:

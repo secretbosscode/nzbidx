@@ -14,6 +14,7 @@ from typing import List, Tuple
 
 from . import config
 from .db import get_connection
+from .backfill_release_parts import backfill_release_parts
 
 log = logging.getLogger(__name__)
 
@@ -110,7 +111,26 @@ def build_nzb_for_release(release_id: str) -> str:
 
     log.info("starting nzb build for release %s", release_id)
     try:
-        segments = _segments_from_db(release_id)
+        try:
+            segments = _segments_from_db(release_id)
+        except LookupError as exc:
+            err = str(exc).lower()
+            if "has no segments" in err:
+                try:
+                    backfill_release_parts(release_ids=[release_id])
+                except Exception as bf_exc:  # pragma: no cover - unexpected
+                    log.warning(
+                        "auto_backfill_error",
+                        extra={"release_id": release_id, "error": str(bf_exc)},
+                    )
+                try:
+                    segments = _segments_from_db(release_id)
+                except LookupError:
+                    log.warning("auto_backfill_failed", extra={"release_id": release_id})
+                    raise
+            else:
+                raise
+
         if not segments:
             raise newznab.NzbFetchError("no segments found")
         max_segments = config.nzb_max_segments()
