@@ -107,7 +107,11 @@ def build_nzb_for_release(release_id: str) -> str:
         if not segments:
             raise newznab.NzbFetchError("no segments found")
     except LookupError as exc:
-        raise newznab.NzbFetchError(str(exc)) from exc
+        msg = (
+            f"{exc}. To populate missing release parts, run "
+            "scripts/backfill_release_parts.py"
+        )
+        raise newznab.NzbFetchError(msg) from exc
     except Exception as exc:
         raise newznab.NzbFetchError("database query failed") from exc
     return _build_xml_from_segments(release_id, segments)
