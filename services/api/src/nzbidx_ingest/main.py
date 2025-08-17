@@ -293,9 +293,7 @@ def connect_db() -> Any:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
     )
