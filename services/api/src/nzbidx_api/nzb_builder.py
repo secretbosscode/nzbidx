@@ -38,12 +38,17 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
         if not seg_data:
             log.warning("missing_segments", extra={"release_id": release_id})
             raise LookupError("release has no segments")
-        try:
-            data = (
-                json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
-            )
-        except Exception:
-            data = []
+        data = []
+        if isinstance(seg_data, (str, bytes)):
+            try:
+                data = json.loads(seg_data)
+            except Exception as exc:
+                log.warning(
+                    "invalid_segments_json",
+                    extra={"release_id": release_id, "error": str(exc)},
+                )
+        else:
+            data = seg_data
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
             segments.append(
@@ -160,6 +165,8 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is normalized."
             )
         raise newznab.NzbFetchError(msg) from exc
+    except newznab.NzbFetchError:
+        raise
     except Exception as exc:
-        raise newznab.NzbFetchError("database query failed") from exc
+        raise newznab.NzbDatabaseError(str(exc)) from exc
     return _build_xml_from_segments(release_id, segments)
