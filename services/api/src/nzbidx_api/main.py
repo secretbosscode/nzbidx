@@ -32,6 +32,7 @@ else:  # pragma: no cover - prefers orjson when available
             ),
         )
 
+
 # Starlette (with safe fallbacks for tests/minimal envs)
 try:  # pragma: no cover - import guard
     from starlette.applications import Starlette
@@ -288,7 +289,6 @@ def _git_sha() -> str:
 
 
 BUILD = os.getenv("GIT_SHA", _git_sha())
-
 class TimingMiddleware(BaseHTTPMiddleware):
     """Log timing for ``/api`` responses."""
 
@@ -316,6 +316,8 @@ class TimingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+
+
 async def health(request: Request) -> ORJSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
@@ -339,8 +341,7 @@ async def health(request: Request) -> ORJSONResponse:
 async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
-    payload = {"request_id": req_id, "breaker": {}}
-    payload["breaker"]["os"] = os_breaker.state()
+    payload = {"request_id": req_id, "breaker": {"os": os_breaker.state()}}
     return ORJSONResponse(payload)
 
 
