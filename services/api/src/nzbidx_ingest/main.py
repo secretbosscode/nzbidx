@@ -321,40 +321,37 @@ def insert_release(
 
     items: list[
         tuple[
-            str, Optional[str], Optional[str], list[str], Optional[str], Optional[int]
+            str,
+            Optional[str],
+            Optional[str],
+            Optional[list[str]],
+            Optional[str],
+            Optional[int],
         ]
     ] = []
     if releases is not None:
         for r in releases:
-            n, c, lang, t, g, s = r
-            items.append((n, c, lang, list(t or []), g, s))
+            items.append(r)
     elif norm_title is not None:
-        items.append(
-            (norm_title, category, language, list(tags or []), group, size_bytes)
-        )
+        items.append((norm_title, category, language, tags, group, size_bytes))
     else:
         return set()
 
-    cleaned: list[tuple[str, str, str, str, Optional[str], Optional[int]]] = []
+    prepped: list[
+        tuple[
+            str,
+            Optional[str],
+            Optional[str],
+            Optional[list[str]],
+            Optional[str],
+            Optional[int],
+        ]
+    ] = []
     titles: list[str] = []
     for n, c, lang, t, g, s in items:
         cleaned_title = _clean(n) or ""
         titles.append(cleaned_title)
-        cleaned_category = _clean(c) or CATEGORY_MAP["other"]
-        cleaned_language = _clean(lang) or "und"
-        cleaned_tags = ",".join(_clean(tag) or "" for tag in t)
-        cleaned_group = _clean(g)
-        size_val = s if isinstance(s, int) and s > 0 else None
-        cleaned.append(
-            (
-                cleaned_title,
-                cleaned_category,
-                cleaned_language,
-                cleaned_tags,
-                cleaned_group,
-                size_val,
-            )
-        )
+        prepped.append((cleaned_title, c, lang, t, g, s))
 
     placeholders = ",".join(
         [
@@ -370,18 +367,64 @@ def insert_release(
         )
         existing = {row[0] for row in cur.fetchall()}
 
-    to_insert = [row for row in cleaned if row[0] not in existing]
-    inserted = {row[0] for row in to_insert}
-    if to_insert:
+    cleaned: list[
+        tuple[
+            str,
+            Optional[str],
+            Optional[str],
+            Optional[str],
+            Optional[str],
+            Optional[int],
+        ]
+    ] = []
+    for title, c, lang, t, g, s in prepped:
+        if title in existing:
+            cleaned_category = _clean(c)
+            cleaned_language = _clean(lang)
+            cleaned_tags = (
+                ",".join(_clean(tag) or "" for tag in t or [])
+                if t is not None
+                else None
+            )
+            cleaned_group = _clean(g)
+            size_val = s if isinstance(s, int) and s > 0 else None
+        else:
+            cleaned_category = _clean(c) or CATEGORY_MAP["other"]
+            cleaned_language = _clean(lang) or "und"
+            cleaned_tags = ",".join(_clean(tag) or "" for tag in t or [])
+            cleaned_group = _clean(g)
+            size_val = s if isinstance(s, int) and s > 0 else None
+        cleaned.append(
+            (
+                title,
+                cleaned_category,
+                cleaned_language,
+                cleaned_tags,
+                cleaned_group,
+                size_val,
+            )
+        )
+
+    inserted = {title for title, *_ in cleaned if title not in existing}
+    if cleaned:
         if conn.__class__.__module__.startswith("sqlite3"):
             cur.executemany(
                 "INSERT OR IGNORE INTO release (norm_title, category, language, tags, source_group, size_bytes) VALUES (?, ?, ?, ?, ?, ?)",
-                to_insert,
+                cleaned,
             )
         else:
             cur.executemany(
-                "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO NOTHING",
-                to_insert,
+                (
+                    "INSERT INTO release (norm_title, category, language, tags, source_group, size_bytes) "
+                    "VALUES (%s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (norm_title) DO UPDATE SET "
+                    "category = COALESCE(EXCLUDED.category, release.category), "
+                    "language = COALESCE(EXCLUDED.language, release.language), "
+                    "tags = COALESCE(EXCLUDED.tags, release.tags), "
+                    "source_group = COALESCE(EXCLUDED.source_group, release.source_group), "
+                    "size_bytes = COALESCE(EXCLUDED.size_bytes, release.size_bytes)"
+                ),
+                cleaned,
             )
     conn.commit()
     return inserted
