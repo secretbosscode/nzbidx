@@ -19,6 +19,12 @@ except Exception:  # pragma: no cover - optional dependency
     AsyncEngine = None  # type: ignore
     create_async_engine = None  # type: ignore
 
+# Optional sqlparse dependency for parsing schema statements
+try:  # pragma: no cover - import guard
+    import sqlparse
+except Exception:  # pragma: no cover - optional dependency
+    sqlparse = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost:5432/postgres")
@@ -39,7 +45,10 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     sql = (
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
     )
-    statements = [s.strip() for s in sql.split(";") if s.strip()]
+    if sqlparse:
+        statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
+    else:  # pragma: no cover - sqlparse not installed
+        statements = [s.strip() for s in sql.split(";") if s.strip()]
 
     async def _apply(conn: Any) -> None:
         for stmt in statements:

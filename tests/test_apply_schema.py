@@ -107,6 +107,57 @@ def test_apply_schema_retries_on_oserror(monkeypatch):
     assert attempts == 3
 
 
+def test_apply_schema_handles_function_with_semicolons(monkeypatch):
+    executed: list[str] = []
+
+    sql = (
+        "CREATE TABLE t(a int);\n"
+        "CREATE OR REPLACE FUNCTION f() RETURNS void AS $$\n"
+        "BEGIN\n"
+        "  PERFORM 1;\n"
+        "  PERFORM 2;\n"
+        "END;\n"
+        "$$ LANGUAGE plpgsql;\n"
+    )
+
+    class DummyConn:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt, params=None):
+            executed.append(stmt)
+
+        async def commit(self):
+            return None
+
+        async def rollback(self):
+            return None
+
+    class DummyEngine:
+        def connect(self):
+            return DummyConn()
+
+    class DummyResource:
+        def joinpath(self, name: str):
+            return self
+
+        def read_text(self, encoding: str = "utf-8") -> str:
+            return sql
+
+    monkeypatch.setattr(db, "engine", DummyEngine())
+    monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
+
+    asyncio.run(db.apply_schema())
+
+    assert executed[0].startswith("CREATE TABLE")
+    assert executed[1].startswith("CREATE OR REPLACE FUNCTION")
+    assert "PERFORM 2;" in executed[1]
+
+
 def test_create_database_noop_if_exists(monkeypatch):
     admin_urls: list[tuple[str, str | None]] = []
     executed: list[str] = []
