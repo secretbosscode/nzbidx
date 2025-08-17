@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 
 def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
+    from . import newznab
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -42,16 +44,9 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
             data = (
                 json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
-        except Exception as exc:
-            log.warning(
-                "invalid_segments_json",
-                extra={
-                    "release_id": release_id,
-                    "exception": exc.__class__.__name__,
-                    "error": str(exc),
-                },
-            )
-            raise LookupError("release has no segments") from exc
+        except Exception:
+            log.warning("invalid_segments_json", extra={"release_id": release_id})
+            data = []
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
             segments.append(
@@ -77,7 +72,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 "error": str(exc),
             },
         )
-        raise
+        raise newznab.NzbDatabaseError(str(exc)) from exc
 
 
 def _build_xml_from_segments(
@@ -168,6 +163,10 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is normalized."
             )
         raise newznab.NzbFetchError(msg) from exc
+    except newznab.NzbFetchError:
+        raise
+    except newznab.NzbDatabaseError:
+        raise
     except Exception as exc:
-        raise newznab.NzbFetchError("database query failed") from exc
+        raise newznab.NzbDatabaseError("database query failed") from exc
     return _build_xml_from_segments(release_id, segments)
