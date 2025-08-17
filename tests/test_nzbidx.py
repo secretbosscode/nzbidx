@@ -210,6 +210,45 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
     )
 
 
+def test_invalid_segments_json_logs(monkeypatch, caplog) -> None:
+    """Invalid JSON in the segments field should be logged."""
+
+    class DummyCursor:
+        def __enter__(self):  # type: ignore[override]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[override]
+            pass
+
+        def execute(self, *args, **kwargs):
+            pass
+
+        def fetchone(self):
+            return ("{invalid",)
+
+    class DummyConn:
+        def cursor(self):
+            return DummyCursor()
+
+        def close(self):
+            pass
+
+    DummyConn.__module__ = "sqlite3"
+
+    def _connect() -> DummyConn:
+        return DummyConn()
+
+    monkeypatch.setattr(main, "connect_db", _connect)
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
+            nzb_builder.build_nzb_for_release("badjson")
+
+    assert any(
+        rec.message == "invalid_segments_json" and rec.release_id == "badjson"
+        for rec in caplog.records
+    )
+
+
 def test_lookup_error_missing_segments_suggests_backfill(monkeypatch) -> None:
     """Missing segments should suggest running the backfill script."""
 
@@ -885,9 +924,7 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
     def db_error_build(_release_id: str) -> str:
         raise newznab.NzbDatabaseError("db down")
 
-    monkeypatch.setattr(
-        newznab.nzb_builder, "build_nzb_for_release", db_error_build
-    )
+    monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error_build)
     cache = DummyAsyncCache()
     monkeypatch.setattr(api_main, "cache", cache)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
