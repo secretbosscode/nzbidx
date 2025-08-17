@@ -508,7 +508,7 @@ def prune_release_parts(
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute(f"DELETE FROM release_part WHERE release_id < {placeholder}", (cutoff,))
     cur.execute(
-        f"UPDATE release SET has_parts = FALSE, part_count = 0 WHERE id < {placeholder}",
+        f"UPDATE release SET has_parts = FALSE, part_count = 0, size_bytes = 0 WHERE id < {placeholder}",
         (cutoff,),
     )
     cur.execute(
