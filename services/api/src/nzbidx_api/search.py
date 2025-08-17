@@ -27,6 +27,7 @@ try:  # pragma: no cover - optional dependency
         TransportError,
     )
 except Exception:  # pragma: no cover - optional dependency
+
     class TransportError(Exception):
         """Fallback when opensearch-py isn't installed."""
 
@@ -35,6 +36,7 @@ except Exception:  # pragma: no cover - optional dependency
 
     class ConnectionTimeout(OSConnectionError):
         """Fallback timeout error."""
+
 
 logger = logging.getLogger(__name__)
 
