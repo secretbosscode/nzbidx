@@ -131,6 +131,10 @@ script at `db/init/schema.sql` handles this during database provisioning.
 - **Actions:** remove them with `python scripts/check_os_orphans.py --prune`.
 - **Schedule:** run nightly via cron, e.g., `0 4 * * * python scripts/check_os_orphans.py --prune`.
 
+## Full reindex
+- **Usage:** `python scripts/reindex_all.py`
+- **Runtime:** roughly 1 minute per 100k releases
+
 ## Useful commands
 - Smoke test: `scripts/smoke.sh`
 - Health check: `curl -fsS localhost:8080/health`
