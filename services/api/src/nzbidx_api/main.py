@@ -6,7 +6,6 @@ import logging
 import os
 import time
 import asyncio
-import inspect
 from types import SimpleNamespace
 from pathlib import Path
 from typing import Optional, Callable
@@ -149,6 +148,7 @@ from .config import (
 from .metrics_log import start as start_metrics, inc_api_5xx
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
+from .utils import maybe_await
 
 _stop_metrics: Callable[[], None] | None = None
 _ingest_stop: threading.Event | None = None
@@ -299,12 +299,6 @@ BUILD = os.getenv("GIT_SHA", _git_sha())
 cache: Optional[Redis] = None
 
 
-async def _maybe_await(result):
-    if inspect.isawaitable(result):
-        return await result
-    return result
-
-
 class TimingMiddleware(BaseHTTPMiddleware):
     """Log timing for ``/api`` responses."""
 
@@ -340,11 +334,11 @@ async def init_cache_async() -> None:
     url = os.getenv("REDIS_URL", "redis://redis:6379/0")
     try:
         client = Redis.from_url(url)
-        await _maybe_await(client.ping())
+        await maybe_await(client.ping())
         if os.getenv("REDIS_DISABLE_PERSISTENCE") in {"1", "true", "TRUE", "True"}:
             try:
-                await _maybe_await(client.config_set("save", ""))
-                await _maybe_await(client.config_set("appendonly", "no"))
+                await maybe_await(client.config_set("save", ""))
+                await maybe_await(client.config_set("appendonly", "no"))
             except Exception as exc:
                 logger.warning("Failed to disable Redis persistence: %s", exc)
         cache = client
@@ -363,7 +357,7 @@ async def shutdown() -> None:
     global cache
     if cache:
         try:
-            await _maybe_await(cache.close())  # type: ignore[attr-defined]
+            await maybe_await(cache.close())  # type: ignore[attr-defined]
         except Exception:
             pass
         cache = None
@@ -377,7 +371,7 @@ async def health(request: Request) -> ORJSONResponse:
     if cache:
         start = time.monotonic()
         try:  # pragma: no cover - network errors
-            await _maybe_await(cache.ping())
+            await maybe_await(cache.ping())
             payload["redis"] = "ok"
         except Exception:
             payload["redis"] = "down"
@@ -406,7 +400,7 @@ async def status(request: Request) -> ORJSONResponse:
     payload = {"request_id": req_id, "breaker": {}}
     if cache:
         try:  # pragma: no cover - network errors
-            await _maybe_await(cache.ping())
+            await maybe_await(cache.ping())
             payload["redis"] = "ok"
         except Exception:
             payload["redis"] = "down"
