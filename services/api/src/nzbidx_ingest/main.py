@@ -493,28 +493,25 @@ def bulk_index_releases(
             continue
         payload = "\n".join(lines) + "\n"
         try:  # pragma: no cover - network errors
-            response = client.bulk(body=payload, refresh=False)
-            if response.get("errors"):
-                for item in response.get("items", []):
-                    for info in item.values():
-                        error = info.get("error")  # type: ignore[union-attr]
-                        if error:
-                            reason = (
-                                error.get("reason")
-                                if isinstance(error, dict)
-                                else str(error)
-                            )
-                            logger.warning(
-                                "opensearch_bulk_item_failed",
-                                extra={
-                                    "id": info.get("_id"),
-                                    "error": reason,
-                                },
-                            )
+            resp = client.bulk(body=payload, refresh=False)
         except Exception as exc:  # pragma: no cover - network errors
             if not _os_warned:
                 logger.warning("opensearch_bulk_failed", extra={"error": str(exc)})
                 _os_warned = True
+        else:
+            if (
+                isinstance(resp, dict)
+                and resp.get("errors")
+                and isinstance(resp.get("items"), list)
+            ):
+                for item in resp["items"]:
+                    info = item.get("index") or item.get("delete") or {}
+                    err = info.get("error")
+                    if err:
+                        logger.warning(
+                            "opensearch_bulk_item_failed",
+                            extra={"id": info.get("_id"), "error": err.get("reason", str(err))},
+                        )
 
 
 def prune_group(conn: Any, client: Optional[object], group: str) -> None:
