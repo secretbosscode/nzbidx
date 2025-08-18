@@ -27,6 +27,23 @@ Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper schedules `VACUUM (ANALYZE)`, `ANALYZE`,
 and `REINDEX` jobs via APScheduler.
 
+## Database Initialization
+
+Seed a fresh PostgreSQL instance before starting ingestion. Apply the schema
+file to install required extensions and create the partitioned `release` table:
+
+```bash
+psql "$DATABASE_URL" -f db/init/schema.sql
+```
+
+Run the command once with a superuser account or via your migration tool. This
+ensures the partitions exist and prevents costly migrations after data is
+ingested. Existing deployments can retrofit partitions with:
+
+```bash
+python scripts/migrate_release_partitions.py
+```
+
 ## Performance Tuning
 
 The default compose files apply a few settings aimed at keeping searches fast:

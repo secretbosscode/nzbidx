@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -7,8 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_api import backfill_release_parts as backfill_mod
-import json
+from nzbidx_api import backfill_release_parts as backfill_mod  # noqa: E402
 
 
 def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
