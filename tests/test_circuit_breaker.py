@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
+import time
 
 import pytest
 
@@ -15,6 +16,7 @@ from nzbidx_api.middleware_circuit import (
 
 def test_circuit_breaker_thread_safety() -> None:
     breaker = CircuitBreaker(max_failures=1, reset_seconds=60)
+    barrier = threading.Barrier(5)
     count_lock = threading.Lock()
     call_count = 0
 
@@ -22,14 +24,16 @@ def test_circuit_breaker_thread_safety() -> None:
         nonlocal call_count
         with count_lock:
             call_count += 1
+        time.sleep(0.05)
         raise ValueError("boom")
 
     def worker() -> None:
+        barrier.wait()
         with pytest.raises((ValueError, CircuitOpenError)):
             breaker.call(fail)
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(worker) for _ in range(10)]
+        futures = [executor.submit(worker) for _ in range(5)]
         for future in futures:
             future.result()
 
