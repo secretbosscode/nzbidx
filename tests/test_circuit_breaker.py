@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
-import sys
-from pathlib import Path
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
 import pytest
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api.middleware_circuit import (
     CircuitBreaker,

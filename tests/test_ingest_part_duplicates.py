@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
-import sys
-from pathlib import Path
 import sqlite3
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 import nzbidx_ingest.ingest_loop as loop  # type: ignore
 from nzbidx_ingest import config, cursors  # type: ignore
 
 
 def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
-
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)

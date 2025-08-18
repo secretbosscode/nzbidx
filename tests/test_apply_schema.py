@@ -1,14 +1,6 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import asyncio
-
-# ruff: noqa: E402 - path manipulation before imports
-# Ensure the API package is importable
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api import db
 
