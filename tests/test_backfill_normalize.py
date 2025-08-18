@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
 import sqlite3
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import insert_release  # type: ignore
 from scripts.normalize_releases import normalize_releases  # type: ignore

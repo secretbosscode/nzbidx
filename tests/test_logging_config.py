@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
 import logging
 import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 
 class ListHandler(logging.Handler):
@@ -22,7 +17,11 @@ def test_setup_logging_single_execution() -> None:
     """Repeated setup calls should not duplicate log entries."""
     root = logging.getLogger()
     access = logging.getLogger("uvicorn.access")
-    root_handlers, root_level, root_filters = list(root.handlers), root.level, list(root.filters)
+    root_handlers, root_level, root_filters = (
+        list(root.handlers),
+        root.level,
+        list(root.filters),
+    )
     access_handlers, access_prop = list(access.handlers), access.propagate
 
     try:

@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
-import sys
-from pathlib import Path
 from xml.etree import ElementTree as ET
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_api.newznab import rss_xml  # type: ignore
 

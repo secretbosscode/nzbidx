@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
-
 import sqlite3
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
 
@@ -82,5 +75,3 @@ def test_insert_release_batch() -> None:
         ("bar", 456, "2024-02-01T00:00:00+00:00"),
         ("foo", None, None),
     ]
-
-
