@@ -192,7 +192,7 @@ class JsonFormatter(logging.Formatter):
                 payload[k] = v
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
-        return orjson.dumps(payload).decode()
+        return orjson.dumps(payload, default=str).decode()
 
 
 _LOG_LOCK = threading.Lock()
