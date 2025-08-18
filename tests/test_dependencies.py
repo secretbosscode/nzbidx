@@ -6,18 +6,11 @@ import asyncio
 import inspect
 import json
 import os
-import sys
 import time
-from pathlib import Path
 from types import SimpleNamespace
 
 os.environ["API_KEYS"] = "secret"
 os.environ["INGEST_STALE_SECONDS"] = "5"
-
-# Ensure local packages are importable
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT))
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 import nzbidx_api.main as main  # type: ignore  # noqa: E402
 
@@ -128,5 +121,3 @@ def test_config_endpoint(monkeypatch) -> None:
         assert data["nntp_total_timeout_seconds"] == 77
     cfg.nzb_timeout_seconds.cache_clear()
     cfg.nntp_total_timeout_seconds.cache_clear()
-
-

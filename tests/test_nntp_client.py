@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
-
 import sys
-from pathlib import Path
 from types import SimpleNamespace
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest import nntp_client  # type: ignore
 
@@ -68,9 +62,7 @@ def test_high_water_mark_auth(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
     monkeypatch.setenv("NNTP_USER", "user")
     monkeypatch.setenv("NNTP_PASS", "pass")
-    monkeypatch.setattr(
-        nntp_client.config, "nntp_timeout_seconds", lambda: 60
-    )
+    monkeypatch.setattr(nntp_client.config, "nntp_timeout_seconds", lambda: 60)
     monkeypatch.setattr(
         nntp_client,
         "nntplib",
@@ -175,8 +167,10 @@ def test_aio_nntp_fallback(monkeypatch) -> None:
 
     # Reload compatibility layer and client to pick up the fake modules
     import nzbidx_ingest.nntp_compat as nntp_compat
+
     importlib.reload(nntp_compat)
     import nzbidx_ingest.nntp_client as nntp_client_reload
+
     importlib.reload(nntp_client_reload)
 
     monkeypatch.setenv("NNTP_HOST", "example.com")
