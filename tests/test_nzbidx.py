@@ -838,9 +838,7 @@ def test_connect_db_creates_database(monkeypatch) -> None:
 
     state = {"fail": True}
 
-    def fake_create_engine(
-        url: str, echo: bool = False, future: bool = True, **kwargs
-    ):
+    def fake_create_engine(url: str, echo: bool = False, future: bool = True, **_kw):
         calls.append(url)
         if state["fail"]:
             state["fail"] = False

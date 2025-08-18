@@ -82,15 +82,13 @@ class CircuitBreaker(Generic[T]):
         with self._lock:
             if self._state_unlocked() == "open":
                 raise CircuitOpenError("circuit open")
-        try:
-            result = func(*args, **kwargs)
-        except Exception:
-            with self._lock:
+            try:
+                result = func(*args, **kwargs)
+            except Exception:
                 self._record_failure_unlocked()
-            raise
-        with self._lock:
+                raise
             self._record_success_unlocked()
-        return result
+            return result
 
 
 def call_with_retry(

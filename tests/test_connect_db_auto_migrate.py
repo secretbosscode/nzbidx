@@ -2,15 +2,13 @@ import logging
 import sys
 from pathlib import Path
 
-import pytest
-
 # Ensure local packages are importable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_ingest import main
-from nzbidx_ingest.main import connect_db
+from nzbidx_ingest import main  # noqa: E402
+from nzbidx_ingest.main import connect_db  # noqa: E402
 
 
 def test_connect_db_auto_migrate(monkeypatch, caplog):
