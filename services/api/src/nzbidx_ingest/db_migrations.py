@@ -35,6 +35,9 @@ def migrate_release_table(conn: Any) -> None:
         "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category_id INT",
     )
     cur.execute(
+        "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ",
+    )
+    cur.execute(
         "UPDATE release SET category_id = NULLIF(category, '')::INT "
         "WHERE category_id IS NULL AND category ~ '^[0-9]+'",
     )

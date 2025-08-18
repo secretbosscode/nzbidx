@@ -14,10 +14,14 @@ from nzbidx_ingest.main import connect_db  # type: ignore  # noqa: E402
 from nzbidx_ingest.db_migrations import migrate_release_table  # type: ignore  # noqa: E402
 
 
-def migrate() -> None:
-    conn = connect_db()
+def migrate(conn=None) -> None:
+    close = False
+    if conn is None:
+        conn = connect_db()
+        close = True
     migrate_release_table(conn)
-    conn.close()
+    if close:
+        conn.close()
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry
