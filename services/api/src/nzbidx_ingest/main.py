@@ -99,6 +99,14 @@ GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
     ("android", "pc_mobile_android"),
     ("games", "pc_games"),
     ("pc", "pc"),
+    # Adult hints must be checked before generic media categories like
+    # "movies" or "video" so mixed groups such as
+    # "alt.binaries.movies.xxx" are classified correctly.
+    ("xxx", "xxx"),
+    ("sex", "xxx"),
+    ("adult", "xxx"),
+    ("hentai", "xxx"),
+    ("animation", "xxx"),
     ("movies", "movies"),
     ("movie", "movies"),
     ("video", "movies"),
@@ -114,11 +122,6 @@ GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
     ("ebook", "ebook"),
     ("book", "ebook"),
     ("books", "ebook"),
-    ("xxx", "xxx"),
-    ("sex", "xxx"),
-    ("adult", "xxx"),
-    ("hentai", "xxx"),
-    ("animation", "xxx"),
     ("comics", "comics"),
     ("comic", "comics"),
     ("misc", "misc"),
@@ -537,6 +540,17 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
 
     if group:
         g = group.lower()
+        adult_keys = ("xxx", "sex", "adult", "hentai", "animation")
+        if any(k in g for k in adult_keys):
+            if "dvd" in s:
+                return CATEGORY_MAP["xxx_dvd"]
+            if "wmv" in s:
+                return CATEGORY_MAP["xxx_wmv"]
+            if "xvid" in s:
+                return CATEGORY_MAP["xxx_xvid"]
+            if "x264" in s or "h264" in s:
+                return CATEGORY_MAP["xxx_x264"]
+            return CATEGORY_MAP["xxx"]
         for key, cat in GROUP_CATEGORY_HINTS:
             if key in g:
                 if cat == "xxx":

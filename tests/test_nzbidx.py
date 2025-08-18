@@ -579,6 +579,10 @@ def test_infer_category_from_group() -> None:
     assert 6000 <= int(
         _infer_category("Test", group="alt.binaries.hentai")
     ) <= 6090
+    assert (
+        _infer_category("Test", group="alt.binaries.movies.xxx")
+        == CATEGORY_MAP["xxx"]
+    )
 
 
 def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
