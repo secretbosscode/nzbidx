@@ -1,0 +1,2 @@
+nzbidx_api
+nzbidx_ingest
