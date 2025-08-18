@@ -1,14 +1,7 @@
-import sys
-from pathlib import Path
 import uuid
 
 import psycopg
 import pytest
-
-# ruff: noqa: E402 - path manip before imports
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT))
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import connect_db
 
@@ -33,7 +26,9 @@ def test_connect_db_creates_partitions(monkeypatch):
         pytest.skip(f"PostgreSQL unavailable: {exc}")
 
     cur = conn.cursor()
-    cur.execute("SELECT 1 FROM pg_partitioned_table WHERE partrelid='release'::regclass")
+    cur.execute(
+        "SELECT 1 FROM pg_partitioned_table WHERE partrelid='release'::regclass"
+    )
     assert cur.fetchone() is not None
     cur.execute("SELECT 1 FROM pg_class WHERE relname='release_movies'")
     assert cur.fetchone() is not None
