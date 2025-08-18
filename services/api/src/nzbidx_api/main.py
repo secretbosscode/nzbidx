@@ -94,7 +94,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .orjson_response import ORJSONResponse, Response
-from .db import ping, apply_schema
+from .db import apply_schema, close_connection, dispose_engine, ping
 from . import newznab
 from .newznab import (
     adult_content_allowed,
@@ -705,6 +705,8 @@ app = Starlette(
     on_shutdown=[
         stop_ingest,
         lambda: _stop_metrics() if _stop_metrics else None,
+        dispose_engine,
+        close_connection,
     ],
     middleware=middleware,
 )

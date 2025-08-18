@@ -314,3 +314,12 @@ def close_connection() -> None:
         except Exception:
             pass
         _conn = None
+
+
+async def dispose_engine() -> None:
+    """Dispose the global async engine and close pooled connections."""
+
+    global engine
+    if engine is not None:
+        await engine.dispose()
+        engine = None
