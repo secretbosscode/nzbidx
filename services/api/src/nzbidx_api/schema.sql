@@ -43,7 +43,13 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0;
 ALTER TABLE IF EXISTS release DROP CONSTRAINT IF EXISTS release_norm_title_key;
-ALTER TABLE IF EXISTS release ADD CONSTRAINT IF NOT EXISTS release_norm_title_category_id_key UNIQUE (norm_title, category_id);
+DO $$
+BEGIN
+    ALTER TABLE IF EXISTS release
+        ADD CONSTRAINT release_norm_title_category_id_key UNIQUE (norm_title, category_id);
+EXCEPTION
+    WHEN duplicate_table THEN NULL;
+END $$;
 
 UPDATE release SET language = 'und' WHERE language IS NULL;
 UPDATE release SET tags = '' WHERE tags IS NULL;
