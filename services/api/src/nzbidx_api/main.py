@@ -117,7 +117,7 @@ from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
 from .middleware_quota import QuotaMiddleware
 from .search_cache import cache_rss, get_cached_rss
-from .search import MAX_LIMIT, MAX_OFFSET, search_releases
+from .search import MAX_LIMIT, MAX_OFFSET, search_releases, _format_pubdate
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker
@@ -541,6 +541,21 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
+        if not q and not items:
+            first_cat = cats.split(",")[0] if cats else MOVIE_CATEGORY_IDS[0]
+            link = "/api?t=getnzb&id=0"
+            if api_key:
+                link += f"&apikey={api_key}"
+            items = [
+                {
+                    "title": "Indexer Test Item",
+                    "guid": "0",
+                    "pubDate": _format_pubdate(None),
+                    "category": first_cat,
+                    "link": link,
+                    "size": "1",
+                }
+            ]
         xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
