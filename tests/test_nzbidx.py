@@ -578,11 +578,25 @@ def test_infer_category_from_group() -> None:
     )
     assert 6000 <= int(_infer_category("Test", group="alt.binaries.hentai")) <= 6090
 
+    assert _infer_category("Test", group="alt.binaries.erotica") == CATEGORY_MAP["xxx"]
+    assert _infer_category("Test", group="alt.binaries.porn") == CATEGORY_MAP["xxx"]
 
-@pytest.mark.parametrize("keyword", ["porn", "erotica", "nsfw"])
-def test_infer_category_adult_keywords(keyword: str) -> None:
-    """Subjects containing adult keywords should map to XXX."""
-    assert _infer_category(f"Some {keyword} content") == CATEGORY_MAP["xxx"]
+
+def test_group_category_hints_file(tmp_path, monkeypatch) -> None:
+    """Hints should be extendable via an external config file."""
+    cfg = tmp_path / "hints.json"
+    cfg.write_text(json.dumps([["foo", "xxx"]]))
+    monkeypatch.setenv("GROUP_CATEGORY_HINTS_FILE", str(cfg))
+    reloaded = importlib.reload(main)
+    try:
+        assert ("foo", "xxx") in reloaded.GROUP_CATEGORY_HINTS
+        assert (
+            reloaded._infer_category("Test", group="alt.binaries.foo")
+            == CATEGORY_MAP["xxx"]
+        )
+    finally:
+        monkeypatch.delenv("GROUP_CATEGORY_HINTS_FILE", raising=False)
+        importlib.reload(main)
 
 
 def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
