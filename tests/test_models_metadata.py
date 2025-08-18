@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.importorskip("sqlalchemy")
 from sqlalchemy import UniqueConstraint, create_engine, inspect
 
 from nzbidx_api.models import Base, Release
