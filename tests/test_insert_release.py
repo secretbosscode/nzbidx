@@ -8,7 +8,7 @@ from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
 def test_insert_release_filters_surrogates() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE(norm_title, category_id))"
     )
     inserted = insert_release(
         conn,
@@ -38,7 +38,7 @@ def test_insert_release_filters_surrogates() -> None:
 def test_insert_release_defaults() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE(norm_title, category_id))"
     )
     inserted = insert_release(conn, "foo", None, None, None, None, None, None)
     assert inserted == {"foo"}
@@ -51,7 +51,7 @@ def test_insert_release_defaults() -> None:
 def test_insert_release_batch() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE(norm_title, category_id))"
     )
     releases = [
         ("foo", None, None, None, None, None, None),

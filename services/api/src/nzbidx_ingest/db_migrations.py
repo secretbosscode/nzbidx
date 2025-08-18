@@ -47,7 +47,7 @@ def migrate_release_table(conn: Any) -> None:
     cur.execute(
         """
         CREATE TABLE release (
-            LIKE release_old INCLUDING DEFAULTS INCLUDING CONSTRAINTS
+            LIKE release_old INCLUDING DEFAULTS
             INCLUDING STORAGE INCLUDING COMMENTS
         ) PARTITION BY RANGE (category_id)
         """
@@ -71,6 +71,11 @@ def migrate_release_table(conn: Any) -> None:
     )
     cur.execute(
         "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
+    )
+
+    # Enforce uniqueness on norm_title/category_id across partitions.
+    cur.execute(
+        "ALTER TABLE release ADD CONSTRAINT release_norm_title_category_id_key UNIQUE (norm_title, category_id)",
     )
 
     # Recreate indexes on the new table.
