@@ -9,7 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
-from nzbidx_api import backfill_release_parts as backfill_mod
+from nzbidx_api import backfill_release_parts as backfill_mod  # noqa: E402
 
 
 class DummyClient:
