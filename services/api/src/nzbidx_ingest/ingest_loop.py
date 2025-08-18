@@ -382,15 +382,18 @@ def run_once() -> float:
 
 def run_forever(stop_event: Event | None = None) -> None:
     """Continuously poll groups until ``stop_event`` is set."""
+    failure_delay = INGEST_POLL_MIN_SECONDS
     while not (stop_event and stop_event.is_set()):
         try:
             delay = run_once()
+            failure_delay = INGEST_POLL_MIN_SECONDS
         except BaseException as exc:  # pragma: no cover
             if isinstance(exc, KeyboardInterrupt):
                 logger.info("ingest_loop_interrupted")
                 raise
             logger.exception("ingest_loop_failure")
-            raise
+            delay = failure_delay
+            failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
         delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
         if stop_event:
             if stop_event.wait(delay):
