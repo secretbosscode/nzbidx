@@ -424,6 +424,7 @@ docker compose up -d && scripts/smoke.sh
 - Dependencies unhealthy – ``docker compose ps`` and ``docker compose logs <svc>``.
 - Snapshot repo not configured – ``make snapshot-repo`` no-ops until env vars set.
 - Smoke test times out – increase timeout or inspect ``docker compose logs``.
+- ``t=movie`` without a ``q`` parameter returns a placeholder "Indexer Test Item" when no real results exist.
 
 ## Kubernetes (examples only)
 
