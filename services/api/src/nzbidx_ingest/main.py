@@ -189,7 +189,10 @@ def connect_db() -> Any:
             else:
                 if exists and not partitioned:
                     logger.error("release_table_not_partitioned")
-                    raise RuntimeError("release table must be partitioned")
+                    raise RuntimeError(
+                        "'release' table exists but is not partitioned; "
+                        "drop the table or run scripts/migrate_release_partitions.py"
+                    )
 
             with engine.connect() as conn:  # type: ignore[call-arg]
                 exists = conn.execute(
@@ -213,7 +216,9 @@ def connect_db() -> Any:
                         extra={"next_step": "drop_or_migrate"},
                     )
                     raise RuntimeError(
-                        "'release' table exists but is not partitioned; drop or migrate the table before starting the worker"
+                        "'release' table exists but is not partitioned; "
+                        "drop the table or run scripts/migrate_release_partitions.py "
+                        "before starting the worker"
                     )
                 if not exists:
                     logger.info(
