@@ -60,3 +60,4 @@ CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_
 CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
+CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at);
