@@ -83,12 +83,10 @@ def test_connect_db_auto_migrate(monkeypatch, caplog):
     monkeypatch.setattr(main, "create_engine", lambda *a, **k: DummyEngine())
     monkeypatch.setattr(main, "text", lambda s: s)
 
-    import scripts.migrate_release_partitions as mrp
-
-    monkeypatch.setattr(mrp, "migrate", fake_migrate)
+    monkeypatch.setattr(main, "migrate_release_table", fake_migrate)
 
     with caplog.at_level(logging.INFO):
         conn = connect_db()
     assert called["partitioned"] is True
     assert conn is not None
-    assert "release_table_auto_migrated" in caplog.text
+    assert "release_table_migrating" in caplog.text

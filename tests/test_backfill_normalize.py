@@ -9,7 +9,7 @@ from scripts.normalize_releases import normalize_releases  # type: ignore
 def test_normalize_releases_merges_parts() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE(norm_title, category_id))"
     )
     insert_release(
         conn,
