@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
-from nzbidx_ingest.main import connect_db  # type: ignore
+from nzbidx_ingest.main import connect_db  # type: ignore  # noqa: E402
 
 
 def migrate() -> None:
