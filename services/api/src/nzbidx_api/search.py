@@ -95,7 +95,8 @@ async def search_releases_async(
         "size": "size_bytes",
         "title": "norm_title",
     }
-    sort_field = order_map.get(sort or "date", sort or "posted_at")
+    sort_key = sort or "date"
+    sort_field = order_map.get(sort_key, "posted_at")
 
     where_clause = " AND ".join(conditions)
     sql = text(
