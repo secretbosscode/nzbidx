@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -82,48 +83,84 @@ CATEGORY_MAP = {
 }
 
 
-# Keyword hints used to map NNTP groups to categories
-GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
-    ("xbox360", "console_xbox360"),
-    ("xbox", "console_xbox"),
-    ("wiiware", "console_wiiware"),
-    ("wii", "console_wii"),
-    ("psp", "console_psp"),
-    ("playstation", "console_psp"),
-    ("nds", "console_nds"),
-    ("console", "console"),
-    ("0day", "pc_0day"),
-    ("iso", "pc_iso"),
-    ("mac", "pc_mac"),
-    ("ios", "pc_mobile_ios"),
-    ("android", "pc_mobile_android"),
-    ("games", "pc_games"),
-    ("pc", "pc"),
-    ("movies", "movies"),
-    ("movie", "movies"),
-    ("video", "movies"),
-    ("tv", "tv"),
-    ("series", "tv"),
-    ("sport", "tv_sport"),
-    ("music", "audio"),
-    ("audio", "audio"),
-    ("mp3", "audio_mp3"),
-    ("flac", "audio_lossless"),
-    ("audiobook", "audio_audiobook"),
-    ("ebooks", "ebook"),
-    ("ebook", "ebook"),
-    ("book", "ebook"),
-    ("books", "ebook"),
-    ("xxx", "xxx"),
-    ("sex", "xxx"),
-    ("adult", "xxx"),
-    ("hentai", "xxx"),
-    ("animation", "xxx"),
-    ("comics", "comics"),
-    ("comic", "comics"),
-    ("misc", "misc"),
-    ("other", "other"),
-]
+def _load_group_category_hints() -> list[tuple[str, str]]:
+    """Return default group/category hints, optionally extended via config."""
+    hints: list[tuple[str, str]] = [
+        ("xbox360", "console_xbox360"),
+        ("xbox", "console_xbox"),
+        ("wiiware", "console_wiiware"),
+        ("wii", "console_wii"),
+        ("psp", "console_psp"),
+        ("playstation", "console_psp"),
+        ("nds", "console_nds"),
+        ("console", "console"),
+        ("0day", "pc_0day"),
+        ("iso", "pc_iso"),
+        ("mac", "pc_mac"),
+        ("ios", "pc_mobile_ios"),
+        ("android", "pc_mobile_android"),
+        ("games", "pc_games"),
+        ("pc", "pc"),
+        ("movies", "movies"),
+        ("movie", "movies"),
+        ("video", "movies"),
+        ("tv", "tv"),
+        ("series", "tv"),
+        ("sport", "tv_sport"),
+        ("music", "audio"),
+        ("audio", "audio"),
+        ("mp3", "audio_mp3"),
+        ("flac", "audio_lossless"),
+        ("audiobook", "audio_audiobook"),
+        ("ebooks", "ebook"),
+        ("ebook", "ebook"),
+        ("book", "ebook"),
+        ("books", "ebook"),
+        ("xxx", "xxx"),
+        ("sex", "xxx"),
+        ("adult", "xxx"),
+        ("hentai", "xxx"),
+        ("animation", "xxx"),
+        ("erotica", "xxx"),
+        ("erotic", "xxx"),
+        ("porn", "xxx"),
+        ("porno", "xxx"),
+        ("comics", "comics"),
+        ("comic", "comics"),
+        ("misc", "misc"),
+        ("other", "other"),
+    ]
+
+    cfg = os.getenv("GROUP_CATEGORY_HINTS_FILE")
+    if cfg:
+        try:
+            data = json.loads(Path(cfg).read_text())
+            if isinstance(data, dict):
+                extra = [(k, v) for k, v in data.items()]
+            else:
+                extra = [
+                    tuple(item)
+                    for item in data
+                    if isinstance(item, (list, tuple)) and len(item) == 2
+                ]
+            hints.extend([(str(k), str(v)) for k, v in extra])
+            logger.info(
+                "group_category_hints_loaded",
+                extra={
+                    "event": "group_category_hints_loaded",
+                    "path": cfg,
+                    "count": len(extra),
+                },
+            )
+        except Exception:
+            logger.warning(
+                "group_category_hints_load_failed",
+                extra={"event": "group_category_hints_load_failed", "path": cfg},
+            )
+    return hints
+
+
+GROUP_CATEGORY_HINTS: list[tuple[str, str]] = _load_group_category_hints()
 
 
 try:  # pragma: no cover - optional dependency
