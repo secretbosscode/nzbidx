@@ -126,6 +126,23 @@ GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
 ]
 
 
+DEFAULT_ADULT_KEYWORDS = (
+    "brazzers",
+    "realitykings",
+    "onlyfans",
+    "pornhub",
+    "adult",
+    "xxx",
+    "porn",
+    "erotica",
+    "nsfw",
+)
+ADULT_KEYWORDS = tuple(
+    k.strip().lower()
+    for k in os.getenv("ADULT_KEYWORDS", ",".join(DEFAULT_ADULT_KEYWORDS)).split(",")
+    if k.strip()
+)
+
 try:  # pragma: no cover - optional dependency
     from sqlalchemy import create_engine, text
 except Exception:  # pragma: no cover - optional dependency
@@ -567,10 +584,7 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["ebook"]
     if "[xxx]" in s:
         return CATEGORY_MAP["xxx"]
-    if any(
-        k in s
-        for k in ("brazzers", "realitykings", "onlyfans", "pornhub", "adult", "xxx")
-    ):
+    if any(k in s for k in ADULT_KEYWORDS):
         if "dvd" in s:
             return CATEGORY_MAP["xxx_dvd"]
         if "wmv" in s:

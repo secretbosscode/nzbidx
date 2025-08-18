@@ -576,9 +576,13 @@ def test_infer_category_from_group() -> None:
         _infer_category("Cartoons x264", group="alt.binaries.animations")
         == CATEGORY_MAP["xxx_x264"]
     )
-    assert 6000 <= int(
-        _infer_category("Test", group="alt.binaries.hentai")
-    ) <= 6090
+    assert 6000 <= int(_infer_category("Test", group="alt.binaries.hentai")) <= 6090
+
+
+@pytest.mark.parametrize("keyword", ["porn", "erotica", "nsfw"])
+def test_infer_category_adult_keywords(keyword: str) -> None:
+    """Subjects containing adult keywords should map to XXX."""
+    assert _infer_category(f"Some {keyword} content") == CATEGORY_MAP["xxx"]
 
 
 def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
