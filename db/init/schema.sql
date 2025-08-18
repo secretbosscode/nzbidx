@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS release (
     posted_at TIMESTAMPTZ,
     segments JSONB,
     has_parts BOOLEAN NOT NULL DEFAULT FALSE,
-    part_count INT NOT NULL DEFAULT 0
+    part_count INT NOT NULL DEFAULT 0,
+    UNIQUE (norm_title, category_id)
 ) PARTITION BY RANGE (category_id);
 
 CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
@@ -41,6 +42,8 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS release DROP CONSTRAINT IF EXISTS release_norm_title_key;
+ALTER TABLE IF EXISTS release ADD CONSTRAINT IF NOT EXISTS release_norm_title_category_id_key UNIQUE (norm_title, category_id);
 
 UPDATE release SET language = 'und' WHERE language IS NULL;
 UPDATE release SET tags = '' WHERE tags IS NULL;
