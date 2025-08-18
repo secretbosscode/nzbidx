@@ -1,7 +1,8 @@
 import uuid
 
-import psycopg
 import pytest
+
+psycopg = pytest.importorskip("psycopg")
 
 from nzbidx_ingest.main import connect_db
 
