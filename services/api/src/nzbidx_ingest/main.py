@@ -168,13 +168,18 @@ def connect_db() -> Any:
             try:
                 raw = engine.raw_connection()
                 cur = raw.cursor()
-                cur.execute("SELECT 1 FROM pg_class WHERE relname = 'release'")
-                exists = getattr(cur, "rowcount", 0) > 0
+                # Determine whether the "release" table exists and whether it is
+                # already partitioned using explicit ``SELECT EXISTS`` queries.
                 cur.execute(
-                    "SELECT 1 FROM pg_partitioned_table "
-                    "WHERE partrelid = 'release'::regclass"
+                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release')"
                 )
-                partitioned = getattr(cur, "rowcount", 0) > 0
+                exists = bool(cur.fetchone()[0])
+                cur.execute(
+                    "SELECT EXISTS ("
+                    "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
+                    ")"
+                )
+                partitioned = bool(cur.fetchone()[0])
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
@@ -189,22 +194,24 @@ def connect_db() -> Any:
             with engine.connect() as conn:  # type: ignore[call-arg]
                 exists = (
                     conn.execute(
-                        text("SELECT 1 FROM pg_class WHERE relname='release'")
-                    ).first()
-                    is not None
+                        text(
+                            "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')"
+                        )
+                    ).fetchone()[0]
                 )
                 partitioned = (
                     conn.execute(
                         text(
                             """
-                            SELECT 1
-                            FROM pg_partitioned_table p
-                            JOIN pg_class c ON p.partrelid = c.oid
-                            WHERE c.relname = 'release'
+                            SELECT EXISTS(
+                                SELECT 1
+                                FROM pg_partitioned_table p
+                                JOIN pg_class c ON p.partrelid = c.oid
+                                WHERE c.relname = 'release'
+                            )
                             """
                         )
-                    ).first()
-                    is not None
+                    ).fetchone()[0]
                 )
                 if exists and not partitioned:
                     logger.error(
