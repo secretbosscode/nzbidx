@@ -192,17 +192,12 @@ def connect_db() -> Any:
                     raise RuntimeError("release table must be partitioned")
 
             with engine.connect() as conn:  # type: ignore[call-arg]
-                exists = (
-                    conn.execute(
-                        text(
-                            "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')"
-                        )
-                    ).fetchone()[0]
-                )
-                partitioned = (
-                    conn.execute(
-                        text(
-                            """
+                exists = conn.execute(
+                    text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')")
+                ).fetchone()[0]
+                partitioned = conn.execute(
+                    text(
+                        """
                             SELECT EXISTS(
                                 SELECT 1
                                 FROM pg_partitioned_table p
@@ -210,9 +205,8 @@ def connect_db() -> Any:
                                 WHERE c.relname = 'release'
                             )
                             """
-                        )
-                    ).fetchone()[0]
-                )
+                    )
+                ).fetchone()[0]
                 if exists and not partitioned:
                     logger.error(
                         "release_table_not_partitioned",
