@@ -221,17 +221,12 @@ def connect_db() -> Any:
                         pass
 
             with engine.connect() as conn:  # type: ignore[call-arg]
-                exists = (
-                    conn.execute(
-                        text(
-                            "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')"
-                        )
-                    ).fetchone()[0]
-                )
-                partitioned = (
-                    conn.execute(
-                        text(
-                            """
+                exists = conn.execute(
+                    text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')")
+                ).fetchone()[0]
+                partitioned = conn.execute(
+                    text(
+                        """
                             SELECT EXISTS(
                                 SELECT 1
                                 FROM pg_partitioned_table p
@@ -239,9 +234,8 @@ def connect_db() -> Any:
                                 WHERE c.relname = 'release'
                             )
                             """
-                        )
-                    ).fetchone()[0]
-                )
+                    )
+                ).fetchone()[0]
                 if exists and not partitioned:
                     logger.error(
                         "release_table_not_partitioned",
@@ -337,7 +331,9 @@ def connect_db() -> Any:
                 raise
             dbname = parsed.path.lstrip("/")
             admin_url = urlunparse(parsed._replace(path="/postgres"))
-            engine = create_engine(admin_url, echo=False, future=True, isolation_level='AUTOCOMMIT')
+            engine = create_engine(
+                admin_url, echo=False, future=True, isolation_level="AUTOCOMMIT"
+            )
             with engine.connect() as conn:  # type: ignore[call-arg]
                 conn.execute(text(f'CREATE DATABASE "{dbname}"'))
             engine.dispose()
@@ -422,6 +418,7 @@ def insert_release(
         return text.encode("utf-8", "surrogateescape").decode("utf-8", "ignore")
 
     cur = conn.cursor()
+    is_sqlite = conn.__class__.__module__.startswith("sqlite3")
 
     items: list[
         tuple[
@@ -456,10 +453,9 @@ def insert_release(
     cleaned: list[
         tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[str]]
     ] = []
-    titles: list[str] = []
+    pairs: list[tuple[str, int]] = []
     for n, c, lang, t, g, s, p in items:
         cleaned_title = _clean(n) or ""
-        titles.append(cleaned_title)
         cleaned_category = _clean(c) or CATEGORY_MAP["other"]
         try:
             cleaned_category_id = int(cleaned_category)
@@ -482,43 +478,39 @@ def insert_release(
                 cleaned_posted,
             )
         )
+        pairs.append((cleaned_title, cleaned_category_id))
 
-    placeholders = ",".join(
-        [
-            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            for _ in titles
-        ]
-    )
-    existing: set[str] = set()
-    if titles:
+    existing: set[tuple[str, int]] = set()
+    if pairs:
+        pair_placeholder = "(?, ?)" if is_sqlite else "(%s, %s)"
+        placeholders = ",".join([pair_placeholder] * len(pairs))
+        flat_params = [val for pair in pairs for val in pair]
         cur.execute(
-            f"SELECT norm_title FROM release WHERE norm_title IN ({placeholders})",
-            titles,
+            f"SELECT norm_title, category_id FROM release WHERE (norm_title, category_id) IN ({placeholders})",
+            flat_params,
         )
-        existing = {row[0] for row in cur.fetchall()}
+        existing = {(row[0], row[1]) for row in cur.fetchall()}
 
-    to_insert = [row for row in cleaned if row[0] not in existing]
+    to_insert = [row for row in cleaned if (row[0], row[2]) not in existing]
     inserted = {row[0] for row in to_insert}
     if to_insert:
-        if conn.__class__.__module__.startswith("sqlite3"):
+        if is_sqlite:
             cur.executemany(
                 "INSERT OR IGNORE INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 to_insert,
             )
         else:
             cur.executemany(
-                "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
                 to_insert,
             )
     # Ensure posted_at is updated for existing rows
     if cleaned:
-        updates = [(row[7], row[0]) for row in cleaned if row[7]]
+        updates = [(row[7], row[0], row[2]) for row in cleaned if row[7]]
         if updates:
-            placeholder = (
-                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            )
+            placeholder = "?" if is_sqlite else "%s"
             cur.executemany(
-                f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder}",
+                f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
                 updates,
             )
     conn.commit()
