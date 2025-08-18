@@ -250,8 +250,8 @@ def connect_db() -> Any:
                     (
                         """
                         CREATE TABLE IF NOT EXISTS release (
-                            id BIGSERIAL PRIMARY KEY,
-                            norm_title TEXT UNIQUE,
+                            id BIGSERIAL,
+                            norm_title TEXT,
                             category TEXT,
                             category_id INT,
                             language TEXT NOT NULL DEFAULT 'und',
@@ -321,8 +321,8 @@ def connect_db() -> Any:
                 raise
             dbname = parsed.path.lstrip("/")
             admin_url = urlunparse(parsed._replace(path="/postgres"))
-            engine = create_engine(admin_url, echo=False, future=True)
-            with engine.begin() as conn:  # type: ignore[call-arg]
+            engine = create_engine(admin_url, echo=False, future=True, isolation_level='AUTOCOMMIT')
+            with engine.connect() as conn:  # type: ignore[call-arg]
                 conn.execute(text(f'CREATE DATABASE "{dbname}"'))
             engine.dispose()
             return _connect(url)
@@ -341,7 +341,7 @@ def connect_db() -> Any:
         """
         CREATE TABLE IF NOT EXISTS release (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            norm_title TEXT UNIQUE,
+            norm_title TEXT,
             category TEXT,
             category_id INT,
             language TEXT NOT NULL DEFAULT 'und',

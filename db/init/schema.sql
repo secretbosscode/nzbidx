@@ -1,8 +1,8 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS release (
-    id BIGSERIAL PRIMARY KEY,
-    norm_title TEXT UNIQUE,
+    id BIGSERIAL,
+    norm_title TEXT,
     category TEXT,
     category_id INT,
     language TEXT NOT NULL DEFAULT 'und',
