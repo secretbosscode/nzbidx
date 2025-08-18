@@ -10,18 +10,17 @@ into the new table before dropping the old table.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# Ensure local packages are importable when running from repo root.
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT / "services" / "api" / "src"))
-
-from nzbidx_ingest.main import connect_db  # type: ignore  # noqa: E402
+from typing import Any
 
 
-def migrate() -> None:
-    conn = connect_db()
+def migrate(conn: Any) -> None:
+    """Partition the ``release`` table by ``category_id``.
+
+    ``conn`` must be an open database connection.  The function is idempotent
+    and returns immediately if the ``release`` table is already partitioned or
+    does not exist.
+    """
+
     cur = conn.cursor()
 
     # Does an unpartitioned ``release`` table exist?
@@ -35,11 +34,9 @@ def migrate() -> None:
     )
     row = cur.fetchone()
     if row is None:
-        conn.close()
         return
     _, partrelid = row
     if partrelid is not None:
-        conn.close()
         return
 
     # Prepare data for partitioning.
@@ -98,8 +95,23 @@ def migrate() -> None:
     cur.execute("DROP TABLE release_old")
 
     conn.commit()
-    conn.close()
+
+
+def main() -> None:  # pragma: no cover - script entry
+    import sys
+    from pathlib import Path
+
+    # Ensure local packages are importable when running from repo root.
+    root = Path(__file__).resolve().parents[1]
+    sys.path.append(str(root / "services" / "api" / "src"))
+    from nzbidx_ingest.main import connect_db  # type: ignore
+
+    conn = connect_db()
+    try:
+        migrate(conn)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":  # pragma: no cover - script entry
-    migrate()
+    main()
