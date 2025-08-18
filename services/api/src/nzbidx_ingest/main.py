@@ -163,8 +163,9 @@ def connect_db() -> Any:
             # Ensure the release table is partitioned before attempting any
             # migrations.  ``pg_partitioned_table`` will have a row when the
             # table exists **and** is partitioned.  If the table exists but
-            # lacks partitioning, raise an informative error so callers know
-            # that manual intervention is required.
+            # lacks partitioning, either raise an error or attempt an
+            # auto-migration when the ``NZBIDX_AUTO_MIGRATE`` flag is set.
+            raw = None
             try:
                 raw = engine.raw_connection()
                 cur = raw.cursor()
@@ -175,9 +176,7 @@ def connect_db() -> Any:
                 )
                 exists = bool(cur.fetchone()[0])
                 cur.execute(
-                    "SELECT EXISTS ("
-                    "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
-                    ")"
+                    "SELECT EXISTS (SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass)"
                 )
                 partitioned = bool(cur.fetchone()[0])
             except Exception:
@@ -188,8 +187,37 @@ def connect_db() -> Any:
                 pass
             else:
                 if exists and not partitioned:
-                    logger.error("release_table_not_partitioned")
-                    raise RuntimeError("release table must be partitioned")
+                    if os.getenv("NZBIDX_AUTO_MIGRATE"):
+                        try:  # pragma: no cover - import at runtime
+                            from scripts import migrate_release_partitions as mrp
+
+                            mrp.migrate(raw)
+                            # Re-check partition state after migration
+                            cur = raw.cursor()
+                            cur.execute(
+                                "SELECT EXISTS (SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass)"
+                            )
+                            partitioned = bool(cur.fetchone()[0])
+                            if partitioned:
+                                logger.info("release_table_auto_migrated")
+                            else:
+                                logger.error("release_table_auto_migrate_failed")
+                                raise RuntimeError("release table must be partitioned")
+                        except Exception as exc:
+                            logger.error(
+                                "release_table_auto_migrate_failed",
+                                extra={"error": str(exc)},
+                            )
+                            raise
+                    else:
+                        logger.error("release_table_not_partitioned")
+                        raise RuntimeError("release table must be partitioned")
+            finally:
+                try:
+                    if raw is not None:
+                        raw.close()
+                except Exception:
+                    pass
 
             with engine.connect() as conn:  # type: ignore[call-arg]
                 exists = (
