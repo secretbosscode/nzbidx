@@ -456,10 +456,9 @@ def insert_release(
     cleaned: list[
         tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[str]]
     ] = []
-    titles: list[str] = []
+    pairs: list[tuple[str, int]] = []
     for n, c, lang, t, g, s, p in items:
         cleaned_title = _clean(n) or ""
-        titles.append(cleaned_title)
         cleaned_category = _clean(c) or CATEGORY_MAP["other"]
         try:
             cleaned_category_id = int(cleaned_category)
@@ -482,22 +481,27 @@ def insert_release(
                 cleaned_posted,
             )
         )
+        pairs.append((cleaned_title, cleaned_category_id))
 
-    placeholders = ",".join(
-        [
+    existing: set[tuple[str, int]] = set()
+    if pairs:
+        placeholder = (
             "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            for _ in titles
-        ]
-    )
-    existing: set[str] = set()
-    if titles:
-        cur.execute(
-            f"SELECT norm_title FROM release WHERE norm_title IN ({placeholders})",
-            titles,
         )
-        existing = {row[0] for row in cur.fetchall()}
+        conditions = " OR ".join(
+            f"(norm_title = {placeholder} AND category_id = {placeholder})"
+            for _ in pairs
+        )
+        params: list[object] = []
+        for title, cat_id in pairs:
+            params.extend([title, cat_id])
+        cur.execute(
+            f"SELECT norm_title, category_id FROM release WHERE {conditions}",
+            params,
+        )
+        existing = {(row[0], row[1]) for row in cur.fetchall()}
 
-    to_insert = [row for row in cleaned if row[0] not in existing]
+    to_insert = [row for row in cleaned if (row[0], row[2]) not in existing]
     inserted = {row[0] for row in to_insert}
     if to_insert:
         if conn.__class__.__module__.startswith("sqlite3"):

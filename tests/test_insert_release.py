@@ -75,3 +75,23 @@ def test_insert_release_batch() -> None:
         ("bar", 456, "2024-02-01T00:00:00+00:00"),
         ("foo", None, None),
     ]
+
+
+def test_insert_release_multiple_titles_no_operational_error() -> None:
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE(norm_title, category_id))",
+    )
+    releases = [
+        ("foo", CATEGORY_MAP["movies"], None, None, None, None, None),
+        ("foo", CATEGORY_MAP["audio"], None, None, None, None, None),
+    ]
+    inserted = insert_release(conn, releases=releases)
+    assert inserted == {"foo"}
+    rows = conn.execute(
+        "SELECT norm_title, category FROM release ORDER BY category",
+    ).fetchall()
+    assert rows == [
+        ("foo", CATEGORY_MAP["movies"]),
+        ("foo", CATEGORY_MAP["audio"]),
+    ]
