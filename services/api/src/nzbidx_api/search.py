@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from typing import Any, Dict, List, Optional
@@ -65,12 +64,10 @@ async def search_releases_async(
     params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
     if q:
-        tokens = [t for t in re.split(r"\s+", q) if t]
-        tsquery = " & ".join(tokens)
         conditions.append(
-            "to_tsvector('simple', coalesce(norm_title, '') || ' ' || coalesce(tags, '')) @@ to_tsquery('simple', :tsquery)"
+            "to_tsvector('simple', coalesce(norm_title, '') || ' ' || coalesce(tags, '')) @@ plainto_tsquery('simple', :tsquery)"
         )
-        params["tsquery"] = tsquery
+        params["tsquery"] = q
 
     if category:
         cats = [c.strip() for c in category.split(",") if c.strip()]
