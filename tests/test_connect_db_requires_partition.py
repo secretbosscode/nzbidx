@@ -18,16 +18,17 @@ def test_connect_db_requires_partition(monkeypatch, caplog):
     """connect_db should fail if release table is not partitioned."""
 
     class DummyCursor:
-        rowcount = 0
-
         def execute(self, stmt):  # pragma: no cover - trivial
             # Simulate existing table but missing partition metadata
             if "pg_class" in stmt:
-                self.rowcount = 1
+                self._result = (True,)
             elif "pg_partitioned_table" in stmt:
-                self.rowcount = 0
+                self._result = (False,)
             else:
-                self.rowcount = 0
+                self._result = (False,)
+
+        def fetchone(self):  # pragma: no cover - trivial
+            return self._result
 
     class DummyRaw:
         def __init__(self) -> None:

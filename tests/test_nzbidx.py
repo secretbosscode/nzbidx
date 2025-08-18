@@ -34,8 +34,14 @@ from nzbidx_ingest.main import (
 
 
 class DummyResult:
+    def __init__(self, value: bool | None = None) -> None:
+        self.value = value
+
     def first(self):  # pragma: no cover - trivial
         return None
+
+    def fetchone(self):  # pragma: no cover - trivial
+        return (self.value,)
 
 
 class DummyCache:
@@ -678,6 +684,8 @@ def test_connect_db_postgres(monkeypatch) -> None:
     class DummyConn:
         def execute(self, stmt: str) -> DummyResult:  # pragma: no cover - trivial
             calls["stmt"] = stmt
+            if "pg_class" in stmt or "pg_partitioned_table" in stmt:
+                return DummyResult(False)
             return DummyResult()
 
         def commit(self) -> None:  # pragma: no cover - trivial
@@ -735,6 +743,8 @@ def test_connect_db_postgres_single_slash(monkeypatch) -> None:
     class DummyConn:
         def execute(self, stmt: str) -> DummyResult:  # pragma: no cover - trivial
             calls["stmt"] = stmt
+            if "pg_class" in stmt or "pg_partitioned_table" in stmt:
+                return DummyResult(False)
             return DummyResult()
 
         def commit(self) -> None:  # pragma: no cover - trivial
@@ -793,6 +803,8 @@ def test_connect_db_creates_database(monkeypatch) -> None:
     class DummyConn:
         def execute(self, stmt: str) -> DummyResult:  # pragma: no cover - trivial
             executed.append(stmt)
+            if "pg_class" in stmt or "pg_partitioned_table" in stmt:
+                return DummyResult(False)
             return DummyResult()
 
         def commit(self) -> None:  # pragma: no cover - trivial

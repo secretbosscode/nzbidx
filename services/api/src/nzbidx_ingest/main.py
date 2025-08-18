@@ -168,21 +168,18 @@ def connect_db() -> Any:
             try:
                 raw = engine.raw_connection()
                 cur = raw.cursor()
+                # Determine whether the "release" table exists and whether it is
+                # already partitioned using explicit ``SELECT EXISTS`` queries.
                 cur.execute(
-                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')"
+                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release')"
                 )
-                if hasattr(cur, "fetchone"):
-                    exists = bool(cur.fetchone()[0])
-                else:  # pragma: no cover - compatibility fallback
-                    exists = bool(getattr(cur, "rowcount", 0))
+                exists = bool(cur.fetchone()[0])
                 cur.execute(
-                    "SELECT EXISTS (SELECT FROM pg_partitioned_table "
-                    "WHERE partrelid='release'::regclass)"
+                    "SELECT EXISTS ("
+                    "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
+                    ")"
                 )
-                if hasattr(cur, "fetchone"):
-                    partitioned = bool(cur.fetchone()[0])
-                else:  # pragma: no cover - compatibility fallback
-                    partitioned = bool(getattr(cur, "rowcount", 0))
+                partitioned = bool(cur.fetchone()[0])
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
@@ -191,41 +188,38 @@ def connect_db() -> Any:
                 pass
             else:
                 if exists and not partitioned:
-                    logger.error(
-                        "release_table_not_partitioned",
-                        extra={
-                            "next_step": "run_db_init",
-                            "resolution": "run db/init/schema.sql or recreate the database",
-                        },
-                    )
-                    raise RuntimeError(
-                        "release table must be partitioned; run db/init/schema.sql or recreate the database"
-                    )
+                    logger.error("release_table_not_partitioned")
+                    raise RuntimeError("release table must be partitioned")
 
             with engine.connect() as conn:  # type: ignore[call-arg]
-                res = conn.execute(
-                    text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')")
+                exists = (
+                    conn.execute(
+                        text(
+                            "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')"
+                        )
+                    ).fetchone()[0]
                 )
-                row = res.fetchone() if hasattr(res, "fetchone") else res.first()
-                exists = bool(row[0]) if row else False
-                res = conn.execute(
-                    text(
-                        "SELECT EXISTS (SELECT FROM pg_partitioned_table "
-                        "WHERE partrelid='release'::regclass)"
-                    )
+                partitioned = (
+                    conn.execute(
+                        text(
+                            """
+                            SELECT EXISTS(
+                                SELECT 1
+                                FROM pg_partitioned_table p
+                                JOIN pg_class c ON p.partrelid = c.oid
+                                WHERE c.relname = 'release'
+                            )
+                            """
+                        )
+                    ).fetchone()[0]
                 )
-                row = res.fetchone() if hasattr(res, "fetchone") else res.first()
-                partitioned = bool(row[0]) if row else False
                 if exists and not partitioned:
                     logger.error(
                         "release_table_not_partitioned",
-                        extra={
-                            "next_step": "drop_or_migrate",
-                            "resolution": "run db/init/schema.sql or recreate the database",
-                        },
+                        extra={"next_step": "drop_or_migrate"},
                     )
                     raise RuntimeError(
-                        "'release' table exists but is not partitioned; run db/init/schema.sql or recreate the database before starting the worker"
+                        "'release' table exists but is not partitioned; drop or migrate the table before starting the worker"
                     )
                 if not exists:
                     logger.info(
