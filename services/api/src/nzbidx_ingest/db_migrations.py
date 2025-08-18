@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Database migration helpers."""
+
+from __future__ import annotations
 
 from typing import Any
 
@@ -79,6 +79,9 @@ def migrate_release_table(conn: Any) -> None:
     )
     cur.execute(
         "CREATE INDEX release_posted_at_idx ON release (posted_at)",
+    )
+    cur.execute(
+        "CREATE UNIQUE INDEX release_norm_title_category_id_key ON release (norm_title, category_id)",
     )
 
     # Copy rows and drop the old table.

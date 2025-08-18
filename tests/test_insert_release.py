@@ -8,7 +8,7 @@ from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
 def test_insert_release_filters_surrogates() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE (norm_title, category_id))"
     )
     inserted = insert_release(
         conn,
@@ -38,7 +38,7 @@ def test_insert_release_filters_surrogates() -> None:
 def test_insert_release_defaults() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE (norm_title, category_id))"
     )
     inserted = insert_release(conn, "foo", None, None, None, None, None, None)
     assert inserted == {"foo"}
@@ -51,7 +51,7 @@ def test_insert_release_defaults() -> None:
 def test_insert_release_batch() -> None:
     conn = sqlite3.connect(":memory:")
     conn.execute(
-        "CREATE TABLE release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ)"
+        "CREATE TABLE release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, UNIQUE (norm_title, category_id))"
     )
     releases = [
         ("foo", None, None, None, None, None, None),
@@ -75,3 +75,50 @@ def test_insert_release_batch() -> None:
         ("bar", 456, "2024-02-01T00:00:00+00:00"),
         ("foo", None, None),
     ]
+
+
+def test_insert_release_postgres_sql() -> None:
+    class DummyCursor:
+        def __init__(self) -> None:
+            self.executed: list[tuple[str, object]] = []
+
+        def execute(self, sql: str, params: object = ()) -> None:
+            self.executed.append((sql, params))
+
+        def fetchall(self) -> list[tuple[str, int]]:
+            return []
+
+        def executemany(self, sql: str, seq: list[tuple[object, ...]]) -> None:
+            self.executed.append((sql, seq))
+
+    class DummyConn:
+        __module__ = "psycopg"
+
+        def __init__(self) -> None:
+            self.cur = DummyCursor()
+
+        def cursor(self) -> DummyCursor:
+            return self.cur
+
+        def commit(self) -> None:  # pragma: no cover - no-op
+            pass
+
+    conn = DummyConn()
+    inserted = insert_release(
+        conn,
+        "foo",
+        "2000",
+        "en",
+        ["tag"],
+        "alt.binaries.example",
+        123,
+        "2024-02-01T00:00:00+00:00",
+    )
+    assert inserted == {"foo"}
+    insert_stmt = next(
+        sql for sql, _ in conn.cur.executed if sql.startswith("INSERT INTO release")
+    )
+    assert (
+        "ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at"
+        in insert_stmt
+    )

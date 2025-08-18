@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS release (
     tags TEXT NOT NULL DEFAULT '',
     source_group TEXT,
     size_bytes BIGINT,
+    posted_at TIMESTAMPTZ,
     segments JSONB,
     has_parts BOOLEAN NOT NULL DEFAULT FALSE,
     part_count INT NOT NULL DEFAULT 0
@@ -36,6 +37,7 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DE
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '';
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT;
+ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0;
@@ -55,3 +57,4 @@ CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_
 CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
+CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_key ON release (norm_title, category_id);

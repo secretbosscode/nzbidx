@@ -33,7 +33,7 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
     def _connect() -> sqlite3.Connection:
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT UNIQUE, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, segments TEXT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0)"
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, segments TEXT, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, UNIQUE (norm_title, category_id))"
         )
         return conn
 
