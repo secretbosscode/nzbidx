@@ -452,6 +452,7 @@ async def api(request: Request) -> Response:
     if offset > MAX_OFFSET:
         offset = MAX_OFFSET
     sort = params.get("sort")
+    extended = params.get("extended") == "1"
 
     # Adult category gating
     if cat:
@@ -485,7 +486,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -513,7 +514,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -540,7 +541,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -571,7 +572,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -602,7 +603,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
