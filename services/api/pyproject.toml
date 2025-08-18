@@ -1,5 +1,8 @@
 [build-system]
-requires = ["setuptools>=78.1.1"]
+# Ensure a recent packaging library is available so the build
+# dependencies resolve correctly. Older versions of packaging can raise
+# `TypeError: 'NoneType' object is not iterable` during `pip install`.
+requires = ["setuptools>=78.1.1", "packaging>=24"]
 build-backend = "setuptools.build_meta"
 
 [project]
