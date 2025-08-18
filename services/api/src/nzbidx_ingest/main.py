@@ -117,6 +117,8 @@ GROUP_CATEGORY_HINTS: list[tuple[str, str]] = [
     ("xxx", "xxx"),
     ("sex", "xxx"),
     ("adult", "xxx"),
+    ("hentai", "xxx"),
+    ("animation", "xxx"),
     ("comics", "comics"),
     ("comic", "comics"),
     ("misc", "misc"),
@@ -537,6 +539,16 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         g = group.lower()
         for key, cat in GROUP_CATEGORY_HINTS:
             if key in g:
+                if cat == "xxx":
+                    if "dvd" in s:
+                        return CATEGORY_MAP["xxx_dvd"]
+                    if "wmv" in s:
+                        return CATEGORY_MAP["xxx_wmv"]
+                    if "xvid" in s:
+                        return CATEGORY_MAP["xxx_xvid"]
+                    if "x264" in s or "h264" in s:
+                        return CATEGORY_MAP["xxx_x264"]
+                    return CATEGORY_MAP["xxx"]
                 return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
