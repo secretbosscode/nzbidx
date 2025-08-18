@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: nzbidx-api
+Version: 0.0.0
+Author: NZBidx Contributors
+Requires-Dist: fastapi
+Requires-Dist: uvicorn[standard]
+Requires-Dist: httpx
+Requires-Dist: sqlalchemy>=2
+Requires-Dist: asyncpg
+Requires-Dist: psycopg[binary]>=3.1
+Requires-Dist: python-dotenv
+Requires-Dist: setuptools>=78.1.1
+Requires-Dist: apscheduler
+Requires-Dist: langdetect
+Provides-Extra: orjson
+Requires-Dist: orjson; extra == "orjson"
