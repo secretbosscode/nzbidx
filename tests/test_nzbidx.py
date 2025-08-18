@@ -715,7 +715,7 @@ def test_connect_db_postgres(monkeypatch) -> None:
             return Raw()
 
     def fake_create_engine(
-        url: str, echo: bool = False, future: bool = True
+        url: str, echo: bool = False, future: bool = True, **kwargs
     ) -> DummyEngine:
         calls["url"] = url
         return DummyEngine()
@@ -774,7 +774,7 @@ def test_connect_db_postgres_single_slash(monkeypatch) -> None:
             return Raw()
 
     def fake_create_engine(
-        url: str, echo: bool = False, future: bool = True
+        url: str, echo: bool = False, future: bool = True, **kwargs
     ) -> DummyEngine:
         calls["url"] = url
         return DummyEngine()
@@ -838,7 +838,7 @@ def test_connect_db_creates_database(monkeypatch) -> None:
 
     state = {"fail": True}
 
-    def fake_create_engine(url: str, echo: bool = False, future: bool = True):
+    def fake_create_engine(url: str, echo: bool = False, future: bool = True, **kwargs):
         calls.append(url)
         if state["fail"]:
             state["fail"] = False
@@ -863,7 +863,7 @@ def test_connect_db_creates_database(monkeypatch) -> None:
 def test_connect_db_missing_driver_raises(monkeypatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgres://user@host/db")
 
-    def fake_create_engine(url: str, echo: bool = False, future: bool = True):
+    def fake_create_engine(url: str, echo: bool = False, future: bool = True, **kwargs):
         raise ModuleNotFoundError("No module named 'psycopg'")
 
     monkeypatch.setattr(main, "create_engine", fake_create_engine)
