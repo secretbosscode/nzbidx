@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - optional dependency
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
+from .db_migrations import migrate_release_table
 
 logger = logging.getLogger(__name__)
 
@@ -160,64 +161,48 @@ def connect_db() -> Any:
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
 
-            # Ensure the release table is partitioned before attempting any
-            # migrations.  ``pg_partitioned_table`` will have a row when the
-            # table exists **and** is partitioned.  If the table exists but
-            # lacks partitioning, either raise an error or attempt an
-            # auto-migration when the ``NZBIDX_AUTO_MIGRATE`` flag is set.
+            # Ensure the ``release`` table is partitioned before attempting any
+            # migrations.  If the table exists but is not partitioned, attempt to
+            # migrate it automatically and verify the result.
             raw = None
             try:
                 raw = engine.raw_connection()
                 cur = raw.cursor()
-                # Determine whether the "release" table exists and whether it is
-                # already partitioned using explicit ``SELECT EXISTS`` queries.
                 cur.execute(
                     "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release')"
                 )
                 exists = bool(cur.fetchone()[0])
                 cur.execute(
-                    "SELECT EXISTS (SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass)"
+                    "SELECT EXISTS ("
+                    "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
+                    ")"
                 )
                 partitioned = bool(cur.fetchone()[0])
+                if exists and not partitioned:
+                    logger.info("release_table_migrating")
+                    migrate_release_table(raw)
+                    cur = raw.cursor()
+                    cur.execute(
+                        "SELECT EXISTS ("
+                        "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
+                        ")"
+                    )
+                    partitioned = bool(cur.fetchone()[0])
+                    if not partitioned:
+                        logger.error("release_table_not_partitioned")
+                        raise RuntimeError("release table must be partitioned")
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
                 # required structures.  Any failures there will surface as
                 # RuntimeError from the caller's perspective.
                 pass
-            else:
-                if exists and not partitioned:
-                    if os.getenv("NZBIDX_AUTO_MIGRATE"):
-                        try:  # pragma: no cover - import at runtime
-                            from scripts import migrate_release_partitions as mrp
-
-                            mrp.migrate(raw)
-                            # Re-check partition state after migration
-                            cur = raw.cursor()
-                            cur.execute(
-                                "SELECT EXISTS (SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass)"
-                            )
-                            partitioned = bool(cur.fetchone()[0])
-                            if partitioned:
-                                logger.info("release_table_auto_migrated")
-                            else:
-                                logger.error("release_table_auto_migrate_failed")
-                                raise RuntimeError("release table must be partitioned")
-                        except Exception as exc:
-                            logger.error(
-                                "release_table_auto_migrate_failed",
-                                extra={"error": str(exc)},
-                            )
-                            raise
-                    else:
-                        logger.error("release_table_not_partitioned")
-                        raise RuntimeError("release table must be partitioned")
             finally:
-                try:
-                    if raw is not None:
+                if raw is not None:
+                    try:
                         raw.close()
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
 
             with engine.connect() as conn:  # type: ignore[call-arg]
                 exists = (
