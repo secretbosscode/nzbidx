@@ -6,8 +6,6 @@ import logging
 import os
 import time
 import asyncio
-from datetime import datetime, timezone
-from email.utils import format_datetime
 from types import SimpleNamespace
 from pathlib import Path
 from typing import Optional, Callable
@@ -110,7 +108,6 @@ from .newznab import (
     is_adult_category,
     rss_xml,
     MOVIE_CATEGORY_IDS,
-    MOVIES_CATEGORY_ID,
     TV_CATEGORY_IDS,
     AUDIO_CATEGORY_IDS,
     BOOKS_CATEGORY_IDS,
@@ -455,6 +452,7 @@ async def api(request: Request) -> Response:
     if offset > MAX_OFFSET:
         offset = MAX_OFFSET
     sort = params.get("sort")
+    extended = params.get("extended") == "1"
 
     # Adult category gating
     if cat:
@@ -488,7 +486,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -516,7 +514,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -543,17 +541,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        if not items and not (q and q.strip()):
-            items = [
-                {
-                    "title": "Indexer Test Item",
-                    "guid": "nzbidx-test-item",
-                    "pubDate": format_datetime(datetime.now(timezone.utc)),
-                    "category": MOVIES_CATEGORY_ID,
-                    "link": "",
-                }
-            ]
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -584,7 +572,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)
@@ -615,7 +603,7 @@ async def api(request: Request) -> Response:
             sort=sort,
             api_key=api_key,
         )
-        xml = rss_xml(items)
+        xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
         return _cached_xml_response(request, xml, allow_304=not no_cache)

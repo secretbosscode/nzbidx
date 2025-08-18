@@ -198,7 +198,7 @@ def caps_xml() -> str:
     )
 
 
-def rss_xml(items: list[dict[str, str]]) -> str:
+def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
     """Return a simple RSS feed with the provided items.
 
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
@@ -220,6 +220,16 @@ def rss_xml(items: list[dict[str, str]]) -> str:
             if size.isdigit() and int(size) > 0
             else ""
         )
+        attrs = ""
+        if extended:
+            attr_parts: list[str] = []
+            for key in ("imdbid", "size", "category"):
+                val = str(i.get(key, ""))
+                if val:
+                    attr_parts.append(
+                        f'<attr name="{html.escape(key)}" value="{html.escape(val)}"/>'
+                    )
+            attrs = "".join(attr_parts)
         item_parts.append(
             "<item>"
             f"<title>{html.escape(i['title'])}</title>"
@@ -228,6 +238,7 @@ def rss_xml(items: list[dict[str, str]]) -> str:
             f"<category>{html.escape(i['category'])}</category>"
             f"<link>{html.escape(i['link'])}</link>"
             f"{enclosure}"
+            f"{attrs}"
             "</item>"
         )
     items_xml = "".join(item_parts)
