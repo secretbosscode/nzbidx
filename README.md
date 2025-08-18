@@ -38,11 +38,9 @@ psql "$DATABASE_URL" -f db/init/schema.sql
 
 Run the command once with a superuser account or via your migration tool. This
 ensures the partitions exist and prevents costly migrations after data is
-ingested. Existing deployments can retrofit partitions with:
-
-```bash
-python scripts/migrate_release_partitions.py
-```
+ingested. The application migrates the `release` table automatically on startup
+when provided a `DATABASE_URL` with superuser privileges, so no separate
+migration script is required.
 
 ## Performance Tuning
 
