@@ -2,13 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
-
-from nzbidx_api import backfill_release_parts as backfill_mod  # noqa: E402
+from nzbidx_api import backfill_release_parts as backfill_mod
 
 
 def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
@@ -57,4 +51,3 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
     seg2 = json.loads(cur2.fetchone()[0])
     assert seg2[0]["message_id"] == "m2"
     conn2.close()
-

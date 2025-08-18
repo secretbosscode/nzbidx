@@ -16,7 +16,7 @@ script at `db/init/schema.sql` handles this during database provisioning.
 
 ## Release table partitioning
 The `release` table must be partitioned by `category_id` so partitions can be
-maintained independently. Create the table and partitions:
+maintained independently. The application migrates and creates this table automatically on startup when provided a `DATABASE_URL` with superuser privileges. For reference, create the table and partitions:
 
 ```sql
 CREATE TABLE IF NOT EXISTS release (
@@ -44,13 +44,6 @@ CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
     FOR VALUES FROM (7000) TO (8000);
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
-```
-
-To convert existing deployments with an unpartitioned table, run the migration
-script:
-
-```bash
-python scripts/migrate_release_partitions.py
 ```
 
 ## Breaker stuck open

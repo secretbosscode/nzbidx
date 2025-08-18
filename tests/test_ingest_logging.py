@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-# ruff: noqa: E402 - path manipulation before imports
 import json
 import logging
 import sqlite3
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 import nzbidx_ingest.ingest_loop as loop  # type: ignore
 from nzbidx_ingest import config, cursors  # type: ignore
@@ -51,8 +45,6 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
     assert not hasattr(record, "deduped")
 
 
-
-
 def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
@@ -91,7 +83,18 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
     with _connect() as conn:
         conn.execute(
             "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, has_parts, part_count, segments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("example", "other", 7000, "und", "", "alt.test", 100, 1, 1, json.dumps([(1, "m1", "alt.test", 100)])),
+            (
+                "example",
+                "other",
+                7000,
+                "und",
+                "",
+                "alt.test",
+                100,
+                1,
+                1,
+                json.dumps([(1, "m1", "alt.test", 100)]),
+            ),
         )
         conn.commit()
 
@@ -112,7 +115,6 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
 
 
 def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
-
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
