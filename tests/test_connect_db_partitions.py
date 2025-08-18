@@ -19,10 +19,14 @@ def test_connect_db_creates_partitions(monkeypatch):
     monkeypatch.setenv("PGHOST", "/var/run/postgresql")
     monkeypatch.setenv("DATABASE_URL", f"postgresql+psycopg://root@/{dbname}")
 
-    admin = psycopg.connect(dbname="postgres", user="root")
-    admin.autocommit = True
-    admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
-    admin.close()
+    try:
+        admin = psycopg.connect(dbname="postgres", user="root")
+    except Exception as exc:  # pragma: no cover - environment specific
+        pytest.skip(f"PostgreSQL unavailable: {exc}")
+    else:
+        admin.autocommit = True
+        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+        admin.close()
 
     try:
         conn = connect_db()
@@ -30,7 +34,9 @@ def test_connect_db_creates_partitions(monkeypatch):
         pytest.skip(f"PostgreSQL unavailable: {exc}")
 
     cur = conn.cursor()
-    cur.execute("SELECT 1 FROM pg_partitioned_table WHERE partrelid='release'::regclass")
+    cur.execute(
+        "SELECT 1 FROM pg_partitioned_table WHERE partrelid='release'::regclass"
+    )
     assert cur.fetchone() is not None
     cur.execute("SELECT 1 FROM pg_class WHERE relname='release_movies'")
     assert cur.fetchone() is not None
