@@ -1,13 +1,3 @@
-import sys
-from pathlib import Path
-
-# ruff: noqa: E402 - path manipulation before imports
-import pytest
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT))
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
-
 from nzbidx_ingest import main
 from nzbidx_ingest.main import connect_db
 
