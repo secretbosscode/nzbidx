@@ -1,14 +1,7 @@
-import sys
-from pathlib import Path
 import uuid
 
 import psycopg
 import pytest
-
-# ruff: noqa: E402 - path manip before imports
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT))
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import connect_db
 
@@ -23,10 +16,9 @@ def test_connect_db_creates_partitions(monkeypatch):
         admin = psycopg.connect(dbname="postgres", user="root")
     except Exception as exc:  # pragma: no cover - environment specific
         pytest.skip(f"PostgreSQL unavailable: {exc}")
-    else:
-        admin.autocommit = True
-        admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
-        admin.close()
+    admin.autocommit = True
+    admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+    admin.close()
 
     try:
         conn = connect_db()

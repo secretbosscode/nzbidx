@@ -1,10 +1,4 @@
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(REPO_ROOT / "services" / "api" / "src"))
-
-from nzbidx_ingest.parsers import detect_language  # noqa: E402
+from nzbidx_ingest.parsers import detect_language
 
 
 def test_detect_language_token():
