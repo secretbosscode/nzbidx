@@ -1,8 +1,8 @@
 # Logging
 
-The API emits plain text logs by default. Set `LOG_FORMAT=json` to switch to
-structured JSON logs that aid diagnostics. Timeout errors during NZB retrieval
-log a message similar to:
+The API emits plain text logs to stdout by default, matching the ingest worker.
+Set `LOG_FORMAT=json` to switch to structured JSON logs that aid diagnostics.
+Timeout errors during NZB retrieval log a message similar to:
 
 ```
 "nzb fetch timed out after 30s"

@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import time
 import asyncio
 from types import SimpleNamespace
@@ -206,7 +207,7 @@ def setup_logging() -> None:
         if getattr(root, "_nzbidx_logging_configured", False):
             return
 
-        handler = logging.StreamHandler()
+        handler = logging.StreamHandler(sys.stdout)
         log_format = os.getenv("LOG_FORMAT", "plain")
         if log_format.lower() == "json":
             handler.setFormatter(JsonFormatter())
