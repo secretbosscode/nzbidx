@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from typing import Set
+from hmac import compare_digest
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -43,11 +44,17 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                     decoded = base64.b64decode(auth.split(" ", 1)[1]).decode()
                     username, _, password = decoded.partition(":")
                     for cred in (username, password):
-                        if cred in self.valid_keys:
-                            provided = cred
+                        for valid in self.valid_keys:
+                            if compare_digest(cred, valid):
+                                provided = cred
+                                break
+                        if provided:
                             break
                 except Exception:
                     pass
-        if provided not in self.valid_keys:
+        for valid in self.valid_keys:
+            if compare_digest(provided or "", valid):
+                break
+        else:
             return unauthorized()
         return await call_next(request)
