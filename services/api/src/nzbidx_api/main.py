@@ -238,9 +238,7 @@ def _thread_excepthook(args: threading.ExceptHookArgs) -> None:
     """Log uncaught thread exceptions consistently."""
     exc = getattr(args, "exc", args.exc_value)
     name = args.thread.name if args.thread else ""
-    logger.exception(
-        "thread_uncaught_exception", exc_info=exc, extra={"thread": name}
-    )
+    logger.exception("thread_uncaught_exception", exc_info=exc, extra={"thread": name})
 
 
 setup_logging()
