@@ -34,7 +34,13 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
 if create_async_engine:
-    engine: Optional[AsyncEngine] = create_async_engine(DATABASE_URL, echo=False)
+    POOL_RECYCLE_SECONDS = int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800"))
+    engine: Optional[AsyncEngine] = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+        pool_recycle=POOL_RECYCLE_SECONDS,
+    )
 else:  # pragma: no cover - no sqlalchemy available
     engine = None
 

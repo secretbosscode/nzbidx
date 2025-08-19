@@ -110,9 +110,31 @@ async def search_releases_async(
     if not engine or text is None:
         return items
 
-    async with engine.connect() as conn:
-        result = await conn.execute(sql, params)
-        rows = result.fetchall()
+    rows = []
+    max_attempts = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.connect() as conn:
+                result = await conn.execute(sql, params)
+                rows = result.fetchall()
+            break
+        except Exception as exc:
+            if isinstance(exc, OSError) or getattr(
+                exc, "connection_invalidated", False
+            ):
+                logger.warning(
+                    "search_retry",
+                    extra={
+                        "error": str(exc),
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                    },
+                )
+                if attempt == max_attempts:
+                    return items
+                await asyncio.sleep(0.1 * attempt)
+                continue
+            raise
 
     for row in rows:
         size = row.size_bytes
