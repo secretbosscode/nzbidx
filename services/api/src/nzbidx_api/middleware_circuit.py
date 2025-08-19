@@ -78,6 +78,14 @@ class CircuitBreaker(Generic[T]):
         with self._lock:
             self._record_success_unlocked()
 
+    def record_success(self) -> None:
+        """Public helper to record a successful call."""
+        self._record_success()
+
+    def record_failure(self) -> None:
+        """Public helper to record a failed call."""
+        self._record_failure()
+
     def call(self, func: Callable[..., T], *args, **kwargs) -> T:
         with self._lock:
             if self._state_unlocked() == "open":
@@ -163,7 +171,7 @@ async def call_with_retry_async(
                 result = func(*args, **kwargs)
                 if inspect.isawaitable(result):
                     result = await result
-                breaker._record_success()
+                breaker.record_success()
                 state = "open" if breaker.is_open() else "closed"
                 set_span_attr("breaker_state", state)
             logger.info(
@@ -184,7 +192,7 @@ async def call_with_retry_async(
             inc_breaker_open(dep)
             raise
         except Exception:
-            breaker._record_failure()
+            breaker.record_failure()
             state = "half-open" if breaker.is_open() else "closed"
             set_span_attr("breaker_state", state)
             if breaker.is_open() or attempt >= retries:
