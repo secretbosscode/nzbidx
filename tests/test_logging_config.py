@@ -56,3 +56,44 @@ def test_setup_logging_single_execution() -> None:
         for mod in ["nzbidx_api.main", "nzbidx_ingest.logging"]:
             if mod in sys.modules:
                 del sys.modules[mod]
+
+
+def test_api_logger_uses_stdout() -> None:
+    """API logger should emit to stdout like the ingest logger."""
+    root = logging.getLogger()
+    root_handlers, root_level, root_filters = (
+        list(root.handlers),
+        root.level,
+        list(root.filters),
+    )
+
+    try:
+        for mod in ["nzbidx_api.main", "nzbidx_ingest.logging"]:
+            if mod in sys.modules:
+                del sys.modules[mod]
+
+        import nzbidx_ingest.logging as ingest_logging  # type: ignore
+
+        ingest_logging.setup_logging()
+        ingest_stream = logging.getLogger().handlers[0].stream
+        assert ingest_stream is sys.stdout
+
+        root.handlers.clear()
+        if hasattr(root, "_nzbidx_logging_configured"):
+            delattr(root, "_nzbidx_logging_configured")
+
+        import nzbidx_api.main as api_main  # type: ignore
+
+        api_main.setup_logging()
+        api_stream = logging.getLogger().handlers[0].stream
+        assert api_stream is sys.stdout
+        assert api_stream is ingest_stream
+    finally:
+        root.handlers = root_handlers
+        root.setLevel(root_level)
+        root.filters = root_filters
+        if hasattr(root, "_nzbidx_logging_configured"):
+            delattr(root, "_nzbidx_logging_configured")
+        for mod in ["nzbidx_api.main", "nzbidx_ingest.logging"]:
+            if mod in sys.modules:
+                del sys.modules[mod]
