@@ -111,9 +111,7 @@ def _build_xml_from_segments(
             segs_el, "segment", {"bytes": str(size), "number": str(number)}
         )
         seg_el.text = msgid.strip("<>")
-    return '<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
-        root, encoding="unicode"
-    )
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
