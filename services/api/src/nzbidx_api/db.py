@@ -297,9 +297,36 @@ def get_connection() -> Any:
     """Return a persistent database connection for synchronous callers."""
 
     global _conn
-    if _conn is None:
-        from nzbidx_ingest.main import connect_db  # type: ignore
+    from nzbidx_ingest.main import connect_db  # type: ignore
 
+    reconnect: Optional[str] = None
+    if _conn is None:
+        reconnect = "init"
+    else:
+        if getattr(_conn, "closed", False):
+            reconnect = "closed"
+        else:
+            cur = None
+            try:
+                cur = _conn.cursor()
+                cur.execute("SELECT 1")
+                cur.fetchone()
+            except Exception:
+                reconnect = "error"
+            finally:
+                if cur is not None:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
+
+    if reconnect:
+        if reconnect != "init":
+            logger.info("database_reconnecting", extra={"reason": reconnect})
+            try:
+                _conn.close()
+            except Exception:
+                pass
         _conn = connect_db()
     return _conn
 
