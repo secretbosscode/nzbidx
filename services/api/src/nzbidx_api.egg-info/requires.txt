@@ -8,6 +8,7 @@ python-dotenv
 setuptools>=78.1.1
 apscheduler
 langdetect
+standard-nntplib
 
 [orjson]
 orjson
