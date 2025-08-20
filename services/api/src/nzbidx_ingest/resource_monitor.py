@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -40,8 +39,8 @@ def get_memory_stats(root: Path = _CGROUP_ROOT) -> Tuple[Optional[int], Optional
     return used, limit
 
 
-def _monitor(interval: int, root: Path) -> None:
-    while True:
+def _monitor(interval: int, root: Path, stop: threading.Event) -> None:
+    while not stop.is_set():
         used, limit = get_memory_stats(root)
         if used is not None:
             extra = {"used": used}
@@ -70,13 +69,21 @@ def _monitor(interval: int, root: Path) -> None:
                     used,
                     extra={"event": "memory_usage", **extra},
                 )
-        time.sleep(interval)
+        if stop.wait(interval):
+            break
 
 
-def start_memory_logger(interval: int = 60, root: Path = _CGROUP_ROOT) -> None:
-    """Start a background thread that logs memory usage periodically."""
-    thread = threading.Thread(target=_monitor, args=(interval, root), daemon=True)
+def start_memory_logger(
+    interval: int = 60, root: Path = _CGROUP_ROOT
+) -> threading.Event:
+    """Start a background thread that logs memory usage periodically.
+
+    Returns the :class:`threading.Event` used to signal the thread to exit."""
+
+    stop = threading.Event()
+    thread = threading.Thread(target=_monitor, args=(interval, root, stop), daemon=True)
     thread.start()
+    return stop
 
 
 def install_signal_handlers() -> None:

@@ -40,3 +40,26 @@ def test_get_cached_rss_purges_expired_entries(monkeypatch):
     # Lookup a different key to trigger purge_expired
     assert asyncio.run(search_cache.get_cached_rss("new")) is None
     assert "old" not in search_cache._CACHE
+
+
+def test_concurrent_cache_access(monkeypatch):
+    """Concurrent readers and writers should not raise runtime errors."""
+    monkeypatch.setattr(config, "search_ttl_seconds", lambda: 60)
+    search_cache._CACHE.clear()
+
+    async def writer(i: int) -> None:
+        await search_cache.cache_rss(f"k{i % 5}", f"<rss>{i}</rss>")
+
+    async def reader(i: int) -> None:
+        await search_cache.get_cached_rss(f"k{i % 5}")
+
+    async def runner() -> None:
+        tasks = []
+        for i in range(50):
+            tasks.append(asyncio.create_task(writer(i)))
+            tasks.append(asyncio.create_task(reader(i)))
+        await asyncio.gather(*tasks)
+
+    asyncio.run(runner())
+    # No matter the interleaving there should be at most 5 keys stored
+    assert len(search_cache._CACHE) <= 5
