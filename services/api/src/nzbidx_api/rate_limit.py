@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from typing import Dict
+import threading
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -20,18 +21,20 @@ class RateLimiter:
         self.limit = limit
         self.window = window
         self.counts: Dict[int, Dict[str, int]] = {}
+        self._lock = threading.Lock()
 
     async def increment(self, key: str) -> int:
         """Increment and return current count for ``key``."""
         now = int(time.time())
         bucket = now // self.window
-        bucket_counts = self.counts.setdefault(bucket, {})
-        bucket_counts[key] = bucket_counts.get(key, 0) + 1
-        # Drop old buckets
-        for old in list(self.counts.keys()):
-            if old != bucket:
-                del self.counts[old]
-        return bucket_counts[key]
+        with self._lock:
+            bucket_counts = self.counts.setdefault(bucket, {})
+            bucket_counts[key] = bucket_counts.get(key, 0) + 1
+            # Drop old buckets
+            for old in list(self.counts.keys()):
+                if old != bucket:
+                    del self.counts[old]
+            return bucket_counts[key]
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
