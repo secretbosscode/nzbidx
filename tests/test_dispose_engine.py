@@ -13,11 +13,8 @@ def test_dispose_engine_handles_closed_loop(monkeypatch):
             nonlocal disposed
             disposed = True
 
-    async def get_loop() -> asyncio.AbstractEventLoop:
-        return asyncio.get_running_loop()
-
-    loop = asyncio.run(get_loop())
-    assert loop.is_closed()
+    loop = asyncio.new_event_loop()
+    loop.close()
 
     monkeypatch.setattr(db, "_engine", DummyEngine())
     monkeypatch.setattr(db, "_engine_loop", loop)

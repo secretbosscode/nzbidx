@@ -401,10 +401,9 @@ async def dispose_engine() -> None:
     if _engine is None:
         return
     loop = asyncio.get_running_loop()
-    if _engine_loop is loop:
+    if _engine_loop is loop or _engine_loop is None or _engine_loop.is_closed():
         await _engine.dispose()
     else:
-
         fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
         await asyncio.wrap_future(fut)
     _engine = None
