@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextlib import closing
 from typing import Callable, Iterable, Optional
 
 from nzbidx_ingest.main import connect_db
@@ -67,70 +68,74 @@ def backfill_release_parts(
     job to a specific set of releases.
     """
     conn = connect_db()
-    cur = conn.cursor()
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-    base_sql = "SELECT id, norm_title, source_group FROM release"
-    params: list[int] | tuple[int, ...] = []
-    if release_ids:
-        ids = list(release_ids)
-        placeholders = ",".join([placeholder] * len(ids))
-        base_sql += f" WHERE id IN ({placeholders})"
-        params = ids
-    cur.execute(f"{base_sql} ORDER BY id", params)
-    processed = 0
-    to_delete: list[tuple[int, str]] = []
-    while True:
-        rows = cur.fetchmany(BATCH_SIZE)
-        if not rows:
-            break
-        for rel_id, norm_title, group in rows:
-            try:
-                segments = _fetch_segments(norm_title, group or "")
-            except ConnectionError as exc:
-                log.warning(
-                    "nntp_fetch_failed",
-                    extra={"id": rel_id, "group": group, "error": str(exc)},
-                )
-                continue
-            except Exception as exc:  # pragma: no cover - unexpected
-                log.warning("unexpected_error", extra={"id": rel_id, "error": str(exc)})
-                to_delete.append((rel_id, norm_title))
-                continue
-            if not segments:
-                log.info("no_segments", extra={"id": rel_id})
-                to_delete.append((rel_id, norm_title))
-                continue
-            seg_data = [
-                {
-                    "number": num,
-                    "message_id": msg_id,
-                    "group": group or "",
-                    "size": size,
-                }
-                for num, msg_id, size in segments
-            ]
-            total_size = sum(size for _, _, size in segments)
-            conn.execute(
-                (
-                    f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
-                    f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
-                ),
-                (json.dumps(seg_data), True, len(seg_data), total_size, rel_id),
-            )
-            processed += 1
-            if progress_cb:
-                try:
-                    progress_cb(processed)
-                except Exception:  # pragma: no cover - progress callback errors
-                    log.exception("progress_callback_failed")
-        conn.commit()
-        if to_delete:
-            ids = [r for r, _ in to_delete]
+    _cursor = conn.cursor()
+    cursor_cm = _cursor if hasattr(_cursor, "__enter__") else closing(_cursor)
+    with cursor_cm as cur:
+        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+        base_sql = "SELECT id, norm_title, source_group FROM release"
+        params: list[int] | tuple[int, ...] = []
+        if release_ids:
+            ids = list(release_ids)
             placeholders = ",".join([placeholder] * len(ids))
-            conn.execute(f"DELETE FROM release WHERE id IN ({placeholders})", ids)
+            base_sql += f" WHERE id IN ({placeholders})"
+            params = ids
+        cur.execute(f"{base_sql} ORDER BY id", params)
+        processed = 0
+        to_delete: list[tuple[int, str]] = []
+        while True:
+            rows = cur.fetchmany(BATCH_SIZE)
+            if not rows:
+                break
+            for rel_id, norm_title, group in rows:
+                try:
+                    segments = _fetch_segments(norm_title, group or "")
+                except ConnectionError as exc:
+                    log.warning(
+                        "nntp_fetch_failed",
+                        extra={"id": rel_id, "group": group, "error": str(exc)},
+                    )
+                    continue
+                except Exception as exc:  # pragma: no cover - unexpected
+                    log.warning(
+                        "unexpected_error", extra={"id": rel_id, "error": str(exc)}
+                    )
+                    to_delete.append((rel_id, norm_title))
+                    continue
+                if not segments:
+                    log.info("no_segments", extra={"id": rel_id})
+                    to_delete.append((rel_id, norm_title))
+                    continue
+                seg_data = [
+                    {
+                        "number": num,
+                        "message_id": msg_id,
+                        "group": group or "",
+                        "size": size,
+                    }
+                    for num, msg_id, size in segments
+                ]
+                total_size = sum(size for _, _, size in segments)
+                conn.execute(
+                    (
+                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
+                        f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
+                    ),
+                    (json.dumps(seg_data), True, len(seg_data), total_size, rel_id),
+                )
+                processed += 1
+                if progress_cb:
+                    try:
+                        progress_cb(processed)
+                    except Exception:  # pragma: no cover - progress callback errors
+                        log.exception("progress_callback_failed")
             conn.commit()
-            log.info("deleted %d invalid releases", len(ids))
-            to_delete.clear()
-        log.info("processed %d releases", processed)
+            if to_delete:
+                ids = [r for r, _ in to_delete]
+                placeholders = ",".join([placeholder] * len(ids))
+                conn.execute(f"DELETE FROM release WHERE id IN ({placeholders})", ids)
+                conn.commit()
+                log.info("deleted %d invalid releases", len(ids))
+                to_delete.clear()
+            log.info("processed %d releases", processed)
     conn.close()
     return processed
