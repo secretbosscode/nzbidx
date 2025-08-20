@@ -69,7 +69,7 @@ def test_build_nzb_without_host(monkeypatch) -> None:
     monkeypatch.delenv("NNTP_HOST", raising=False)
     monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: [])
     with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
+        nzb_builder.build_nzb_for_release("123")
 
 
 def test_nzb_timeout_defaults(monkeypatch) -> None:
@@ -115,7 +115,7 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
         nzb_builder, "_segments_from_db", lambda _rid: [(1, "m1", "g", 123)]
     )
 
-    nzb_builder.build_nzb_for_release("MyRelease")
+    nzb_builder.build_nzb_for_release("123")
 
     assert api_config.nzb_timeout_seconds() == 20
 
@@ -125,7 +125,7 @@ def test_build_nzb_missing_segments_raises(monkeypatch) -> None:
 
     monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: [])
     with pytest.raises(newznab.NzbFetchError):
-        nzb_builder.build_nzb_for_release("MyRelease")
+        nzb_builder.build_nzb_for_release("123")
 
 
 def test_release_not_found_logs(monkeypatch, caplog) -> None:
@@ -162,10 +162,10 @@ def test_release_not_found_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="release not found"):
-            nzb_builder.build_nzb_for_release("missing")
+            nzb_builder.build_nzb_for_release("123")
 
     assert any(
-        rec.message == "release_not_found" and rec.release_id == "missing"
+        rec.message == "release_not_found" and rec.release_id == 123
         for rec in caplog.records
     )
 
@@ -202,10 +202,10 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(nzb_builder, "backfill_release_parts", lambda *a, **k: None)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
-            nzb_builder.build_nzb_for_release("noparts")
+            nzb_builder.build_nzb_for_release("123")
 
     assert any(
-        rec.message == "missing_segments" and rec.release_id == "noparts"
+        rec.message == "missing_segments" and rec.release_id == 123
         for rec in caplog.records
     )
 
@@ -241,10 +241,10 @@ def test_invalid_segments_json_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
-            nzb_builder.build_nzb_for_release("badjson")
+            nzb_builder.build_nzb_for_release("123")
 
     assert any(
-        rec.message == "invalid_segments_json" and rec.release_id == "badjson"
+        rec.message == "invalid_segments_json" and rec.release_id == 123
         for rec in caplog.records
     )
 
@@ -252,31 +252,31 @@ def test_invalid_segments_json_logs(monkeypatch, caplog) -> None:
 def test_lookup_error_missing_segments_suggests_backfill(monkeypatch) -> None:
     """Missing segments should suggest running the backfill script."""
 
-    def _missing(_rid: str):
+    def _missing(_rid: int):
         raise LookupError("release has no segments")
 
     monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
     monkeypatch.setattr(nzb_builder, "backfill_release_parts", lambda *a, **k: None)
     with pytest.raises(newznab.NzbFetchError) as excinfo:
-        nzb_builder.build_nzb_for_release("missing")
+        nzb_builder.build_nzb_for_release("123")
     msg = str(excinfo.value)
     assert "scripts/backfill_release_parts.py" in msg
     assert "release has no segments" in msg
 
 
 def test_lookup_error_not_found_mentions_normalisation(monkeypatch) -> None:
-    """Not found errors explain normalisation."""
+    """Not found errors explain numeric IDs."""
 
-    def _missing(_rid: str):
+    def _missing(_rid: int):
         raise LookupError("release not found")
 
     monkeypatch.setattr(nzb_builder, "_segments_from_db", _missing)
     with pytest.raises(newznab.NzbFetchError) as excinfo:
-        nzb_builder.build_nzb_for_release("missing")
+        nzb_builder.build_nzb_for_release("123")
     msg = str(excinfo.value)
     assert "release not found" in msg
     assert "scripts/backfill_release_parts.py" not in msg
-    assert "release ID is normalized" in msg
+    assert "release ID is numeric" in msg
 
 
 def test_auto_backfill_success(monkeypatch) -> None:
@@ -284,13 +284,13 @@ def test_auto_backfill_success(monkeypatch) -> None:
 
     calls: dict[str, int] = {"count": 0}
 
-    def _segments(_rid: str):
+    def _segments(_rid: int):
         calls["count"] += 1
         if calls["count"] == 1:
             raise LookupError("release has no segments")
         return [(1, "<m1>", "alt.test", 10)]
 
-    called: list[str] = []
+    called: list[int] = []
 
     def _backfill(*, release_ids=None, progress_cb=None):  # type: ignore[override]
         called.extend(release_ids or [])
@@ -298,19 +298,19 @@ def test_auto_backfill_success(monkeypatch) -> None:
     monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
     monkeypatch.setattr(nzb_builder, "backfill_release_parts", _backfill)
 
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    xml = nzb_builder.build_nzb_for_release("123")
     assert "m1" in xml
-    assert called == ["MyRelease"]
+    assert called == [123]
     assert calls["count"] == 2
 
 
 def test_auto_backfill_failure(monkeypatch, caplog) -> None:
     """If backfill doesn't populate segments, an error is raised."""
 
-    def _segments(_rid: str):
+    def _segments(_rid: int):
         raise LookupError("release has no segments")
 
-    called: list[str] = []
+    called: list[int] = []
 
     def _backfill(*, release_ids=None, progress_cb=None):  # type: ignore[override]
         called.extend(release_ids or [])
@@ -320,11 +320,11 @@ def test_auto_backfill_failure(monkeypatch, caplog) -> None:
 
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
-            nzb_builder.build_nzb_for_release("Missing")
+            nzb_builder.build_nzb_for_release("123")
 
-    assert called == ["Missing"]
+    assert called == [123]
     assert any(
-        rec.message == "auto_backfill_failed" and rec.release_id == "Missing"
+        rec.message == "auto_backfill_failed" and rec.release_id == 123
         for rec in caplog.records
     )
 
@@ -363,11 +363,11 @@ def test_db_query_failure_logs(monkeypatch, caplog) -> None:
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbDatabaseError, match="boom"):
-            nzb_builder.build_nzb_for_release("broken")
+            nzb_builder.build_nzb_for_release("123")
 
     assert any(
         rec.message == "db_query_failed"
-        and rec.release_id == "broken"
+        and rec.release_id == 123
         and rec.exception == "OperationalError"
         and rec.error == "boom"
         for rec in caplog.records
@@ -380,7 +380,7 @@ def test_postgres_error_wrapped(monkeypatch, caplog) -> None:
     class DummyPostgresError(Exception):
         pass
 
-    def _segments(_rid: str):
+    def _segments(_rid: int):
         raise DummyPostgresError("pg boom")
 
     monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
@@ -390,11 +390,11 @@ def test_postgres_error_wrapped(monkeypatch, caplog) -> None:
 
     with caplog.at_level(logging.ERROR):
         with pytest.raises(newznab.NzbDatabaseError, match="pg boom"):
-            nzb_builder.build_nzb_for_release("broken")
+            nzb_builder.build_nzb_for_release("123")
 
     assert any(
         rec.message == "db_query_failed"
-        and rec.release_id == "broken"
+        and rec.release_id == 123
         and rec.exception == "DummyPostgresError"
         and rec.error == "pg boom"
         for rec in caplog.records
@@ -436,8 +436,8 @@ def test_repeated_nzb_fetch_reuses_db_connection(monkeypatch) -> None:
 
     monkeypatch.setattr(main, "connect_db", _connect)
 
-    nzb_builder.build_nzb_for_release("MyRelease")
-    nzb_builder.build_nzb_for_release("MyRelease")
+    nzb_builder.build_nzb_for_release("123")
+    nzb_builder.build_nzb_for_release("123")
 
     assert calls == 1
 
@@ -453,9 +453,52 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
             (2, "<msg2@example.com>", "g", 456),
         ],
     )
-    xml = nzb_builder.build_nzb_for_release("MyRelease")
+    xml = nzb_builder.build_nzb_for_release("123")
     assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
     assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
+
+
+def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
+    """Segments should be fetched using the numeric release id."""
+
+    seg_data = json.dumps(
+        [
+            {"number": 1, "message_id": "m1", "group": "g", "size": 123},
+        ]
+    )
+    executed: dict[str, object] = {}
+
+    class DummyCursor:
+        def __enter__(self):  # type: ignore[override]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[override]
+            pass
+
+        def execute(self, sql, params):
+            executed["sql"] = sql
+            executed["params"] = params
+
+        def fetchone(self):
+            return (seg_data,)
+
+    class DummyConn:
+        def cursor(self):
+            return DummyCursor()
+
+        def close(self):  # pragma: no cover - not used
+            pass
+
+    DummyConn.__module__ = "sqlite3"
+
+    monkeypatch.setattr(nzb_builder, "get_connection", lambda: DummyConn())
+
+    xml = nzb_builder.build_nzb_for_release("123")
+    assert '<segment bytes="123" number="1">m1</segment>' in xml
+    assert str(executed.get("sql", "")).lower().startswith(
+        "select segments from release where id"
+    )
+    assert executed.get("params") == (123,)
 
 
 def test_segment_limit_exceeded(monkeypatch, caplog) -> None:
@@ -469,7 +512,7 @@ def test_segment_limit_exceeded(monkeypatch, caplog) -> None:
     monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: segs)
     with caplog.at_level(logging.WARNING):
         with pytest.raises(newznab.NzbFetchError):
-            nzb_builder.build_nzb_for_release("MyRelease")
+            nzb_builder.build_nzb_for_release("123")
     assert any(rec.message == "segment_limit_exceeded" for rec in caplog.records)
 
 

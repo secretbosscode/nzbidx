@@ -39,33 +39,34 @@ DB_EXCEPTIONS = tuple(DB_EXCEPTIONS)
 log = logging.getLogger(__name__)
 
 
-def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
+def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
     from . import newznab
 
     conn = get_connection()
     try:
+        rid = int(release_id)
         with conn.cursor() as cur:
             placeholder = (
                 "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
             )
             cur.execute(
-                f"SELECT segments FROM release WHERE norm_title = {placeholder}",
-                (release_id,),
+                f"SELECT segments FROM release WHERE id = {placeholder}",
+                (rid,),
             )
             row = cur.fetchone()
         if not row:
-            log.warning("release_not_found", extra={"release_id": release_id})
+            log.warning("release_not_found", extra={"release_id": rid})
             raise LookupError("release not found")
         seg_data = row[0]
         if not seg_data:
-            log.warning("missing_segments", extra={"release_id": release_id})
+            log.warning("missing_segments", extra={"release_id": rid})
             raise LookupError("release has no segments")
         try:
             data = (
                 json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
         except Exception:
-            log.warning("invalid_segments_json", extra={"release_id": release_id})
+            log.warning("invalid_segments_json", extra={"release_id": rid})
             data = []
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
@@ -78,7 +79,7 @@ def _segments_from_db(release_id: str) -> List[Tuple[int, str, str, int]]:
                 )
             )
         if not segments:
-            log.warning("missing_segments", extra={"release_id": release_id})
+            log.warning("missing_segments", extra={"release_id": rid})
             raise LookupError("release has no segments")
         return segments
     except LookupError:
@@ -131,25 +132,26 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
 
-    log.info("starting nzb build for release %s", release_id)
+    rid = int(release_id)
+    log.info("starting nzb build for release %s", rid)
     try:
         try:
-            segments = _segments_from_db(release_id)
+            segments = _segments_from_db(rid)
         except LookupError as exc:
             err = str(exc).lower()
             if "has no segments" in err:
                 try:
-                    backfill_release_parts(release_ids=[release_id])
+                    backfill_release_parts(release_ids=[rid])
                 except Exception as bf_exc:  # pragma: no cover - unexpected
                     log.warning(
                         "auto_backfill_error",
-                        extra={"release_id": release_id, "error": str(bf_exc)},
+                        extra={"release_id": rid, "error": str(bf_exc)},
                     )
                 try:
-                    segments = _segments_from_db(release_id)
+                    segments = _segments_from_db(rid)
                 except LookupError:
                     log.warning(
-                        "auto_backfill_failed", extra={"release_id": release_id}
+                        "auto_backfill_failed", extra={"release_id": rid}
                     )
                     raise
             else:
@@ -162,7 +164,7 @@ def build_nzb_for_release(release_id: str) -> str:
             log.warning(
                 "segment_limit_exceeded",
                 extra={
-                    "release_id": release_id,
+                    "release_id": rid,
                     "segment_count": len(segments),
                     "limit": max_segments,
                 },
@@ -173,13 +175,13 @@ def build_nzb_for_release(release_id: str) -> str:
         if "not found" in err:
             msg = (
                 "release not found. The backfill script may remove invalid releases; "
-                "verify that the release ID is normalized."
+                "verify that the release ID is numeric."
             )
         else:
             msg = (
                 "release has no segments. To populate missing segments, run scripts/"
                 "backfill_release_parts.py. The backfill script may remove invalid "
-                "releases; verify that the release ID is normalized."
+                "releases; verify that the release ID is numeric."
             )
         raise newznab.NzbFetchError(msg) from exc
     except newznab.NzbFetchError:
@@ -190,10 +192,10 @@ def build_nzb_for_release(release_id: str) -> str:
         log.exception(
             "db_query_failed",
             extra={
-                "release_id": release_id,
+                "release_id": rid,
                 "exception": exc.__class__.__name__,
                 "error": str(exc),
             },
         )
         raise newznab.NzbDatabaseError(str(exc)) from exc
-    return _build_xml_from_segments(release_id, segments)
+    return _build_xml_from_segments(str(rid), segments)
