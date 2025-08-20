@@ -19,6 +19,7 @@ def purge_expired() -> None:
 
 async def get_cached_rss(key: str) -> Optional[str]:
     """Return cached RSS XML for ``key`` if present and not expired."""
+    purge_expired()
     entry = _CACHE.get(key)
     if not entry:
         return None
