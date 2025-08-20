@@ -70,19 +70,7 @@ async def init_engine() -> None:
     if _engine is not None:
         if _engine_loop is loop:
             return
-        # Dispose existing engine on its original loop. If that loop was
-        # closed, fall back to the current loop.
-        if _engine_loop and not _engine_loop.is_closed():
-            try:
-                fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
-            except RuntimeError:
-                logger.warning("engine_loop_closed")
-                await _engine.dispose()
-            else:
-                await asyncio.wrap_future(fut)
-        else:
-            logger.warning("engine_loop_closed")
-            await _engine.dispose()
+        await dispose_engine()
 
     _engine = create_async_engine(
         DATABASE_URL,
