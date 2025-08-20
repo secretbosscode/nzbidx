@@ -1,16 +1,22 @@
-# Common Newsgroups
+# Newsgroups
 
-NZBidx expects a list of NNTP groups via the `NNTP_GROUPS` environment variable. While offerings vary by provider, the following hierarchies are common starting points:
+Utilities for working with NNTP newsgroup lists.
 
-- `alt.binaries.movies` – general movie releases
-- `alt.binaries.tv` – episodic television
-- `alt.binaries.music` – audio and music
-- `alt.binaries.games` – PC and console games
-- `alt.binaries.pictures.*` – image sets
-- `alt.binaries.ebook` – eBooks and magazines
+## `group_list.py`
 
-A sample newline-separated list is available in [newsgroups-example.txt](newsgroups-example.txt). Copy or adapt it to populate `NNTP_GROUPS`.
+`scripts/group_list.py` validates and normalizes newline-delimited group names.
+It removes duplicates, ensures each name matches a basic newsgroup pattern and
+can output the result in different formats.
 
-Use `NNTP_IGNORE_GROUPS` to prune groups you do not wish to scan. Supply a comma-separated list of exact names or wildcard patterns.
+```bash
+# Validate and show a comma-separated list
+python scripts/group_list.py groups.txt --csv
 
-Check your provider to ensure these groups exist and comply with their usage policies.
+# Write the normalized list back to a file
+NNTP_GROUP_FILE=groups.txt \
+python scripts/group_list.py groups.txt --update
+```
+
+When `--update` is used, the destination file path is taken from the
+`NNTP_GROUP_FILE` environment variable. The input can be read from a file or
+`stdin`.

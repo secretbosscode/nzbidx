@@ -8,9 +8,9 @@ from typing import Optional
 
 from nzbidx_api import config
 
-# ``nntplib`` is scheduled for removal in Python 3.13.  Import it via a
-# compatibility layer that can fall back to third-party implementations when
-# the standard library module is absent.
+# ``nntplib`` was removed in Python 3.13. Import it via a compatibility layer
+# that can rely on the third-party ``standard-nntplib`` package when the
+# standard library module is absent.
 from .nntp_compat import nntplib
 
 logger = logging.getLogger(__name__)
@@ -175,14 +175,14 @@ class NNTPClient:
         return 0
 
     # ------------------------------------------------------------------
-    def list_groups(self) -> list[str]:
+    def list_groups(self, pattern: str = "alt.binaries.*") -> list[str]:
         """Return a list of available NNTP groups."""
         if not self.host:
             return []
         try:
             server = self._create_server()
             with server:
-                _resp, groups = server.list("alt.binaries.*")
+                _resp, groups = server.list(pattern)
                 return [name for name, *_rest in groups]
         except Exception:  # pragma: no cover - network failure
             return []

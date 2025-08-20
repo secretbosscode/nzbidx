@@ -20,13 +20,20 @@ def test_ingest_config_defaults(monkeypatch) -> None:
     assert config.INGEST_POLL_MAX_SECONDS == 60
 
 
-def test_group_file_ignored(monkeypatch, tmp_path) -> None:
-    groups = tmp_path / "groups.txt"
-    groups.write_text("alt.good\nalt.bad\nalt.other\n", encoding="utf-8")
-    monkeypatch.delenv("NNTP_GROUPS", raising=False)
-    monkeypatch.setenv("NNTP_GROUP_FILE", str(groups))
-    monkeypatch.setenv("NNTP_IGNORE_GROUPS", "alt.bad")
+def test_load_groups_uses_wildcard(monkeypatch) -> None:
     import nzbidx_ingest.config as config
-    importlib.reload(config)
-    result = [g for g in config.NNTP_GROUPS if g not in config.IGNORE_GROUPS]
-    assert result == ["alt.good", "alt.other"]
+
+    called: dict[str, object] = {}
+
+    class DummyClient:
+        def list_groups(self, pattern):  # pragma: no cover - simple
+            called["pattern"] = pattern
+            return []
+
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setattr(config, "NNTP_GROUP_WILDCARD", "alt.custom.*", raising=False)
+    monkeypatch.setattr(config, "NNTPClient", DummyClient)
+
+    config._load_groups()
+
+    assert called["pattern"] == "alt.custom.*"
