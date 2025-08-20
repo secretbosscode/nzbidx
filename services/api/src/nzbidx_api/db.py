@@ -26,6 +26,17 @@ try:  # pragma: no cover - import guard
 except Exception:  # pragma: no cover - optional dependency
     sqlparse = None  # type: ignore
 
+# Optional psycopg dependency for synchronous connection handling.
+try:  # pragma: no cover - import guard
+    import psycopg
+except Exception:  # pragma: no cover - optional dependency
+    psycopg = None  # type: ignore
+
+if psycopg:  # pragma: no cover - psycopg not installed
+    DB_CLOSE_ERRORS = (psycopg.Error,)
+else:  # pragma: no cover - psycopg not installed
+    DB_CLOSE_ERRORS: tuple[type[BaseException], ...] = ()
+
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost:5432/postgres")
@@ -376,9 +387,11 @@ def close_connection() -> None:
     if _conn is not None:
         try:
             _conn.close()
-        except Exception:
-            pass
-        _conn = None
+        except DB_CLOSE_ERRORS:
+            logger.warning("connection_close_failed", exc_info=True)
+            _conn = None
+        else:
+            _conn = None
 
 
 async def dispose_engine() -> None:
