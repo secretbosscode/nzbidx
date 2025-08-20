@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import binascii
+import logging
 from typing import Set
 from hmac import compare_digest
 
@@ -12,6 +14,9 @@ from starlette.responses import Response
 
 from .config import api_keys
 from .errors import unauthorized
+
+
+logger = logging.getLogger(__name__)
 
 
 class ApiKeyMiddleware(BaseHTTPMiddleware):
@@ -50,8 +55,10 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                                 break
                         if provided:
                             break
-                except Exception:
+                except (binascii.Error, UnicodeDecodeError):
                     pass
+                except Exception:
+                    logger.debug("Unexpected error decoding Basic auth header", exc_info=True)
         for valid in self.valid_keys:
             if compare_digest(provided or "", valid):
                 break
