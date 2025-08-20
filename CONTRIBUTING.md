@@ -1,7 +1,7 @@
 # Contributing
 
 - Use issues and pull requests for changes.
-- Format code with `black` and lint with `ruff`.
+- Format code with `ruff format` and lint with `ruff`.
 - Pull requests run `pre-commit` and may push formatting fixes to your branch.
 - Run tests for affected services before submitting a PR.
 - Prune merged branches with `make prune` to keep the repository tidy.
@@ -9,7 +9,7 @@
 ## Release checklist
 
 1. Ensure the working tree is clean.
-2. Run `ruff check .`, `black --check .` and `PYTHONPATH=. pytest`.
+2. Run `ruff check .`, `ruff format --check .` and `PYTHONPATH=. pytest`.
 3. Execute `bash scripts/smoke.sh` against a fresh stack.
 4. Run `pip-audit`.
 5. Update `CHANGELOG.md` and set `VERSION` when invoking `make release VERSION=x.y.z`.
