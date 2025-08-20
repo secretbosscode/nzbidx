@@ -9,6 +9,9 @@ in the database.
 
 Only release metadata is stored; binaries are discarded during ingest.
 
+Python 3.13 removed the standard library `nntplib` module; NZBidx depends on
+the maintained `standard-nntplib` package to provide NNTP client support.
+
 ## Database Performance
 
 Postgres uses a set of indexes to keep queries fast as the dataset grows. The
