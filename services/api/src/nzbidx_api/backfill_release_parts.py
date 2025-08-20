@@ -42,6 +42,8 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
         if size <= 0:
             continue
         number = extract_segment_number(subject)
+        if number in seen_numbers:
+            continue
         segments.append((number, msg_id, size))
         seen_numbers.add(number)
         if (
@@ -50,6 +52,7 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
             and max(seen_numbers) > 1
         ):
             break
+    segments.sort(key=lambda s: s[0])
     return segments
 
 
