@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 from functools import lru_cache
-from typing import List, Set
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-def api_keys() -> Set[str]:
+def api_keys() -> set[str]:
     keys = os.getenv("API_KEYS", "")
     return {k.strip() for k in keys.split(",") if k.strip()}
 
@@ -61,7 +60,7 @@ def max_param_bytes() -> int:
 
 
 @lru_cache()
-def cors_origins() -> List[str]:
+def cors_origins() -> list[str]:
     value = os.getenv("CORS_ORIGINS", "")
     return [v.strip() for v in value.split(",") if v.strip()]
 
@@ -144,7 +143,7 @@ def retry_jitter_ms() -> int:
     return _int_env("RETRY_JITTER_MS", 200)
 
 
-def validate_nntp_config() -> List[str]:
+def validate_nntp_config() -> list[str]:
     """Check required NNTP configuration variables.
 
     Returns a list of any missing variables after logging an error. This
