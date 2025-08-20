@@ -13,6 +13,9 @@ from .nntp_client import NNTPClient
 logger = logging.getLogger(__name__)
 
 
+NNTP_GROUP_WILDCARD: str = os.getenv("NNTP_GROUP_WILDCARD", "alt.binaries.*")
+
+
 def _load_groups() -> List[str]:
     env = os.getenv("NNTP_GROUPS", "")
     if not env:
@@ -33,7 +36,7 @@ def _load_groups() -> List[str]:
         return groups
 
     client = NNTPClient()
-    groups = client.list_groups()
+    groups = client.list_groups(NNTP_GROUP_WILDCARD)
     if groups:
         logger.info(
             "Discovered %d NNTP groups from server",
