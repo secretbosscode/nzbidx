@@ -55,7 +55,12 @@ _engine_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 async def init_engine() -> None:
-    """Initialize the async engine bound to the current event loop."""
+    """Initialize the async engine bound to the current event loop.
+
+    Any existing engine is disposed on its original loop; if that loop has
+    been closed, disposal falls back to the current loop and a warning is
+    emitted.
+    """
 
     if not create_async_engine:
         return
@@ -65,10 +70,19 @@ async def init_engine() -> None:
     if _engine is not None:
         if _engine_loop is loop:
             return
-        # Dispose existing engine on its original loop
-        if _engine_loop:
-            fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
-            await asyncio.wrap_future(fut)
+        # Dispose existing engine on its original loop. If that loop was
+        # closed, fall back to the current loop.
+        if _engine_loop and not _engine_loop.is_closed():
+            try:
+                fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
+            except RuntimeError:
+                logger.warning("engine_loop_closed")
+                await _engine.dispose()
+            else:
+                await asyncio.wrap_future(fut)
+        else:
+            logger.warning("engine_loop_closed")
+            await _engine.dispose()
 
     _engine = create_async_engine(
         DATABASE_URL,
@@ -395,16 +409,30 @@ def close_connection() -> None:
 
 
 async def dispose_engine() -> None:
-    """Dispose the global async engine and close pooled connections."""
+    """Dispose the global async engine and close pooled connections.
+
+    If the engine was created on a different or closed loop the disposal
+    falls back to the current loop and a warning is emitted.
+    """
 
     global _engine, _engine_loop
     if _engine is None:
         return
     loop = asyncio.get_running_loop()
-    if _engine_loop is loop or _engine_loop is None or _engine_loop.is_closed():
-        await _engine.dispose()
-    else:
-        fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
-        await asyncio.wrap_future(fut)
-    _engine = None
-    _engine_loop = None
+    try:
+        if _engine_loop is loop:
+            await _engine.dispose()
+        elif _engine_loop and not _engine_loop.is_closed():
+            try:
+                fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
+            except RuntimeError:
+                logger.warning("engine_loop_closed")
+                await _engine.dispose()
+            else:
+                await asyncio.wrap_future(fut)
+        else:
+            logger.warning("engine_loop_closed")
+            await _engine.dispose()
+    finally:
+        _engine = None
+        _engine_loop = None
