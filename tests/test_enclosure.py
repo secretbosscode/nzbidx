@@ -21,6 +21,7 @@ def test_rss_xml_includes_enclosure() -> None:
     assert enclosure.get("url") == item["link"]
     assert enclosure.get("type") == "application/x-nzb"
     assert enclosure.get("length") == item["size"]
+    assert not root.findall("./channel/item/attr")
 
 
 def test_rss_xml_extended_attrs() -> None:
