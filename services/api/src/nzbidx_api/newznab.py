@@ -231,15 +231,19 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
                     )
             attrs = "".join(attr_parts)
         item_parts.append(
-            "<item>"
-            f"<title>{html.escape(i['title'])}</title>"
-            f"<guid>{html.escape(i['guid'])}</guid>"
-            f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
-            f"<category>{html.escape(i['category'])}</category>"
-            f"<link>{html.escape(i['link'])}</link>"
-            f"{enclosure}"
-            f"{attrs}"
-            "</item>"
+            "".join(
+                [
+                    "<item>",
+                    f"<title>{html.escape(i['title'])}</title>",
+                    f"<guid>{html.escape(i['guid'])}</guid>",
+                    f"<pubDate>{html.escape(i['pubDate'])}</pubDate>",
+                    f"<category>{html.escape(i['category'])}</category>",
+                    f"<link>{html.escape(i['link'])}</link>",
+                    enclosure,
+                    attrs,
+                    "</item>",
+                ]
+            )
         )
     items_xml = "".join(item_parts)
     return (
