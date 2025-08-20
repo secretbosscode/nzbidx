@@ -15,7 +15,7 @@ except Exception:  # pragma: no cover - optional dependency
     text = None  # type: ignore
 
 from .config import _int_env
-from .db import engine
+from .db import get_engine
 from .newznab import ADULT_CATEGORY_ID, adult_content_allowed
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,7 @@ async def search_releases_async(
     )
 
     items: List[Dict[str, str]] = []
+    engine = get_engine()
     if not engine or text is None:
         return items
 
