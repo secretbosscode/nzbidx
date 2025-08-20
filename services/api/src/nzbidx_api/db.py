@@ -391,6 +391,7 @@ async def dispose_engine() -> None:
     if _engine_loop is loop:
         await _engine.dispose()
     else:
+
         fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
         await asyncio.wrap_future(fut)
     _engine = None
