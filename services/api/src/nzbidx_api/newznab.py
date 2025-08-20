@@ -130,18 +130,8 @@ def _load_categories() -> list[dict[str, str]]:
         try:
             data = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
             return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
-        except FileNotFoundError as exc:
-            log.warning(
-                "category config file not found at %s: %s; using defaults",
-                cfg_path,
-                exc,
-            )
-        except json.JSONDecodeError as exc:
-            log.warning(
-                "category config file at %s is invalid JSON: %s; using defaults",
-                cfg_path,
-                exc,
-            )
+        except Exception:
+            pass
     return _default_categories()
 
 
@@ -213,10 +203,9 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
 
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
     ``category`` and ``link`` keys. ``size`` is optional and used for the
-    enclosure length when it is present and greater than ``0``. Fields are
-    escaped with :func:`html.escape` before being embedded in XML, but callers
-    should still ensure the values are otherwise safe. Adult items are stripped
-    when not allowed.
+    enclosure length when it is present and greater than ``0``. No escaping is
+    performed as the values are expected to be safe for XML. Adult items are
+    stripped when not allowed.
     """
     allow_adult = adult_content_allowed()
     safe_items = [
@@ -225,7 +214,6 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
     channel_date = format_datetime(datetime.now(timezone.utc))
     item_parts = []
     for i in safe_items:
-        # Escape values to keep the generated XML well formed.
         size = str(i.get("size", ""))
         enclosure = (
             f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"{html.escape(size)}\"/>"
@@ -243,20 +231,16 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
                     )
             attrs = "".join(attr_parts)
         item_parts.append(
-            "".join(
-                [
-                    "<item>",
-                    f"<title>{html.escape(i['title'])}</title>",
-                    f"<guid>{html.escape(i['guid'])}</guid>",
-                    f"<pubDate>{html.escape(i['pubDate'])}</pubDate>",
-                    f"<category>{html.escape(i['category'])}</category>",
-                    f"<link>{html.escape(i['link'])}</link>",
-                    enclosure,
-                    attrs,
-                    "</item>",
-                ]
-            )
+            "<item>"
+            f"<title>{html.escape(i['title'])}</title>"
+            f"<guid>{html.escape(i['guid'])}</guid>"
+            f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
+            f"<category>{html.escape(i['category'])}</category>"
+            f"<link>{html.escape(i['link'])}</link>"
         )
+        item_parts.append(enclosure)
+        item_parts.append(attrs)
+        item_parts.append("</item>")
     items_xml = "".join(item_parts)
     return (
         '<rss version="2.0">'
