@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from nzbidx_ingest.resource_monitor import get_memory_stats
+import threading
+
+from nzbidx_ingest.resource_monitor import get_memory_stats, start_memory_logger
 
 
 def test_get_memory_stats_cgroup_v2(tmp_path: Path) -> None:
@@ -26,3 +28,9 @@ def test_get_memory_stats_cgroup_v1(tmp_path: Path) -> None:
     used, limit = get_memory_stats(tmp_path)
     assert used == 150
     assert limit == 300
+
+
+def test_start_memory_logger_returns_event(tmp_path: Path) -> None:
+    stop = start_memory_logger(interval=0, root=tmp_path)
+    assert isinstance(stop, threading.Event)
+    stop.set()
