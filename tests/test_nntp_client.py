@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from nzbidx_ingest import nntp_client  # type: ignore
 
 
@@ -140,32 +142,15 @@ def test_quit_closes_connection(monkeypatch) -> None:
     assert called["quit"] == 1
 
 
-def test_aio_nntp_fallback(monkeypatch) -> None:
-    """When the standard library module is missing use ``aio_nntp`` wrapper."""
+def test_missing_nntplib_raises(monkeypatch) -> None:
+    """Raise ``RuntimeError`` when no NNTP implementation is available."""
 
     # Simulate absence of the stdlib ``nntplib``
     monkeypatch.setitem(sys.modules, "nntplib", None)
 
-    class AsyncDummy:
-        def __init__(self, host, port=119, user=None, password=None, timeout=None):
-            self.args = (host, port, user, password, timeout)
-
-        async def reader(self):  # pragma: no cover - trivial
-            return None
-
-        async def quit(self):  # pragma: no cover - trivial
-            return None
-
-        async def group(self, name):  # pragma: no cover - simple
-            return "", 0, "1", "2", name
-
-    aio_stub = SimpleNamespace(NNTP=AsyncDummy)
-    monkeypatch.setitem(sys.modules, "aio_nntp", SimpleNamespace(client=aio_stub))
-    monkeypatch.setitem(sys.modules, "aio_nntp.client", aio_stub)
-
     import importlib
 
-    # Reload compatibility layer and client to pick up the fake modules
+    # Reload compatibility layer and client to pick up the change
     import nzbidx_ingest.nntp_compat as nntp_compat
 
     importlib.reload(nntp_compat)
@@ -176,16 +161,8 @@ def test_aio_nntp_fallback(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_HOST", "example.com")
 
     client = nntp_client_reload.NNTPClient()
-    high = client.high_water_mark("alt.binaries.example")
-
-    assert high == 2
-    assert getattr(client._server._client, "args") == (
-        "example.com",
-        119,
-        None,
-        None,
-        30.0,
-    )
+    with pytest.raises(RuntimeError):
+        client._create_server()
 
     # Restore original modules for other tests
     importlib.reload(nntp_compat)
