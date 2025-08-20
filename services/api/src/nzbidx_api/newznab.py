@@ -237,10 +237,10 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
             f"<pubDate>{html.escape(i['pubDate'])}</pubDate>"
             f"<category>{html.escape(i['category'])}</category>"
             f"<link>{html.escape(i['link'])}</link>"
-            f"{enclosure}"
-            f"{attrs}"
-            "</item>"
         )
+        item_parts.append(enclosure)
+        item_parts.append(attrs)
+        item_parts.append("</item>")
     items_xml = "".join(item_parts)
     return (
         '<rss version="2.0">'
