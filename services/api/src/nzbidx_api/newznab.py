@@ -203,9 +203,10 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
 
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
     ``category`` and ``link`` keys. ``size`` is optional and used for the
-    enclosure length when it is present and greater than ``0``. No escaping is
-    performed as the values are expected to be safe for XML. Adult items are
-    stripped when not allowed.
+    enclosure length when it is present and greater than ``0``. Fields are
+    escaped with :func:`html.escape` before being embedded in XML, but callers
+    should still ensure the values are otherwise safe. Adult items are stripped
+    when not allowed.
     """
     allow_adult = adult_content_allowed()
     safe_items = [
@@ -214,6 +215,7 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
     channel_date = format_datetime(datetime.now(timezone.utc))
     item_parts = []
     for i in safe_items:
+        # Escape values to keep the generated XML well formed.
         size = str(i.get("size", ""))
         enclosure = (
             f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"{html.escape(size)}\"/>"
