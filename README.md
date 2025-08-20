@@ -143,7 +143,10 @@ Repeat requests report the current progress while the backfill runs.
 The API container also runs an ingest worker which polls NNTP groups and stores
 release metadata. Set the required NNTP environment variables and start the
 stack. Supply `NNTP_GROUPS` with a curated comma-separated list for better
-performance. Wildcard patterns like `alt.binaries.*` are expanded via
+performance. See [docs/newsgroups.md](docs/newsgroups.md) for a list of common
+groups and a [sample file](docs/newsgroups-example.txt) to get started. Use
+`NNTP_IGNORE_GROUPS` to prune groups you do not want to scan. Wildcard patterns
+like `alt.binaries.*` are expanded via
 `server.list`; set `NNTP_GROUP_LIMIT` to cap enumeration. Use `NNTP_TIMEOUT` to
 adjust the socket timeout for slow or flaky providers and `NNTP_TOTAL_TIMEOUT`
 to cap overall retry time. To invoke a one-off ingest loop manually:
