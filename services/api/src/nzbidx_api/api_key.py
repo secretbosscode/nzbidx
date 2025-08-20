@@ -58,7 +58,9 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 except (binascii.Error, UnicodeDecodeError):
                     pass
                 except Exception:
-                    logger.debug("Unexpected error decoding Basic auth header", exc_info=True)
+                    logger.debug(
+                        "Unexpected error decoding Basic auth header", exc_info=True
+                    )
         for valid in self.valid_keys:
             if compare_digest(provided or "", valid):
                 break

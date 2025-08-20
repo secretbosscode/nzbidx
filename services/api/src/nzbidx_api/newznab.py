@@ -218,7 +218,7 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
     for i in safe_items:
         size = str(i.get("size", ""))
         enclosure = (
-            f"<enclosure url=\"{html.escape(i['link'])}\" type=\"application/x-nzb\" length=\"{html.escape(size)}\"/>"
+            f'<enclosure url="{html.escape(i["link"])}" type="application/x-nzb" length="{html.escape(size)}"/>'
             if size.isdigit() and int(size) > 0
             else ""
         )
@@ -310,8 +310,4 @@ async def get_nzb(release_id: str, cache: Optional[Any]) -> str:
 
 def adult_disabled_xml() -> str:
     """Return an empty RSS feed noting adult content is disabled."""
-    return (
-        '<rss version="2.0"><channel>'
-        "<!-- adult content disabled -->"
-        "</channel></rss>"
-    )
+    return '<rss version="2.0"><channel><!-- adult content disabled --></channel></rss>'
