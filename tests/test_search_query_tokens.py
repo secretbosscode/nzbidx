@@ -31,7 +31,7 @@ class _FakeEngine:
 
 def _setup_engine(monkeypatch) -> _FakeEngine:
     engine = _FakeEngine()
-    monkeypatch.setattr(search_mod, "engine", engine)
+    monkeypatch.setattr(search_mod, "get_engine", lambda: engine)
     monkeypatch.setattr(search_mod, "text", lambda s: s)
     return engine
 
@@ -50,4 +50,3 @@ def test_query_with_reserved_operator(monkeypatch) -> None:
     search_mod.search_releases(q, limit=1)
     assert "plainto_tsquery('simple', :tsquery)" in engine.sql
     assert engine.params["tsquery"] == q
-

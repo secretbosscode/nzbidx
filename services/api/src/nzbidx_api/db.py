@@ -33,16 +33,45 @@ DATABASE_URL = os.path.expandvars(DATABASE_URL)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
+# Engine lifecycle management -------------------------------------------------
 if create_async_engine:
     POOL_RECYCLE_SECONDS = int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800"))
-    engine: Optional[AsyncEngine] = create_async_engine(
+else:  # pragma: no cover - no sqlalchemy available
+    POOL_RECYCLE_SECONDS = 0
+
+_engine: Optional[AsyncEngine] = None
+_engine_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+async def init_engine() -> None:
+    """Initialize the async engine bound to the current event loop."""
+
+    if not create_async_engine:
+        return
+
+    global _engine, _engine_loop
+    loop = asyncio.get_running_loop()
+    if _engine is not None:
+        if _engine_loop is loop:
+            return
+        # Dispose existing engine on its original loop
+        if _engine_loop:
+            fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
+            await asyncio.wrap_future(fut)
+
+    _engine = create_async_engine(
         DATABASE_URL,
         echo=False,
         pool_pre_ping=True,
         pool_recycle=POOL_RECYCLE_SECONDS,
     )
-else:  # pragma: no cover - no sqlalchemy available
-    engine = None
+    _engine_loop = loop
+
+
+def get_engine() -> Optional[AsyncEngine]:
+    """Return the loop-bound engine instance if initialized."""
+
+    return _engine
 
 
 def _split_sql(sql: str) -> list[str]:
@@ -156,6 +185,7 @@ def _split_sql(sql: str) -> list[str]:
 
 async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     """Create database schema if it does not already exist."""
+    engine = get_engine()
     if not engine or not text:
         return
     sql = (
@@ -250,6 +280,7 @@ async def _create_database(url: str) -> None:
 
 async def ping() -> bool:
     """Check database connectivity."""
+    engine = get_engine()
     if not engine or not text:
         return False
     try:
@@ -262,6 +293,7 @@ async def ping() -> bool:
 
 async def _maintenance(stmt: str) -> None:
     """Execute a maintenance statement with autocommit."""
+    engine = get_engine()
     if not engine or not text:
         return
     async with engine.connect() as conn:
@@ -352,7 +384,14 @@ def close_connection() -> None:
 async def dispose_engine() -> None:
     """Dispose the global async engine and close pooled connections."""
 
-    global engine
-    if engine is not None:
-        await engine.dispose()
-        engine = None
+    global _engine, _engine_loop
+    if _engine is None:
+        return
+    loop = asyncio.get_running_loop()
+    if _engine_loop is loop:
+        await _engine.dispose()
+    else:
+        fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
+        await asyncio.wrap_future(fut)
+    _engine = None
+    _engine_loop = None

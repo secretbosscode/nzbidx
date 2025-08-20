@@ -10,7 +10,7 @@ def test_search_releases_invalid_sort(monkeypatch) -> None:
         captured["query"] = query
         return query
 
-    monkeypatch.setattr(search_mod, "engine", None)
+    monkeypatch.setattr(search_mod, "get_engine", lambda: None)
     monkeypatch.setattr(search_mod, "text", fake_text)
 
     search_mod.search_releases(None, limit=1, sort="invalid")

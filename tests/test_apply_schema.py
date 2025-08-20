@@ -63,7 +63,7 @@ def test_apply_schema_creates_database(monkeypatch):
         admin_urls.append((url, isolation_level))
         return AdminEngine()
 
-    monkeypatch.setattr(db, "engine", DummyEngine())
+    monkeypatch.setattr(db, "get_engine", lambda: DummyEngine())
     monkeypatch.setattr(db, "create_async_engine", fake_create_async_engine)
     monkeypatch.setattr(db, "text", lambda s: s)
     monkeypatch.setattr(db, "DATABASE_URL", "postgresql+asyncpg://u@h/db")
@@ -91,7 +91,7 @@ def test_apply_schema_retries_on_oserror(monkeypatch):
         def connect(self):
             return DummyConn()
 
-    monkeypatch.setattr(db, "engine", DummyEngine())
+    monkeypatch.setattr(db, "get_engine", lambda: DummyEngine())
     monkeypatch.setattr(db, "text", lambda s: s)
 
     asyncio.run(db.apply_schema(max_attempts=3, retry_delay=0))
@@ -140,7 +140,7 @@ def test_apply_schema_handles_function_with_semicolons_without_sqlparse(monkeypa
         def read_text(self, encoding: str = "utf-8") -> str:
             return sql
 
-    monkeypatch.setattr(db, "engine", DummyEngine())
+    monkeypatch.setattr(db, "get_engine", lambda: DummyEngine())
     monkeypatch.setattr(db, "text", lambda s: s)
     monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
     monkeypatch.setattr(db, "sqlparse", None)
@@ -192,7 +192,7 @@ def test_apply_schema_handles_tagged_dollar_quotes(monkeypatch):
         def read_text(self, encoding: str = "utf-8") -> str:
             return sql
 
-    monkeypatch.setattr(db, "engine", DummyEngine())
+    monkeypatch.setattr(db, "get_engine", lambda: DummyEngine())
     monkeypatch.setattr(db, "text", lambda s: s)
     monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
     monkeypatch.setattr(db, "sqlparse", None)

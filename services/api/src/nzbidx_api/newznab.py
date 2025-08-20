@@ -130,8 +130,10 @@ def _load_categories() -> list[dict[str, str]]:
         try:
             data = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
             return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
+        except FileNotFoundError:
+            log.warning("category config file not found")
         except Exception:
-            pass
+            log.warning("invalid JSON")
     return _default_categories()
 
 
@@ -231,17 +233,19 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
                     )
             attrs = "".join(attr_parts)
         item_parts.append(
-            "".join([
-                "<item>",
-                f"<title>{html.escape(i['title'])}</title>",
-                f"<guid>{html.escape(i['guid'])}</guid>",
-                f"<pubDate>{html.escape(i['pubDate'])}</pubDate>",
-                f"<category>{html.escape(i['category'])}</category>",
-                f"<link>{html.escape(i['link'])}</link>",
-                f"{enclosure}",
-                f"{attrs}",
-                "</item>",
-            ])
+            "".join(
+                [
+                    "<item>",
+                    f"<title>{html.escape(i['title'])}</title>",
+                    f"<guid>{html.escape(i['guid'])}</guid>",
+                    f"<pubDate>{html.escape(i['pubDate'])}</pubDate>",
+                    f"<category>{html.escape(i['category'])}</category>",
+                    f"<link>{html.escape(i['link'])}</link>",
+                    f"{enclosure}",
+                    f"{attrs}",
+                    "</item>",
+                ]
+            )
         )
     items_xml = "".join(item_parts)
     return (

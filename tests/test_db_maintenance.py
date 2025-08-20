@@ -37,7 +37,7 @@ def run(coro):
 def test_vacuum_analyze(monkeypatch):
     conn = DummyConn()
     engine = DummyEngine(conn)
-    monkeypatch.setattr(db, "engine", engine)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
     monkeypatch.setattr(db, "text", lambda s: s)
     run(db.vacuum_analyze())
     assert conn.executed == ["VACUUM (ANALYZE)"]
@@ -47,7 +47,7 @@ def test_vacuum_analyze(monkeypatch):
 def test_reindex(monkeypatch):
     conn = DummyConn()
     engine = DummyEngine(conn)
-    monkeypatch.setattr(db, "engine", engine)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
     monkeypatch.setattr(db, "text", lambda s: s)
     run(db.reindex(table="release"))
     assert conn.executed == ["REINDEX TABLE release"]
@@ -57,7 +57,7 @@ def test_reindex(monkeypatch):
 def test_analyze(monkeypatch):
     conn = DummyConn()
     engine = DummyEngine(conn)
-    monkeypatch.setattr(db, "engine", engine)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
     monkeypatch.setattr(db, "text", lambda s: s)
     run(db.analyze(table="release"))
     assert conn.executed == ["ANALYZE release"]

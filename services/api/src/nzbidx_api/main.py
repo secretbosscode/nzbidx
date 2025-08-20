@@ -95,7 +95,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .orjson_response import ORJSONResponse, Response
-from .db import apply_schema, close_connection, dispose_engine, ping
+from .db import apply_schema, close_connection, dispose_engine, init_engine, ping
 from . import newznab
 from .newznab import (
     adult_content_allowed,
@@ -707,6 +707,7 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[
+        init_engine,
         apply_schema,
         start_ingest,
         lambda: _set_stop(start_metrics()),
