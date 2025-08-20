@@ -434,7 +434,8 @@ async def dispose_engine() -> None:
                         dbapi_conn = getattr(
                             rec, "dbapi_connection", getattr(rec, "connection", None)
                         )
-                        terminator = getattr(dbapi_conn, "terminate", None)
+                        raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
+                        terminator = getattr(raw_conn, "terminate", None)
                         if callable(terminator):
                             try:
                                 terminator()
