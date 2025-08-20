@@ -1,0 +1,3 @@
+alt.binaries.example
+alt.binaries.other
+alt.binaries.yetanother
