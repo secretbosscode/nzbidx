@@ -20,13 +20,13 @@ def test_ingest_config_defaults(monkeypatch) -> None:
     assert config.INGEST_POLL_MAX_SECONDS == 60
 
 
-def test_group_file_merges_with_env(monkeypatch, tmp_path) -> None:
-    groups_file = tmp_path / "groups.txt"
-    groups_file.write_text("alt.one\nalt.two\n")
-    monkeypatch.setenv("NNTP_GROUP_FILE", str(groups_file))
-    monkeypatch.setenv("NNTP_GROUPS", "alt.env")
-
+def test_group_file_ignored(monkeypatch, tmp_path) -> None:
+    groups = tmp_path / "groups.txt"
+    groups.write_text("alt.good\nalt.bad\nalt.other\n", encoding="utf-8")
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setenv("NNTP_GROUP_FILE", str(groups))
+    monkeypatch.setenv("NNTP_IGNORE_GROUPS", "alt.bad")
     import nzbidx_ingest.config as config
-
     importlib.reload(config)
-    assert config.NNTP_GROUPS == ["alt.env", "alt.one", "alt.two"]
+    result = [g for g in config.NNTP_GROUPS if g not in config.IGNORE_GROUPS]
+    assert result == ["alt.good", "alt.other"]
