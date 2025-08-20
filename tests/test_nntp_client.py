@@ -42,6 +42,42 @@ def test_list_groups_sends_auth(monkeypatch) -> None:
     assert called["pattern"] == "alt.binaries.*"
 
 
+def test_list_groups_accepts_pattern(monkeypatch) -> None:
+    called: dict[str, object] = {}
+
+    class DummyServer:
+        def __init__(
+            self, host, port=119, user=None, password=None, timeout=None
+        ):  # pragma: no cover - trivial
+            called["args"] = (host, port, user, password, timeout)
+
+        def __enter__(self):  # pragma: no cover - trivial
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
+            return None
+
+        def list(self, pattern=None):  # pragma: no cover - simple
+            called["pattern"] = pattern
+            return "", [("alt.binaries.example", "0", "0", "0")]
+
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_USER", "user")
+    monkeypatch.setenv("NNTP_PASS", "pass")
+    monkeypatch.setattr(
+        nntp_client,
+        "nntplib",
+        SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
+    )
+
+    client = nntp_client.NNTPClient()
+    groups = client.list_groups("alt.custom.*")
+
+    assert groups == ["alt.binaries.example"]
+    assert called["args"] == ("example.com", 119, "user", "pass", 30.0)
+    assert called["pattern"] == "alt.custom.*"
+
+
 def test_high_water_mark_auth(monkeypatch) -> None:
     called: dict[str, object] = {}
 

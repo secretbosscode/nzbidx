@@ -175,14 +175,14 @@ class NNTPClient:
         return 0
 
     # ------------------------------------------------------------------
-    def list_groups(self) -> list[str]:
+    def list_groups(self, pattern: str = "alt.binaries.*") -> list[str]:
         """Return a list of available NNTP groups."""
         if not self.host:
             return []
         try:
             server = self._create_server()
             with server:
-                _resp, groups = server.list("alt.binaries.*")
+                _resp, groups = server.list(pattern)
                 return [name for name, *_rest in groups]
         except Exception:  # pragma: no cover - network failure
             return []
