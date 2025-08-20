@@ -130,8 +130,18 @@ def _load_categories() -> list[dict[str, str]]:
         try:
             data = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
             return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
-        except Exception:
-            pass
+        except FileNotFoundError as exc:
+            log.warning(
+                "category config file not found at %s: %s; using defaults",
+                cfg_path,
+                exc,
+            )
+        except json.JSONDecodeError as exc:
+            log.warning(
+                "category config file at %s is invalid JSON: %s; using defaults",
+                cfg_path,
+                exc,
+            )
     return _default_categories()
 
 
