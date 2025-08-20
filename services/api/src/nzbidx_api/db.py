@@ -412,7 +412,9 @@ async def dispose_engine() -> None:
     """Dispose the global async engine and close pooled connections.
 
     If the engine was created on a different or closed loop the disposal
-    falls back to the current loop and a warning is emitted.
+    falls back to the current loop and a warning is emitted.  When the
+    original loop has already been closed the engine's pooled connections are
+    terminated directly to avoid awaiting on a defunct loop.
     """
 
     global _engine, _engine_loop
@@ -430,6 +432,26 @@ async def dispose_engine() -> None:
                 await _engine.dispose()
             else:
                 await asyncio.wrap_future(fut)
+        elif _engine_loop and _engine_loop.is_closed():
+            logger.warning("engine_loop_closed_terminate")
+            pool = getattr(getattr(_engine, "sync_engine", None), "pool", None)
+            if pool is not None:
+                raw_pool = getattr(pool, "_pool", None)
+                if raw_pool is not None:
+                    while True:
+                        try:
+                            rec = raw_pool.get_nowait()
+                        except Exception:
+                            break
+                        dbapi_conn = getattr(
+                            rec, "dbapi_connection", getattr(rec, "connection", None)
+                        )
+                        terminator = getattr(dbapi_conn, "terminate", None)
+                        if callable(terminator):
+                            try:
+                                terminator()
+                            except Exception:
+                                pass
         else:
             logger.warning("engine_loop_closed")
             await _engine.dispose()
