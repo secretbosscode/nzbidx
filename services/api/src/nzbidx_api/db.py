@@ -387,11 +387,32 @@ async def dispose_engine() -> None:
     global _engine, _engine_loop
     if _engine is None:
         return
-    loop = asyncio.get_running_loop()
-    if _engine_loop is loop:
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    # If the engine was created on this same loop and it is still running,
+    # dispose directly.  Otherwise attempt to dispatch to the original loop
+    # if it remains open.  When that loop has already been closed, fall back
+    # to using a temporary event loop to perform the disposal.
+    if _engine_loop is loop and loop and not loop.is_closed():
         await _engine.dispose()
-    else:
+    elif _engine_loop and not _engine_loop.is_closed():
         fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
         await asyncio.wrap_future(fut)
+    else:
+        def _dispose_in_loop() -> None:
+            tmp_loop = asyncio.new_event_loop()
+            try:
+                tmp_loop.run_until_complete(_engine.dispose())
+            finally:
+                tmp_loop.close()
+
+        # Run disposal in a separate thread to avoid nested event loops.
+        if loop and not loop.is_closed():
+            await asyncio.to_thread(_dispose_in_loop)
+        else:
+            _dispose_in_loop()
     _engine = None
     _engine_loop = None
