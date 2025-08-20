@@ -143,7 +143,7 @@ async def search_releases_async(
         release_id = str(row.id)
         link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
         if api_key:
-            link += f"&apikey={api_key}"
+            link += f"&apikey={quote(api_key, safe='')}"
         items.append(
             {
                 "title": row.norm_title or "",
