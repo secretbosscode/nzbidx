@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+from pathlib import Path
 from typing import List
 
 from .nntp_client import NNTPClient
@@ -16,23 +18,16 @@ NNTP_GROUP_WILDCARD: str = os.getenv("NNTP_GROUP_WILDCARD", "alt.binaries.*")
 
 def _load_groups() -> List[str]:
     env = os.getenv("NNTP_GROUPS", "")
-    file_path = os.getenv("NNTP_GROUP_FILE")
-
-    groups: List[str] = []
+    if not env:
+        cfg = os.getenv("NNTP_GROUP_FILE")
+        if cfg:
+            try:
+                env = Path(cfg).read_text(encoding="utf-8")
+            except OSError:
+                env = ""
     if env:
-        groups.extend(g.strip() for g in env.split(",") if g.strip())
-    if file_path:
-        try:
-            with open(file_path) as fh:
-                groups.extend(line.strip() for line in fh if line.strip())
-        except OSError:
-            logger.exception(
-                "Failed to read NNTP_GROUP_FILE",
-                extra={"event": "ingest_group_file_error", "group_file": file_path},
-            )
-
-    if groups:
-        groups = list(dict.fromkeys(groups))
+        parts = re.split(r"[\n,]", env)
+        groups = [g.strip() for g in parts if g.strip()]
         logger.info(
             "Using configured NNTP groups: %s",
             groups,
