@@ -91,6 +91,7 @@ faster serializer once compatible.
 | `NNTP_USER` | NNTP username | _(required for ingest worker)_ |
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | NNTP groups to scan (comma separated, wildcards allowed) | _(none)_ |
+| `NNTP_GROUP_FILE` | File with NNTP groups, one per line (merged with `NNTP_GROUPS`) | _(none)_ |
 | `NNTP_GROUP_LIMIT` | Maximum groups to enumerate when using wildcards | _(unlimited)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
@@ -143,10 +144,12 @@ Repeat requests report the current progress while the backfill runs.
 The API container also runs an ingest worker which polls NNTP groups and stores
 release metadata. Set the required NNTP environment variables and start the
 stack. Supply `NNTP_GROUPS` with a curated comma-separated list for better
-performance. Wildcard patterns like `alt.binaries.*` are expanded via
-`server.list`; set `NNTP_GROUP_LIMIT` to cap enumeration. Use `NNTP_TIMEOUT` to
-adjust the socket timeout for slow or flaky providers and `NNTP_TOTAL_TIMEOUT`
-to cap overall retry time. To invoke a one-off ingest loop manually:
+performance or point `NNTP_GROUP_FILE` to a newline-delimited list. Groups from
+the file are merged with `NNTP_GROUPS` (see `docs/newsgroups-example.txt` for an
+example). Wildcard patterns like `alt.binaries.*` are expanded via `server.list`;
+set `NNTP_GROUP_LIMIT` to cap enumeration. Use `NNTP_TIMEOUT` to adjust the
+socket timeout for slow or flaky providers and `NNTP_TOTAL_TIMEOUT` to cap
+overall retry time. To invoke a one-off ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username
