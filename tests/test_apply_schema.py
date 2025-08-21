@@ -290,3 +290,61 @@ def test_apply_schema_after_migrate_release_adult_partitions(monkeypatch):
     asyncio.run(db.apply_schema())
 
     assert executed
+
+
+def test_apply_schema_migrates_unpartitioned_release_adult(monkeypatch):
+    executed: list[str] = []
+    state = {"partitioned": False, "migrated": False}
+
+    class DummyConn:
+        def __init__(self, state):
+            self.state = state
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt, params=None):
+            executed.append(stmt)
+
+        async def commit(self):
+            return None
+
+        async def rollback(self):
+            return None
+
+        async def scalar(self, stmt, params=None):
+            return self.state["partitioned"]
+
+    class DummyEngine:
+        def __init__(self, state):
+            self.state = state
+
+        def connect(self):
+            return DummyConn(self.state)
+
+        @property
+        def sync_engine(self):
+            return self
+
+        def raw_connection(self):
+            class RawConn:
+                def close(self):
+                    return None
+
+            return RawConn()
+
+    def fake_migrate(raw):
+        state["migrated"] = True
+        state["partitioned"] = True
+
+    monkeypatch.setattr(db, "get_engine", lambda: DummyEngine(state))
+    monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db, "migrate_release_adult_partitions", fake_migrate)
+
+    asyncio.run(db.apply_schema())
+
+    assert state["migrated"]
+    assert executed
