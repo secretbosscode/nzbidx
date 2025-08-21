@@ -65,11 +65,30 @@ def _reset_db_conn() -> None:
     api_db.close_connection()
 
 
+@pytest.fixture(autouse=True)
+def _ensure_nntp_host(monkeypatch) -> None:
+    """Provide default NNTP configuration for tests."""
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_PORT", "119")
+    monkeypatch.setenv("NNTP_USER", "user")
+    monkeypatch.setenv("NNTP_PASS", "pass")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
+
+
 def test_build_nzb_without_host(monkeypatch) -> None:
     monkeypatch.delenv("NNTP_HOST", raising=False)
-    monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: [])
-    with pytest.raises(newznab.NzbFetchError):
+    with pytest.raises(newznab.NntpConfigError) as exc:
         nzb_builder.build_nzb_for_release("123")
+    assert "NNTP_HOST" in str(exc.value)
+
+
+def test_build_nzb_missing_credentials(monkeypatch) -> None:
+    monkeypatch.delenv("NNTP_USER", raising=False)
+    monkeypatch.delenv("NNTP_PASS", raising=False)
+    with pytest.raises(newznab.NntpConfigError) as exc:
+        nzb_builder.build_nzb_for_release("123")
+    msg = str(exc.value)
+    assert "NNTP_USER" in msg and "NNTP_PASS" in msg
 
 
 def test_nzb_timeout_defaults(monkeypatch) -> None:
@@ -325,6 +344,28 @@ def test_auto_backfill_failure(monkeypatch, caplog) -> None:
     assert called == [123]
     assert any(
         rec.message == "auto_backfill_failed" and rec.release_id == 123
+        for rec in caplog.records
+    )
+
+
+def test_auto_backfill_connection_error(monkeypatch, caplog) -> None:
+    """Connection errors during backfill are surfaced."""
+
+    def _segments(_rid: int):
+        raise LookupError("release has no segments")
+
+    def _backfill(*, release_ids=None, progress_cb=None):  # type: ignore[override]
+        raise ConnectionError("nntp fail")
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
+    monkeypatch.setattr(nzb_builder, "backfill_release_parts", _backfill)
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(newznab.NzbFetchError, match="nntp fail"):
+            nzb_builder.build_nzb_for_release("123")
+
+    assert any(
+        rec.message == "auto_backfill_connection_error" and rec.release_id == 123
         for rec in caplog.records
     )
 

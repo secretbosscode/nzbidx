@@ -159,6 +159,22 @@ to cap overall retry time. To invoke a one-off ingest loop manually:
     export NNTP_GROUPS=alt.binaries.example  # recommended to set explicitly
     docker compose exec api python -m nzbidx_ingest
 
+### Ingest Checklist
+
+- Set the required NNTP variables before starting the worker: `NNTP_HOST`,
+  `NNTP_PORT`, `NNTP_USER`, `NNTP_PASS`, and `NNTP_GROUPS`.
+- Backfill segment data for a specific release with its numeric ID:
+
+      docker compose exec nzbidx python scripts/backfill_release_parts.py <release-id>
+
+  Replace `<release-id>` with the target `release.id`.
+- Verify the API and ingest worker share the same database connection:
+
+      docker compose exec api printenv DATABASE_URL
+      docker compose exec nzbidx printenv DATABASE_URL
+
+  Both commands should return the same `DATABASE_URL` value.
+
 ## Auth & Rate Limit
 
 Protect the `/api` endpoints by supplying one or more keys:
@@ -399,7 +415,10 @@ See [docs/sbom.md](docs/sbom.md) for details.
 
 ## Operations
 
-See [RUNBOOK.md](RUNBOOK.md) for common on-call checks.
+See [RUNBOOK.md](RUNBOOK.md) for common on-call checks. The [engine lifecycle
+section](RUNBOOK.md#engine-lifecycle) covers the loop-bound `init_engine()` and
+the requirement to call `dispose_engine()` before the originating event loop
+closes.
 
 Container logs stream to stdout/stderr. Configure log rotation (daily or by size)
 to avoid unbounded growth. Example Docker daemon snippet:
@@ -430,6 +449,7 @@ docker compose up -d && scripts/smoke.sh
 - Snapshot repo not configured – ``make snapshot-repo`` no-ops until env vars set.
 - Smoke test times out – increase timeout or inspect ``docker compose logs``.
 - ``t=movie`` without a ``q`` parameter returns a placeholder "Indexer Test Item" when no real results exist.
+- Inspect segment metadata – `python scripts/check_release_segments.py <id>` prints segment count and first/last message IDs.
 
 ## Kubernetes (examples only)
 
