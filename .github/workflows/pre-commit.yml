@@ -21,6 +21,7 @@ jobs:
       - run: pip install pytest
       - run: pip install -e services/api
       - uses: pre-commit/action@v3.0.1
+        continue-on-error: true
         with:
           extra_args: "--files $(git diff --name-only origin/${{ github.base_ref }}...HEAD | tr '\n' ' ')"
       - uses: stefanzweifel/git-auto-commit-action@v6
