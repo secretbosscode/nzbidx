@@ -6,16 +6,16 @@ from nzbidx_api import db
 
 
 def test_dispose_engine_handles_closed_loop(monkeypatch):
-    terminated = False
+    closed = False
 
-    class DummyConn:
-        def terminate(self) -> None:
-            nonlocal terminated
-            terminated = True
+    class DummyProtocol:
+        def close_transport(self) -> None:
+            nonlocal closed
+            closed = True
 
     class DummyRec:
         def __init__(self) -> None:
-            self.dbapi_connection = DummyConn()
+            self.dbapi_connection = type("Conn", (), {"_protocol": DummyProtocol()})()
 
     class DummyQueue:
         def __init__(self) -> None:
@@ -45,6 +45,6 @@ def test_dispose_engine_handles_closed_loop(monkeypatch):
 
     asyncio.run(db.dispose_engine())
 
-    assert terminated
+    assert closed
     assert db._engine is None
     assert db._engine_loop is None
