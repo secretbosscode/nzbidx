@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS release (
     category_id INT,
     language TEXT NOT NULL DEFAULT 'und',
     tags TEXT NOT NULL DEFAULT '',
+    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(norm_title,'') || ' ' || coalesce(tags,''))) STORED,
     source_group TEXT,
     size_bytes BIGINT,
     posted_at TIMESTAMPTZ,
@@ -36,6 +37,7 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category_id INT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'und';
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(norm_title,'') || ' ' || coalesce(tags,''))) STORED;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
@@ -58,6 +60,7 @@ CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id);
 CREATE INDEX IF NOT EXISTS release_language_idx ON release (language);
 CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS release_search_idx ON release USING GIN (search_vector);
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
 CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_key ON release (norm_title, category_id);
