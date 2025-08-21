@@ -4,7 +4,7 @@ import pytest
 
 psycopg = pytest.importorskip("psycopg")
 
-from nzbidx_ingest.main import connect_db
+from nzbidx_ingest.main import connect_db  # noqa: E402
 
 
 def test_connect_db_creates_partitions(monkeypatch):
