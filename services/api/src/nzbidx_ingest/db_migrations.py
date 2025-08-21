@@ -97,3 +97,34 @@ def migrate_release_table(conn: Any) -> None:
     cur.execute("DROP TABLE release_old")
 
     conn.commit()
+
+
+def create_release_posted_at_index(conn: Any) -> None:
+    """Create ``release_posted_at_idx`` for existing installations.
+
+    Uses ``CREATE INDEX CONCURRENTLY`` on PostgreSQL to avoid locking the
+    ``release`` table.  Falls back to a regular ``CREATE INDEX`` for other
+    databases such as SQLite.  The operation is idempotent.
+    """
+
+    cur = conn.cursor()
+    try:
+        module = conn.__class__.__module__
+        if "psycopg" in module:
+            try:
+                conn.autocommit = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            cur.execute(
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
+            )
+        else:
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
+            )
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
