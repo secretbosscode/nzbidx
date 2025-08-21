@@ -549,6 +549,7 @@ def insert_release(
         ]
     )
     existing: set[tuple[str, int]] = set()
+    updates: list[tuple[Optional[str], str, int]] = []
     if titles:
         cur.execute(
             f"SELECT norm_title, category_id FROM release WHERE norm_title IN ({placeholders})",
@@ -556,7 +557,14 @@ def insert_release(
         )
         existing = {(row[0], row[1]) for row in cur.fetchall()}
 
-    to_insert = [row for row in cleaned if (row[0], row[2]) not in existing]
+    to_insert: list[tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[str]]] = []
+    for row in cleaned:
+        key = (row[0], row[2])
+        if key not in existing:
+            to_insert.append(row)
+            existing.add(key)
+        elif row[7]:
+            updates.append((row[7], row[0], row[2]))
     inserted = {row[0] for row in to_insert}
     if to_insert:
         if conn.__class__.__module__.startswith("sqlite3"):
@@ -581,25 +589,23 @@ def insert_release(
             for year, rows in adult_rows.items():
                 ensure_release_adult_year_partition(conn, year)
                 cur.executemany(
-                    f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                    f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
                     rows,
                 )
             if other_rows:
                 cur.executemany(
-                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
                     other_rows,
                 )
     # Ensure posted_at is updated for existing rows
-    if cleaned:
-        updates = [(row[7], row[0], row[2]) for row in cleaned if row[7]]
-        if updates:
-            placeholder = (
-                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            )
-            cur.executemany(
-                f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
-                updates,
-            )
+    if updates:
+        placeholder = (
+            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+        )
+        cur.executemany(
+            f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
+            updates,
+        )
     conn.commit()
     return inserted
 
