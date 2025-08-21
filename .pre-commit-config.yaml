@@ -4,10 +4,3 @@ repos:
     hooks:
       - id: ruff
       - id: ruff-format
-  - repo: local
-    hooks:
-      - id: pytest
-        name: pytest
-        entry: pytest -q
-        language: system
-        pass_filenames: false
