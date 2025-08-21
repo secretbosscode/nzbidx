@@ -444,6 +444,7 @@ def connect_db() -> Any:
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
                     "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
+                    "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts",
                 )
                 if not exists or partitioned:
                     for stmt in stmts:
@@ -528,6 +529,9 @@ def connect_db() -> Any:
     conn.execute("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
     )
     return conn
 
