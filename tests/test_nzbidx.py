@@ -65,10 +65,16 @@ def _reset_db_conn() -> None:
     api_db.close_connection()
 
 
+@pytest.fixture(autouse=True)
+def _ensure_nntp_host(monkeypatch) -> None:
+    """Provide a default NNTP host for tests."""
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+
+
 def test_build_nzb_without_host(monkeypatch) -> None:
     monkeypatch.delenv("NNTP_HOST", raising=False)
     monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: [])
-    with pytest.raises(newznab.NzbFetchError):
+    with pytest.raises(newznab.NntpConfigError):
         nzb_builder.build_nzb_for_release("123")
 
 

@@ -7,6 +7,8 @@ from sqlalchemy import text
 
 from nzbidx_api import db
 
+pytest.importorskip("aiosqlite")
+
 
 async def _use_conn(conn) -> None:
     await conn.execute(text("SELECT 1"))
