@@ -1,37 +1,18 @@
 """API service entrypoint using Starlette."""
 
 import hashlib
-import json
 import logging
 import os
 import sys
 import time
 import asyncio
-from types import SimpleNamespace
 from pathlib import Path
 from typing import Optional, Callable
 
 import threading
 from nzbidx_ingest import ingest_loop
 
-# Default to the standard library JSON module unless explicitly disabled
-if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
-    orjson = SimpleNamespace(
-        dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
-        loads=lambda s, **kw: json.loads(
-            s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw
-        ),
-    )
-else:  # pragma: no cover - prefers orjson when available
-    try:  # pragma: no cover - import guard
-        import orjson  # type: ignore
-    except Exception:  # pragma: no cover - optional dependency
-        orjson = SimpleNamespace(
-            dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
-            loads=lambda s, **kw: json.loads(
-                s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw
-            ),
-        )
+from .json_utils import orjson
 
 
 # Starlette (with safe fallbacks for tests/minimal envs)
