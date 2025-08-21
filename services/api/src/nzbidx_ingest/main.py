@@ -9,6 +9,7 @@ import re
 import sqlite3
 from pathlib import Path
 from typing import Optional, Any, Iterable
+from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
 try:
@@ -549,6 +550,10 @@ def insert_release(
         cleaned_group = _clean(g)
         size_val = s if isinstance(s, int) and s > 0 else None
         cleaned_posted = _clean(p)
+        if cleaned_posted is None and not conn.__class__.__module__.startswith(
+            "sqlite3"
+        ):
+            cleaned_posted = datetime.now(timezone.utc).isoformat()
         cleaned.append(
             (
                 cleaned_title,
