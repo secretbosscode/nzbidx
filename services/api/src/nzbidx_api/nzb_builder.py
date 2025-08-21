@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sqlite3
 import xml.etree.ElementTree as ET
 from typing import List, Tuple
@@ -133,9 +132,11 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
 
-    # NNTP host is required for building NZBs.
-    if not (os.getenv("NNTP_HOST") or os.getenv("NNTP_HOST_1")):
-        raise newznab.NntpConfigError("NNTP host not configured")
+    missing = config.validate_nntp_config()
+    if missing:
+        raise newznab.NntpConfigError(
+            f"missing NNTP configuration: {', '.join(missing)}"
+        )
 
     rid = int(release_id)
     log.info("starting nzb build for release %s", rid)
