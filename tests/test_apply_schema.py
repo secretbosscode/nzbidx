@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from nzbidx_api import db
+from nzbidx_ingest.db_migrations import migrate_release_adult_partitions
 
 
 def test_apply_schema_creates_database(monkeypatch):
@@ -239,3 +240,53 @@ def test_create_database_noop_if_exists(monkeypatch):
 
     assert admin_urls == [("postgresql+asyncpg://u@h/postgres", "AUTOCOMMIT")]
     assert executed == []
+
+
+def test_apply_schema_after_migrate_release_adult_partitions(monkeypatch):
+    executed: list[str] = []
+
+    class MigrationCursor:
+        def execute(self, stmt, params=None):
+            return None
+
+        def fetchone(self):
+            return (1,)
+
+        def fetchall(self):
+            return []
+
+    class MigrationConn:
+        def cursor(self):
+            return MigrationCursor()
+
+        def commit(self):
+            return None
+
+    migrate_release_adult_partitions(MigrationConn())
+
+    class DummyConn:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt, params=None):
+            executed.append(stmt)
+
+        async def commit(self):
+            return None
+
+        async def rollback(self):
+            return None
+
+    class DummyEngine:
+        def connect(self):
+            return DummyConn()
+
+    monkeypatch.setattr(db, "get_engine", lambda: DummyEngine())
+    monkeypatch.setattr(db, "text", lambda s: s)
+
+    asyncio.run(db.apply_schema())
+
+    assert executed
