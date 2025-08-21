@@ -147,6 +147,14 @@ def build_nzb_for_release(release_id: str) -> str:
             if "has no segments" in err:
                 try:
                     backfill_release_parts(release_ids=[rid])
+                except ConnectionError as bf_exc:
+                    log.warning(
+                        "auto_backfill_connection_error",
+                        extra={"release_id": rid, "error": str(bf_exc)},
+                    )
+                    raise newznab.NzbFetchError(
+                        f"failed to fetch segments: {bf_exc}"
+                    ) from bf_exc
                 except Exception as bf_exc:  # pragma: no cover - unexpected
                     log.warning(
                         "auto_backfill_error",

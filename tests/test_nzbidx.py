@@ -335,6 +335,28 @@ def test_auto_backfill_failure(monkeypatch, caplog) -> None:
     )
 
 
+def test_auto_backfill_connection_error(monkeypatch, caplog) -> None:
+    """Connection errors during backfill are surfaced."""
+
+    def _segments(_rid: int):
+        raise LookupError("release has no segments")
+
+    def _backfill(*, release_ids=None, progress_cb=None):  # type: ignore[override]
+        raise ConnectionError("nntp fail")
+
+    monkeypatch.setattr(nzb_builder, "_segments_from_db", _segments)
+    monkeypatch.setattr(nzb_builder, "backfill_release_parts", _backfill)
+
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(newznab.NzbFetchError, match="nntp fail"):
+            nzb_builder.build_nzb_for_release("123")
+
+    assert any(
+        rec.message == "auto_backfill_connection_error" and rec.release_id == 123
+        for rec in caplog.records
+    )
+
+
 def test_db_query_failure_logs(monkeypatch, caplog) -> None:
     """Database errors should be logged and wrapped."""
 
