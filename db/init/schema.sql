@@ -61,3 +61,5 @@ CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_tit
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
 CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_key ON release (norm_title, category_id);
+
+CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at);
