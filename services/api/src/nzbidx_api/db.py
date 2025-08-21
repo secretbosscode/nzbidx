@@ -424,48 +424,52 @@ async def dispose_engine() -> None:
             except RuntimeError:
                 await _engine.dispose()
             else:
+
+                def _log_disposal_result(f: "asyncio.Future[Any]") -> None:
+                    try:
+                        f.result()
+                    except Exception:
+                        logger.exception("engine_dispose_failed")
+
+                fut.add_done_callback(_log_disposal_result)
                 await asyncio.wrap_future(fut)
         elif _engine_loop and _engine_loop.is_closed():
-            # The engine's original loop has been closed.  asyncpg connections
-            # bound to that loop can no longer run their normal close
-            # coroutine and SQLAlchemy will log noisy "Exception terminating
-            # connection" messages if it tries.  Drop the transport at the
-            # protocol level and replace ``Connection.close`` with a no-op so
-            # SQLAlchemy's disposal sees an already-closed connection.
             pool = getattr(getattr(_engine, "sync_engine", None), "pool", None)
             if pool is not None:
                 raw_pool = getattr(pool, "_pool", None)
                 if raw_pool is not None:
-                    items = getattr(raw_pool, "queue", None)
-                    if items is None:
-                        items = getattr(raw_pool, "items", None)
-                    if items is None:
-                        items = getattr(raw_pool, "_queue", None)
-                    if items is not None:
-                        for rec in list(items):
-                            dbapi_conn = getattr(
-                                rec, "dbapi_connection", getattr(rec, "connection", None)
+                    while True:
+                        try:
+                            rec = raw_pool.get_nowait()
+                        except Exception:
+                            break
+                        dbapi_conn = getattr(
+                            rec, "dbapi_connection", getattr(rec, "connection", None)
+                        )
+                        raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
+                        proto = getattr(raw_conn, "_protocol", None)
+                        if proto is not None:
+                            closer = getattr(
+                                proto,
+                                "close_transport",
+                                getattr(proto, "terminate", None),
                             )
-                            raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
-                            proto = getattr(raw_conn, "_protocol", None)
-                            if proto is not None:
-                                for name in ("terminate", "close_transport"):
-                                    closer = getattr(proto, name, None)
-                                    if callable(closer):
-                                        try:
-                                            closer()
-                                        except (RuntimeError, InternalClientError):
-                                            pass
-                            close = getattr(dbapi_conn, "close", None)
-                            if callable(close):
+                            if callable(closer):
                                 try:
-                                    dbapi_conn.close = lambda *_a, **_kw: None  # type: ignore[method-assign]
-                                except Exception:
+                                    closer()
+                                except (RuntimeError, InternalClientError):
                                     pass
-            try:
-                await _engine.dispose()
-            except Exception:
-                pass
+                    # Clear the pool so SQLAlchemy does not retry termination.
+                    try:  # queue.Queue or asyncio.Queue
+                        raw_pool.queue.clear()  # type: ignore[attr-defined]
+                    except Exception:
+                        try:
+                            raw_pool.items.clear()  # type: ignore[attr-defined]
+                        except Exception:
+                            try:
+                                raw_pool._queue.clear()  # type: ignore[attr-defined]
+                            except Exception:
+                                pass
         else:
             await _engine.dispose()
     finally:
