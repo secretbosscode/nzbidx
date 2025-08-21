@@ -6,6 +6,7 @@ src/nzbidx_api/backfill_release_parts.py
 src/nzbidx_api/config.py
 src/nzbidx_api/db.py
 src/nzbidx_api/errors.py
+src/nzbidx_api/json_utils.py
 src/nzbidx_api/log_sanitize.py
 src/nzbidx_api/main.py
 src/nzbidx_api/metrics_log.py
