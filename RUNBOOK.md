@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
 ```
 
+## Graceful shutdown
+- **Steps:**
+  1. Wait for outstanding tasks to complete.
+  2. Call `dispose_engine()` to close database connections.
+  3. Stop the event loop.
+- **Why:** skipping these steps may trigger `RuntimeError: got Future attached to a different loop` in asyncpg.
+
 ## Breaker stuck open
 - **Symptoms:** search endpoints return empty arrays or `503` for NZB retrieval.
 - **Checks:** `curl -fsS localhost:8080/health | jq .breaker` shows `open`.
