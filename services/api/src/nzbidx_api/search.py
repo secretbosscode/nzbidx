@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from typing import Any, Dict, List, Optional
@@ -17,6 +18,7 @@ except Exception:  # pragma: no cover - optional dependency
 from .config import _int_env
 from .db import get_engine
 from .newznab import ADULT_CATEGORY_ID, adult_content_allowed
+from .metrics_log import inc
 
 logger = logging.getLogger(__name__)
 
@@ -112,27 +114,38 @@ async def search_releases_async(
     rows = []
     max_attempts = 2
     for attempt in range(1, max_attempts + 1):
+        start_time = time.monotonic()
         try:
             async with engine.connect() as conn:
                 result = await conn.execute(sql, params)
                 rows = result.fetchall()
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            inc("search_db_query_ms", value=duration_ms)
+            logger.info(
+                "search_query",
+                extra={"duration_ms": duration_ms, "attempt": attempt},
+            )
             break
         except Exception as exc:
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            inc("search_db_query_fail_total")
+            extra_info = {
+                "error": str(exc),
+                "attempt": attempt,
+                "duration_ms": duration_ms,
+            }
             if isinstance(exc, OSError) or getattr(
                 exc, "connection_invalidated", False
             ):
                 logger.warning(
                     "search_retry",
-                    extra={
-                        "error": str(exc),
-                        "attempt": attempt,
-                        "max_attempts": max_attempts,
-                    },
+                    extra={**extra_info, "max_attempts": max_attempts},
                 )
                 if attempt == max_attempts:
                     return items
                 await asyncio.sleep(0.1 * attempt)
                 continue
+            logger.warning("search_query_failed", extra=extra_info)
             raise
 
     for row in rows:
