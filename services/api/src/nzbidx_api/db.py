@@ -338,7 +338,9 @@ async def _create_database(url: str) -> None:
             )
             if not exists:
                 try:
-                    await conn.execute(text(f'CREATE DATABASE "{dbname}"'))
+                    await conn.execute(
+                        text("CREATE DATABASE :name"), {"name": dbname}
+                    )
                 except Exception as exc:  # pragma: no cover - db may exist
                     msg = str(getattr(exc, "orig", exc)).lower()
                     if "already exists" not in msg and "duplicate database" not in msg:
