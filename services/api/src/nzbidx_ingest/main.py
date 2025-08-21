@@ -23,7 +23,11 @@ except ImportError:  # pragma: no cover - optional dependency
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
-from .db_migrations import migrate_release_table, ensure_release_adult_year_partition
+from .db_migrations import (
+    migrate_release_table,
+    ensure_release_adult_year_partition,
+    migrate_release_adult_partitions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +268,47 @@ def connect_db() -> Any:
                     if not partitioned:
                         logger.error("release_table_not_partitioned")
                         raise RuntimeError("release table must be partitioned")
+                cur = raw.cursor()
+                cur.execute(
+                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release_adult')"
+                )
+                adult_exists = bool(cur.fetchone()[0])
+                cur.execute(
+                    """
+                        SELECT EXISTS(
+                            SELECT 1
+                            FROM pg_partitioned_table p
+                            JOIN pg_class c ON p.partrelid = c.oid
+                            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                            WHERE c.relname = 'release_adult' AND a.attname = 'posted_at'
+                        )
+                    """
+                )
+                adult_partitioned = bool(cur.fetchone()[0])
+                if adult_exists and not adult_partitioned:
+                    logger.info("release_adult_table_migrating")
+                    try:
+                        migrate_release_adult_partitions(raw)
+                    except Exception:
+                        pass
+                    cur = raw.cursor()
+                    cur.execute(
+                        """
+                            SELECT EXISTS(
+                                SELECT 1
+                                FROM pg_partitioned_table p
+                                JOIN pg_class c ON p.partrelid = c.oid
+                                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                                WHERE c.relname = 'release_adult' AND a.attname = 'posted_at'
+                            )
+                        """
+                    )
+                    adult_partitioned = bool(cur.fetchone()[0])
+                    if adult_partitioned:
+                        logger.info("release_adult_table_auto_migrated")
+                if adult_exists and not adult_partitioned:
+                    logger.error("release_adult_table_not_partitioned")
+                    raise RuntimeError("release_adult table must be partitioned by posted_at")
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
@@ -293,6 +338,22 @@ def connect_db() -> Any:
                             """
                     )
                 ).fetchone()[0]
+                adult_exists = conn.execute(
+                    text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_adult')")
+                ).fetchone()[0]
+                adult_partitioned = conn.execute(
+                    text(
+                        """
+                            SELECT EXISTS(
+                                SELECT 1
+                                FROM pg_partitioned_table p
+                                JOIN pg_class c ON p.partrelid = c.oid
+                                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                                WHERE c.relname = 'release_adult' AND a.attname = 'posted_at'
+                            )
+                        """
+                    )
+                ).fetchone()[0]
                 if exists and not partitioned:
                     logger.error(
                         "release_table_not_partitioned",
@@ -300,6 +361,14 @@ def connect_db() -> Any:
                     )
                     raise RuntimeError(
                         "'release' table exists but is not partitioned; drop or migrate the table before starting the worker"
+                    )
+                if adult_exists and not adult_partitioned:
+                    logger.error(
+                        "release_adult_table_not_partitioned",
+                        extra={"next_step": "drop_or_migrate"},
+                    )
+                    raise RuntimeError(
+                        "'release_adult' table exists but is not partitioned by posted_at; drop or migrate the table before starting the worker"
                     )
                 if not exists:
                     logger.info(
