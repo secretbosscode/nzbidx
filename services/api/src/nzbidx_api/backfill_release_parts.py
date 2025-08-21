@@ -26,7 +26,9 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
         start = max(0, high - XOVER_LOOKBACK + 1) if XOVER_LOOKBACK > 0 else 0
         headers = client.xover(group, start, high) if high > 0 else []
     except Exception as exc:
-        raise ConnectionError(str(exc)) from exc
+        raise ConnectionError(
+            f"error fetching segments for {release_id} in {group}: {exc}"
+        ) from exc
     segments: list[tuple[int, str, int]] = []
     target = release_id.lower()
     seen_numbers: set[int] = set()
@@ -94,7 +96,7 @@ def backfill_release_parts(
                         "nntp_fetch_failed",
                         extra={"id": rel_id, "group": group, "error": str(exc)},
                     )
-                    continue
+                    raise
                 except Exception as exc:  # pragma: no cover - unexpected
                     log.warning(
                         "unexpected_error", extra={"id": rel_id, "error": str(exc)}

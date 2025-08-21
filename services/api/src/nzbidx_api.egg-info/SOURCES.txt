@@ -30,6 +30,7 @@ src/nzbidx_api.egg-info/dependency_links.txt
 src/nzbidx_api.egg-info/requires.txt
 src/nzbidx_api.egg-info/top_level.txt
 src/nzbidx_api/migrations/0001_add_posted_at_index.py
+src/nzbidx_api/migrations/0001_add_search_vector.py
 src/nzbidx_api/migrations/__init__.py
 src/nzbidx_ingest/__init__.py
 src/nzbidx_ingest/__main__.py
