@@ -399,7 +399,10 @@ See [docs/sbom.md](docs/sbom.md) for details.
 
 ## Operations
 
-See [RUNBOOK.md](RUNBOOK.md) for common on-call checks.
+See [RUNBOOK.md](RUNBOOK.md) for common on-call checks. The [engine lifecycle
+section](RUNBOOK.md#engine-lifecycle) covers the loop-bound `init_engine()` and
+the requirement to call `dispose_engine()` before the originating event loop
+closes.
 
 Container logs stream to stdout/stderr. Configure log rotation (daily or by size)
 to avoid unbounded growth. Example Docker daemon snippet:
