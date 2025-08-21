@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from nzbidx_api import db
 from nzbidx_ingest.db_migrations import migrate_release_adult_partitions
 
@@ -240,6 +242,44 @@ def test_create_database_noop_if_exists(monkeypatch):
 
     assert admin_urls == [("postgresql+asyncpg://u@h/postgres", "AUTOCOMMIT")]
     assert executed == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["postgresql+asyncpg://u@h/db", "postgresql+psycopg://u@h/db"],
+)
+def test_create_database_executes_parameterized(monkeypatch, url):
+    executed: list[tuple[str, dict[str, str] | None]] = []
+
+    class AdminConn:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def scalar(self, stmt, params=None):
+            return None  # database missing
+
+        async def execute(self, stmt, params=None):
+            executed.append((stmt, params))
+
+    class AdminEngine:
+        def connect(self):
+            return AdminConn()
+
+        async def dispose(self):
+            return None
+
+    def fake_create_async_engine(url, echo=False, isolation_level=None):
+        return AdminEngine()
+
+    monkeypatch.setattr(db, "create_async_engine", fake_create_async_engine)
+    monkeypatch.setattr(db, "text", lambda s: s)
+
+    asyncio.run(db._create_database(url))
+
+    assert executed == [("CREATE DATABASE :name", {"name": "db"})]
 
 
 def test_apply_schema_after_migrate_release_adult_partitions(monkeypatch):
