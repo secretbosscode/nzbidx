@@ -415,14 +415,58 @@ async def dispose_engine() -> None:
     if _engine is None:
         return
     loop = asyncio.get_running_loop()
+
+    def _terminate_lingering_connections() -> None:
+        pool = getattr(getattr(_engine, "sync_engine", None), "pool", None)
+        if pool is None:
+            return
+        raw_pool = getattr(pool, "_pool", None)
+        if raw_pool is None:
+            return
+        while True:
+            try:
+                rec = raw_pool.get_nowait()
+            except Exception:
+                break
+            dbapi_conn = getattr(rec, "dbapi_connection", getattr(rec, "connection", None))
+            raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
+            proto = getattr(raw_conn, "_protocol", None)
+            if proto is not None:
+                closer = getattr(
+                    proto, "close_transport", getattr(proto, "terminate", None)
+                )
+                if callable(closer):
+                    try:
+                        closer()
+                    except (RuntimeError, InternalClientError):
+                        pass
+        try:  # queue.Queue or asyncio.Queue
+            raw_pool.queue.clear()  # type: ignore[attr-defined]
+        except Exception:
+            try:
+                raw_pool.items.clear()  # type: ignore[attr-defined]
+            except Exception:
+                try:
+                    raw_pool._queue.clear()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
     try:
         if _engine_loop is loop:
-            await _engine.dispose()
+            try:
+                await _engine.dispose()
+            except (RuntimeError, InternalClientError):
+                logger.exception("engine_dispose_failed")
+                _terminate_lingering_connections()
         elif _engine_loop and not _engine_loop.is_closed():
             try:
                 fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
             except RuntimeError:
-                await _engine.dispose()
+                try:
+                    await _engine.dispose()
+                except (RuntimeError, InternalClientError):
+                    logger.exception("engine_dispose_failed")
+                    _terminate_lingering_connections()
             else:
 
                 def _log_disposal_result(f: "asyncio.Future[Any]") -> None:
@@ -432,46 +476,19 @@ async def dispose_engine() -> None:
                         logger.exception("engine_dispose_failed")
 
                 fut.add_done_callback(_log_disposal_result)
-                await asyncio.wrap_future(fut)
+                try:
+                    await asyncio.wrap_future(fut)
+                except (RuntimeError, InternalClientError):
+                    logger.exception("engine_dispose_failed")
+                    _terminate_lingering_connections()
         elif _engine_loop and _engine_loop.is_closed():
-            pool = getattr(getattr(_engine, "sync_engine", None), "pool", None)
-            if pool is not None:
-                raw_pool = getattr(pool, "_pool", None)
-                if raw_pool is not None:
-                    while True:
-                        try:
-                            rec = raw_pool.get_nowait()
-                        except Exception:
-                            break
-                        dbapi_conn = getattr(
-                            rec, "dbapi_connection", getattr(rec, "connection", None)
-                        )
-                        raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
-                        proto = getattr(raw_conn, "_protocol", None)
-                        if proto is not None:
-                            closer = getattr(
-                                proto,
-                                "close_transport",
-                                getattr(proto, "terminate", None),
-                            )
-                            if callable(closer):
-                                try:
-                                    closer()
-                                except (RuntimeError, InternalClientError):
-                                    pass
-                    # Clear the pool so SQLAlchemy does not retry termination.
-                    try:  # queue.Queue or asyncio.Queue
-                        raw_pool.queue.clear()  # type: ignore[attr-defined]
-                    except Exception:
-                        try:
-                            raw_pool.items.clear()  # type: ignore[attr-defined]
-                        except Exception:
-                            try:
-                                raw_pool._queue.clear()  # type: ignore[attr-defined]
-                            except Exception:
-                                pass
+            _terminate_lingering_connections()
         else:
-            await _engine.dispose()
+            try:
+                await _engine.dispose()
+            except (RuntimeError, InternalClientError):
+                logger.exception("engine_dispose_failed")
+                _terminate_lingering_connections()
     finally:
         _engine = None
         _engine_loop = None
