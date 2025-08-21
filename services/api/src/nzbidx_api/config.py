@@ -66,6 +66,16 @@ def cors_origins() -> list[str]:
 
 
 @lru_cache()
+def strict_transport_security() -> str | None:
+    """Strict-Transport-Security header value or ``None`` to disable."""
+
+    value = os.getenv(
+        "STRICT_TRANSPORT_SECURITY", "max-age=63072000; includeSubDomains"
+    ).strip()
+    return value or None
+
+
+@lru_cache()
 def nzb_timeout_seconds() -> int:
     """Maximum seconds to wait for NZB generation.
 
