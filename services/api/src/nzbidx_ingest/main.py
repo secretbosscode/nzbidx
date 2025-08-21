@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover - optional dependency
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
-from .db_migrations import migrate_release_table, migrate_release_time_partitions
+from .db_migrations import migrate_release_table
 
 logger = logging.getLogger(__name__)
 
@@ -82,49 +82,6 @@ CATEGORY_MAP = {
     "books": "7020",
     "comics": "7030",
 }
-
-
-def _partition_table(category_id: int) -> str:
-    """Return the partition table name for a ``category_id``."""
-    if 2000 <= category_id < 3000:
-        return "release_movies"
-    if 3000 <= category_id < 4000:
-        return "release_music"
-    if 5000 <= category_id < 6000:
-        return "release_tv"
-    if 6000 <= category_id < 7000:
-        return "release_adult"
-    if 7000 <= category_id < 8000:
-        return "release_books"
-    return "release_other"
-
-
-def _ensure_year_partitions(
-    conn: Any, categories: list[tuple[int, str | None]]
-) -> None:
-    """Create year-based partitions for the given categories if needed."""
-
-    cur = conn.cursor()
-    seen: set[tuple[str, int]] = set()
-    for cat_id, posted in categories:
-        if not posted:
-            continue
-        try:
-            year = int(str(posted)[:4])
-        except Exception:
-            continue
-        table = _partition_table(cat_id)
-        key = (table, year)
-        if key in seen:
-            continue
-        seen.add(key)
-        next_year = year + 1
-        cur.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS {table}_{year} PARTITION OF {table}
-                FOR VALUES FROM ('{year}-01-01') TO ('{next_year}-01-01')
-            """
-        )
 
 
 def _load_group_category_hints() -> list[tuple[str, str]]:
@@ -307,11 +264,6 @@ def connect_db() -> Any:
                     if not partitioned:
                         logger.error("release_table_not_partitioned")
                         raise RuntimeError("release table must be partitioned")
-                if partitioned:
-                    try:
-                        migrate_release_time_partitions(raw)
-                    except Exception:
-                        pass
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
@@ -380,53 +332,24 @@ def connect_db() -> Any:
                         ) PARTITION BY RANGE (category_id)
                         """
                     ),
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
-                            FOR VALUES FROM (2000) TO (3000)
-                            PARTITION BY RANGE (posted_at)
-                        """
-                    ),
+                    "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000) PARTITION BY RANGE (posted_at)",
                     "CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
-                            FOR VALUES FROM (3000) TO (4000)
-                            PARTITION BY RANGE (posted_at)
-                        """
-                    ),
+                    "CREATE TABLE IF NOT EXISTS release_movies_default PARTITION OF release_movies DEFAULT",
+                    "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000) PARTITION BY RANGE (posted_at)",
                     "CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
-                            FOR VALUES FROM (5000) TO (6000)
-                            PARTITION BY RANGE (posted_at)
-                        """
-                    ),
+                    "CREATE TABLE IF NOT EXISTS release_music_default PARTITION OF release_music DEFAULT",
+                    "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000) PARTITION BY RANGE (posted_at)",
                     "CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
-                            FOR VALUES FROM (6000) TO (7000)
-                            PARTITION BY RANGE (posted_at)
-                        """
-                    ),
+                    "CREATE TABLE IF NOT EXISTS release_tv_default PARTITION OF release_tv DEFAULT",
+                    "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)",
                     "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
-                            FOR VALUES FROM (7000) TO (8000)
-                            PARTITION BY RANGE (posted_at)
-                        """
-                    ),
+                    "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
+                    "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000) PARTITION BY RANGE (posted_at)",
                     "CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT
-                            PARTITION BY RANGE (posted_at)
-                        """
-                    ),
+                    "CREATE TABLE IF NOT EXISTS release_books_default PARTITION OF release_books DEFAULT",
+                    "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT PARTITION BY RANGE (posted_at)",
                     "CREATE TABLE IF NOT EXISTS release_other_2024 PARTITION OF release_other FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+                    "CREATE TABLE IF NOT EXISTS release_other_default PARTITION OF release_other DEFAULT",
                     "DROP INDEX IF EXISTS release_embedding_idx",
                     "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
@@ -444,7 +367,6 @@ def connect_db() -> Any:
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
                     "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
-                    "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts",
                 )
                 if not exists or partitioned:
                     for stmt in stmts:
@@ -530,10 +452,22 @@ def connect_db() -> Any:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
-    )
     return conn
+
+
+def _ensure_year_partitions(conn: Any, years: set[int]) -> None:
+    """Create year-based partitions for all categories if missing."""
+    if not years or conn.__class__.__module__.startswith("sqlite3"):
+        return
+    cur = conn.cursor()
+    for year in years:
+        start = f"'{year}-01-01'"
+        end = f"'{year + 1}-01-01'"
+        for name in ("movies", "music", "tv", "adult", "books", "other"):
+            cur.execute(
+                f"""CREATE TABLE IF NOT EXISTS release_{name}_{year} PARTITION OF release_{name} FOR VALUES FROM ({start}) TO ({end})"""
+            )
+    conn.commit()
 
 
 def insert_release(
@@ -633,6 +567,9 @@ def insert_release(
             )
         )
 
+    years = {int(row[7][:4]) for row in cleaned if row[7] and row[7][:4].isdigit()}
+    _ensure_year_partitions(conn, years)
+
     placeholders = ",".join(
         [
             "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
@@ -656,9 +593,6 @@ def insert_release(
                 to_insert,
             )
         else:
-            # Ensure year-based partitions exist for upcoming inserts
-            year_cats = [(row[2], row[7]) for row in to_insert]
-            _ensure_year_partitions(conn, year_cats)
             cur.executemany(
                 "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
                 to_insert,
@@ -670,8 +604,6 @@ def insert_release(
             placeholder = (
                 "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
             )
-            if not conn.__class__.__module__.startswith("sqlite3"):
-                _ensure_year_partitions(conn, [(cat, ts) for ts, _, cat in updates])
             cur.executemany(
                 f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
                 updates,
