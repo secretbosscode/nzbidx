@@ -66,9 +66,7 @@ async def search_releases_async(
     params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
     if q:
-        conditions.append(
-            "to_tsvector('simple', coalesce(norm_title, '') || ' ' || coalesce(tags, '')) @@ plainto_tsquery('simple', :tsquery)"
-        )
+        conditions.append("search_vector @@ plainto_tsquery('simple', :tsquery)")
         params["tsquery"] = q
 
     if category:
