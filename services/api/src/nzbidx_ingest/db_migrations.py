@@ -136,3 +136,13 @@ def _ensure_time_partitions(conn: Any) -> None:
         cur.execute(f"INSERT INTO release_{name} SELECT * FROM release_{name}_old")
         cur.execute(f"DROP TABLE release_{name}_old")
     conn.commit()
+
+
+def add_release_has_parts_index(conn: Any) -> None:
+    """Create partial index on ``release`` rows that have parts."""
+
+    cur = conn.cursor()
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (id) WHERE has_parts",
+    )
+    conn.commit()
