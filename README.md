@@ -399,7 +399,10 @@ See [docs/sbom.md](docs/sbom.md) for details.
 
 ## Operations
 
-See [RUNBOOK.md](RUNBOOK.md) for common on-call checks.
+See [RUNBOOK.md](RUNBOOK.md) for common on-call checks. The [engine lifecycle
+section](RUNBOOK.md#engine-lifecycle) covers the loop-bound `init_engine()` and
+the requirement to call `dispose_engine()` before the originating event loop
+closes.
 
 Container logs stream to stdout/stderr. Configure log rotation (daily or by size)
 to avoid unbounded growth. Example Docker daemon snippet:
@@ -430,6 +433,7 @@ docker compose up -d && scripts/smoke.sh
 - Snapshot repo not configured – ``make snapshot-repo`` no-ops until env vars set.
 - Smoke test times out – increase timeout or inspect ``docker compose logs``.
 - ``t=movie`` without a ``q`` parameter returns a placeholder "Indexer Test Item" when no real results exist.
+- Inspect segment metadata – `python scripts/check_release_segments.py <id>` prints segment count and first/last message IDs.
 
 ## Kubernetes (examples only)
 

@@ -53,65 +53,24 @@ def migrate_release_table(conn: Any) -> None:
         """
     )
 
-    # Create partitions with sub-partitioning by posted_at.
+    # Create partitions.
     cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
-            FOR VALUES FROM (2000) TO (3000)
-            PARTITION BY RANGE (posted_at)
-        """,
+        "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+        "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
     )
     cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
-            FOR VALUES FROM (3000) TO (4000)
-            PARTITION BY RANGE (posted_at)
-        """,
+        "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+        "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000)",
     )
     cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
-            FOR VALUES FROM (5000) TO (6000)
-            PARTITION BY RANGE (posted_at)
-        """,
+        "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
-            FOR VALUES FROM (6000) TO (7000)
-            PARTITION BY RANGE (posted_at)
-        """,
-    )
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
-            FOR VALUES FROM (7000) TO (8000)
-            PARTITION BY RANGE (posted_at)
-        """,
-    )
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT
-            PARTITION BY RANGE (posted_at)
-        """,
-    )
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_other_2024 PARTITION OF release_other FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+        "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
     )
 
     # Enforce uniqueness on norm_title/category_id across partitions.
@@ -143,60 +102,32 @@ def migrate_release_table(conn: Any) -> None:
     conn.commit()
 
 
-def migrate_release_time_partitions(conn: Any) -> None:
-    """Sub-partition existing ``release_*`` tables by ``posted_at`` year."""
+def create_release_posted_at_index(conn: Any) -> None:
+    """Create ``release_posted_at_idx`` for existing installations.
+
+    Uses ``CREATE INDEX CONCURRENTLY`` on PostgreSQL to avoid locking the
+    ``release`` table.  Falls back to a regular ``CREATE INDEX`` for other
+    databases such as SQLite.  The operation is idempotent.
+    """
 
     cur = conn.cursor()
-    partitions = [
-        ("release_movies", "FOR VALUES FROM (2000) TO (3000)"),
-        ("release_music", "FOR VALUES FROM (3000) TO (4000)"),
-        ("release_tv", "FOR VALUES FROM (5000) TO (6000)"),
-        ("release_adult", "FOR VALUES FROM (6000) TO (7000)"),
-        ("release_books", "FOR VALUES FROM (7000) TO (8000)"),
-        ("release_other", "DEFAULT"),
-    ]
-
-    for name, range_spec in partitions:
-        cur.execute("SELECT 1 FROM pg_class WHERE relname=%s", (name,))
-        if cur.fetchone() is None:
-            continue
-
-        cur.execute(
-            """
-            SELECT 1 FROM pg_partitioned_table p
-            JOIN pg_class c ON p.partrelid = c.oid
-            WHERE c.relname = %s
-            """,
-            (name,),
-        )
-        if cur.fetchone():
-            # Already partitioned; ensure 2024 partition exists
+    try:
+        module = conn.__class__.__module__
+        if "psycopg" in module:
+            try:
+                conn.autocommit = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
             cur.execute(
-                f"CREATE TABLE IF NOT EXISTS {name}_2024 PARTITION OF {name} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-            )
-            continue
-
-        # Detach existing partition and recreate as partitioned by posted_at
-        cur.execute(f"ALTER TABLE release DETACH PARTITION {name}")
-        cur.execute(f"ALTER TABLE {name} RENAME TO {name}_old")
-        if range_spec == "DEFAULT":
-            cur.execute(
-                f"""
-                CREATE TABLE {name} PARTITION OF release DEFAULT
-                    PARTITION BY RANGE (posted_at)
-                """,
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
             )
         else:
             cur.execute(
-                f"""
-                CREATE TABLE {name} PARTITION OF release {range_spec}
-                    PARTITION BY RANGE (posted_at)
-                """,
+                "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
             )
-        cur.execute(
-            f"CREATE TABLE IF NOT EXISTS {name}_2024 PARTITION OF {name} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-        )
-        cur.execute(f"INSERT INTO {name} SELECT * FROM {name}_old")
-        cur.execute(f"DROP TABLE {name}_old")
-
-    conn.commit()
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
