@@ -97,3 +97,13 @@ def migrate_release_table(conn: Any) -> None:
     cur.execute("DROP TABLE release_old")
 
     conn.commit()
+
+
+def add_release_has_parts_index(conn: Any) -> None:
+    """Create partial index on ``release`` rows that have parts."""
+
+    cur = conn.cursor()
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (id) WHERE has_parts",
+    )
+    conn.commit()
