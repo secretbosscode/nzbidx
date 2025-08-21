@@ -7,6 +7,8 @@ from sqlalchemy import text
 
 from nzbidx_api import db
 
+pytest.importorskip("aiosqlite")
+
 
 async def _run_pending_disposal_test(monkeypatch):
     monkeypatch.setattr(db, "DATABASE_URL", "sqlite+aiosqlite:///:memory:")
