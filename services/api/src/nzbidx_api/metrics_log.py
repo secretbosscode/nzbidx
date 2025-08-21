@@ -13,6 +13,11 @@ _counters: Counter[str] = Counter()
 _prev_counters: Counter[str] = Counter()
 
 
+def get_counters() -> dict[str, int]:
+    """Return a snapshot of current metric counters."""
+    return dict(_counters)
+
+
 def _label_key(name: str, labels: Optional[dict[str, str]]) -> str:
     if not labels:
         return name

@@ -132,6 +132,12 @@ def build_nzb_for_release(release_id: str) -> str:
     config.nntp_total_timeout_seconds.cache_clear()
     config.nzb_timeout_seconds.cache_clear()
 
+    missing = config.validate_nntp_config()
+    if missing:
+        raise newznab.NntpConfigError(
+            f"missing NNTP configuration: {', '.join(missing)}"
+        )
+
     rid = int(release_id)
     log.info("starting nzb build for release %s", rid)
     try:
