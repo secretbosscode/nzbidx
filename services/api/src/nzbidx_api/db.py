@@ -37,6 +37,12 @@ if psycopg:  # pragma: no cover - psycopg not installed
 else:  # pragma: no cover - psycopg not installed
     DB_CLOSE_ERRORS: tuple[type[BaseException], ...] = ()
 
+# Optional asyncpg dependency for low-level connection termination.
+try:  # pragma: no cover - import guard
+    from asyncpg.exceptions import InternalClientError
+except Exception:  # pragma: no cover - optional dependency
+    InternalClientError = RuntimeError  # type: ignore[misc,assignment]
+
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost:5432/postgres")
@@ -400,9 +406,9 @@ async def dispose_engine() -> None:
     """Dispose the global async engine and close pooled connections.
 
     If the engine was created on a different or closed loop the disposal
-    falls back to the current loop and a warning is emitted.  When the
-    original loop has already been closed the engine's pooled connections are
-    terminated directly to avoid awaiting on a defunct loop.
+    falls back to the current loop.  When the original loop has already been
+    closed the engine's pooled connections are terminated directly to avoid
+    awaiting on a defunct loop.
     """
 
     global _engine, _engine_loop
@@ -416,12 +422,10 @@ async def dispose_engine() -> None:
             try:
                 fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
             except RuntimeError:
-                logger.warning("engine_loop_closed")
                 await _engine.dispose()
             else:
                 await asyncio.wrap_future(fut)
         elif _engine_loop and _engine_loop.is_closed():
-            logger.warning("engine_loop_closed_terminate")
             pool = getattr(getattr(_engine, "sync_engine", None), "pool", None)
             if pool is not None:
                 raw_pool = getattr(pool, "_pool", None)
@@ -435,14 +439,26 @@ async def dispose_engine() -> None:
                             rec, "dbapi_connection", getattr(rec, "connection", None)
                         )
                         raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
-                        terminator = getattr(raw_conn, "terminate", None)
-                        if callable(terminator):
+                        proto = getattr(raw_conn, "_protocol", None)
+                        if proto is not None:
+                            closer = getattr(proto, "close_transport", getattr(proto, "terminate", None))
+                            if callable(closer):
+                                try:
+                                    closer()
+                                except (RuntimeError, InternalClientError):
+                                    pass
+                    # Clear the pool so SQLAlchemy does not retry termination.
+                    try:  # queue.Queue or asyncio.Queue
+                        raw_pool.queue.clear()  # type: ignore[attr-defined]
+                    except Exception:
+                        try:
+                            raw_pool.items.clear()  # type: ignore[attr-defined]
+                        except Exception:
                             try:
-                                terminator()
+                                raw_pool._queue.clear()  # type: ignore[attr-defined]
                             except Exception:
                                 pass
         else:
-            logger.warning("engine_loop_closed")
             await _engine.dispose()
     finally:
         _engine = None

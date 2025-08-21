@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import asyncpg
 
 from nzbidx_api import db
 
 
-def test_dispose_engine_after_loop_closed(monkeypatch):
-    terminated = False
-
+def _setup_dummy_engine(monkeypatch, protocol_factory):
     class DummyConn:
-        def terminate(self) -> None:
-            nonlocal terminated
-            terminated = True
+        def __init__(self) -> None:
+            self._protocol = protocol_factory()
 
         async def close(self):  # pragma: no cover - should not run
             raise asyncpg.InternalClientError("close called")
@@ -47,24 +45,46 @@ def test_dispose_engine_after_loop_closed(monkeypatch):
 
     monkeypatch.setattr(db, "create_async_engine", fake_create_async_engine)
 
+
+def test_dispose_engine_after_loop_closed(monkeypatch, caplog):
+    closed = False
+
+    class DummyProtocol:
+        def close_transport(self) -> None:
+            nonlocal closed
+            closed = True
+            raise asyncpg.InternalClientError("close called")
+
+    _setup_dummy_engine(monkeypatch, DummyProtocol)
+
     loop = asyncio.new_event_loop()
     loop.run_until_complete(db.init_engine())
     loop.close()
 
+    caplog.set_level(logging.WARNING, logger="nzbidx_api.db")
     asyncio.run(db.dispose_engine())
 
-    assert terminated
+    assert closed
     assert db._engine is None
     assert db._engine_loop is None
+    assert caplog.records == []
 
 
-def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch):
-    terminated = False
+def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch, caplog):
+    closed = False
+
+    class DummyProtocol:
+        def close_transport(self) -> None:
+            nonlocal closed
+            closed = True
+            raise asyncpg.InternalClientError("close called")
 
     class DummyRawConn:
-        def terminate(self) -> None:
-            nonlocal terminated
-            terminated = True
+        def __init__(self) -> None:
+            self._protocol = DummyProtocol()
+
+        async def close(self):  # pragma: no cover - should not run
+            raise asyncpg.InternalClientError("close called")
 
     class DummyConnProxy:
         def __init__(self) -> None:
@@ -109,8 +129,10 @@ def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch):
     loop.run_until_complete(db.init_engine())
     loop.close()
 
+    caplog.set_level(logging.WARNING, logger="nzbidx_api.db")
     asyncio.run(db.dispose_engine())
 
-    assert terminated
+    assert closed
     assert db._engine is None
     assert db._engine_loop is None
+    assert caplog.records == []
