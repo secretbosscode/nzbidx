@@ -14,5 +14,6 @@ def test_posted_at_column_and_index(monkeypatch, tmp_path):
             row[1] for row in conn.execute("PRAGMA index_list('release')").fetchall()
         ]
         assert "release_posted_at_idx" in indexes
+        assert "release_has_parts_idx" in indexes
     finally:
         conn.close()
