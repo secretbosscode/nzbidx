@@ -15,7 +15,8 @@ _CACHE_LOCK = asyncio.Lock()
 
 def _purge_expired_locked(now: Optional[float] = None) -> None:
     """Internal helper that removes expired entries while the cache lock is held."""
-    now = now or time.time()
+    if now is None:
+        now = time.monotonic()
     for key, (expires, _) in list(_CACHE.items()):
         if expires < now:
             del _CACHE[key]
@@ -30,7 +31,7 @@ async def purge_expired() -> None:
 async def get_cached_rss(key: str) -> Optional[str]:
     """Return cached RSS XML for ``key`` if present and not expired."""
     async with _CACHE_LOCK:
-        now = time.time()
+        now = time.monotonic()
         _purge_expired_locked(now)
         entry = _CACHE.get(key)
         if not entry:
@@ -49,4 +50,4 @@ async def cache_rss(key: str, xml: str) -> None:
 
     async with _CACHE_LOCK:
         _purge_expired_locked()
-        _CACHE[key] = (time.time() + search_ttl_seconds(), xml)
+        _CACHE[key] = (time.monotonic() + search_ttl_seconds(), xml)
