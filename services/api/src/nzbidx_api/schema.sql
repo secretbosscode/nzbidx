@@ -23,7 +23,14 @@ CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
 CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
     FOR VALUES FROM (5000) TO (6000);
 CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
-    FOR VALUES FROM (6000) TO (7000);
+    FOR VALUES FROM (6000) TO (7000)
+    PARTITION BY RANGE (posted_at);
+
+CREATE TABLE IF NOT EXISTS release_adult_2023 PARTITION OF release_adult
+    FOR VALUES FROM ('2023-01-01') TO ('2024-01-01');
+CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT;
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
     FOR VALUES FROM (7000) TO (8000);
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
@@ -67,3 +74,4 @@ CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_tit
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
 CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_key ON release (norm_title, category_id);
+CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at);
