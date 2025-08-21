@@ -67,15 +67,28 @@ def _reset_db_conn() -> None:
 
 @pytest.fixture(autouse=True)
 def _ensure_nntp_host(monkeypatch) -> None:
-    """Provide a default NNTP host for tests."""
+    """Provide default NNTP configuration for tests."""
     monkeypatch.setenv("NNTP_HOST", "example.com")
+    monkeypatch.setenv("NNTP_PORT", "119")
+    monkeypatch.setenv("NNTP_USER", "user")
+    monkeypatch.setenv("NNTP_PASS", "pass")
+    monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
 
 
 def test_build_nzb_without_host(monkeypatch) -> None:
     monkeypatch.delenv("NNTP_HOST", raising=False)
-    monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: [])
-    with pytest.raises(newznab.NntpConfigError):
+    with pytest.raises(newznab.NntpConfigError) as exc:
         nzb_builder.build_nzb_for_release("123")
+    assert "NNTP_HOST" in str(exc.value)
+
+
+def test_build_nzb_missing_credentials(monkeypatch) -> None:
+    monkeypatch.delenv("NNTP_USER", raising=False)
+    monkeypatch.delenv("NNTP_PASS", raising=False)
+    with pytest.raises(newznab.NntpConfigError) as exc:
+        nzb_builder.build_nzb_for_release("123")
+    msg = str(exc.value)
+    assert "NNTP_USER" in msg and "NNTP_PASS" in msg
 
 
 def test_nzb_timeout_defaults(monkeypatch) -> None:
