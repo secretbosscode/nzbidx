@@ -22,7 +22,6 @@ dependencies = [
     "apscheduler",
     "langdetect",
     "standard-nntplib",
-    "aiosqlite",
 ]
 
 [project.optional-dependencies]
