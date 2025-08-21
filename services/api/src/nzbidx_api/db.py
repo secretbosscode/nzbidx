@@ -455,22 +455,21 @@ async def dispose_engine() -> None:
                                 getattr(proto, "terminate", None),
                             )
                             if callable(closer):
-                                conn_id = id(raw_conn)
-                                logger.debug(
-                                    "pooled_connection_force_close",
-                                    extra={"connection_id": conn_id},
-                                )
                                 try:
-                                    closer()
-                                except (RuntimeError, InternalClientError) as exc:
-                                    logger.warning(
-                                        "pooled_connection_force_close_failed",
-                                        extra={
-                                            "connection_id": conn_id,
-                                            "error": str(exc),
-                                        },
-                                        exc_info=exc,
-                                    )
+                                    fut = closer()
+                                    if asyncio.isfuture(fut):
+                                        try:
+                                            fut.result()
+                                        except InternalClientError:
+                                            logger.exception(
+                                                "engine_dispose_terminate_failed"
+                                            )
+                                        except Exception:
+                                            pass
+                                except InternalClientError:
+                                    logger.exception("engine_dispose_terminate_failed")
+                                except RuntimeError:
+                                    pass
                     # Clear the pool so SQLAlchemy does not retry termination.
                     try:  # queue.Queue or asyncio.Queue
                         raw_pool.queue.clear()  # type: ignore[attr-defined]
