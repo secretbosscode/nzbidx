@@ -6,6 +6,8 @@ The helper iterates over all releases, fetches NZB segment metadata via
 ``build_nzb_for_release`` and stores the segment details in the ``release``
 table. Releases that no longer resolve to any segments are removed from storage
 and pruned from the search index.
+
+Optional release IDs may restrict the job to specific entries.
 """
 
 from __future__ import annotations
@@ -49,12 +51,21 @@ def main(
         action="store_true",
         help="process only releases marked with has_parts but missing segments",
     )
+    parser.add_argument(
+        "release_ids",
+        nargs="*",
+        type=int,
+        metavar="ID",
+        help="specific release IDs to backfill",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
     if args.auto:
         _auto_mode()
+    elif args.release_ids:
+        backfill_release_parts(release_ids=args.release_ids)
     else:
         backfill_release_parts()
 
