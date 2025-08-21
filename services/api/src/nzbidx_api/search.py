@@ -65,7 +65,7 @@ async def search_releases_async(
 
     if q:
         conditions.append(
-            "to_tsvector('simple', coalesce(norm_title, '') || ' ' || coalesce(tags, '')) @@ plainto_tsquery('simple', :tsquery)"
+            "search_vector @@ plainto_tsquery('simple', :tsquery)"
         )
         params["tsquery"] = q
 
