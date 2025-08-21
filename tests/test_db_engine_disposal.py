@@ -67,7 +67,11 @@ def test_dispose_engine_after_loop_closed(monkeypatch, caplog):
     assert closed
     assert db._engine is None
     assert db._engine_loop is None
-    assert caplog.records == []
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.message == "pooled_connection_force_close_failed"
+    assert isinstance(record.connection_id, int)
+    assert record.error == "close called"
 
 
 def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch, caplog):
@@ -135,7 +139,11 @@ def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch, caplog):
     assert closed
     assert db._engine is None
     assert db._engine_loop is None
-    assert caplog.records == []
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.message == "pooled_connection_force_close_failed"
+    assert isinstance(record.connection_id, int)
+    assert record.error == "close called"
 
 
 def test_dispose_engine_no_unretrieved_future(monkeypatch, capfd):
