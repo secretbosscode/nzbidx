@@ -136,3 +136,20 @@ def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch, caplog):
     assert db._engine is None
     assert db._engine_loop is None
     assert caplog.records == []
+
+
+def test_dispose_engine_no_unretrieved_future(monkeypatch, capfd):
+    class DummyProtocol:
+        def close_transport(self) -> None:
+            pass
+
+    _setup_dummy_engine(monkeypatch, DummyProtocol)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(db.init_engine())
+    loop.close()
+
+    asyncio.run(db.dispose_engine())
+
+    captured = capfd.readouterr()
+    assert "Future exception was never retrieved" not in captured.err

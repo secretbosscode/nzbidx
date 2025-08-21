@@ -424,6 +424,14 @@ async def dispose_engine() -> None:
             except RuntimeError:
                 await _engine.dispose()
             else:
+
+                def _log_disposal_result(f: "asyncio.Future[Any]") -> None:
+                    try:
+                        f.result()
+                    except Exception:
+                        logger.exception("engine_dispose_failed")
+
+                fut.add_done_callback(_log_disposal_result)
                 await asyncio.wrap_future(fut)
         elif _engine_loop and _engine_loop.is_closed():
             pool = getattr(getattr(_engine, "sync_engine", None), "pool", None)
@@ -441,7 +449,11 @@ async def dispose_engine() -> None:
                         raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
                         proto = getattr(raw_conn, "_protocol", None)
                         if proto is not None:
-                            closer = getattr(proto, "close_transport", getattr(proto, "terminate", None))
+                            closer = getattr(
+                                proto,
+                                "close_transport",
+                                getattr(proto, "terminate", None),
+                            )
                             if callable(closer):
                                 try:
                                     closer()
