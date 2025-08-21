@@ -141,7 +141,7 @@ from .config import (
     nzb_timeout_seconds,
     nntp_total_timeout_seconds,
 )
-from .metrics_log import start as start_metrics, inc_api_5xx
+from .metrics_log import start as start_metrics, inc_api_5xx, get_counters
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
 
@@ -352,6 +352,11 @@ async def status(request: Request) -> ORJSONResponse:
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
     payload = {"request_id": req_id, "breaker": {"os": os_breaker.state()}}
     return ORJSONResponse(payload)
+
+
+async def metrics(request: Request) -> ORJSONResponse:
+    """Expose internal metrics counters."""
+    return ORJSONResponse(get_counters())
 
 
 async def config_endpoint(request: Request) -> ORJSONResponse:
@@ -686,6 +691,7 @@ routes = [
     Route("/health", health),
     Route("/api/health", health),
     Route("/api/status", status),
+    Route("/api/metrics", metrics),
     Route("/api/config", config_endpoint),
     Route("/api/admin/backfill", admin_backfill, methods=["POST"]),
     Route("/api", api),
