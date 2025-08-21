@@ -402,48 +402,6 @@ def close_connection() -> None:
             _conn = None
 
 
-def _terminate_pooled_connections(engine: Any) -> None:
-    """Terminate pooled asyncpg connections without awaiting.
-
-    When the engine's original event loop is no longer running, dispose logic
-    cannot be scheduled.  In this case terminate any pooled connections using
-    the low-level asyncpg protocol methods to ensure transports are closed.
-    """
-
-    pool = getattr(getattr(engine, "sync_engine", None), "pool", None)
-    if pool is None:  # pragma: no cover - no pool available
-        return
-    raw_pool = getattr(pool, "_pool", None)
-    if raw_pool is None:  # pragma: no cover - structure unexpected
-        return
-    while True:
-        try:
-            rec = raw_pool.get_nowait()
-        except Exception:
-            break
-        dbapi_conn = getattr(rec, "dbapi_connection", getattr(rec, "connection", None))
-        raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
-        proto = getattr(raw_conn, "_protocol", None)
-        if proto is not None:
-            closer = getattr(proto, "close_transport", getattr(proto, "terminate", None))
-            if callable(closer):
-                try:
-                    closer()
-                except (RuntimeError, InternalClientError):
-                    pass
-    # Clear pool so SQLAlchemy does not attempt to reuse or terminate again.
-    try:  # queue.Queue or asyncio.Queue
-        raw_pool.queue.clear()  # type: ignore[attr-defined]
-    except Exception:
-        try:
-            raw_pool.items.clear()  # type: ignore[attr-defined]
-        except Exception:
-            try:
-                raw_pool._queue.clear()  # type: ignore[attr-defined]
-            except Exception:
-                pass
-
-
 async def dispose_engine() -> None:
     """Dispose the global async engine and close pooled connections.
 
@@ -461,27 +419,69 @@ async def dispose_engine() -> None:
         if _engine_loop is loop:
             await _engine.dispose()
         elif _engine_loop and not _engine_loop.is_closed():
-            if not _engine_loop.is_running():
-                _terminate_pooled_connections(_engine)
+            try:
+                fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
+            except RuntimeError:
+                await _engine.dispose()
             else:
-                try:
-                    fut = asyncio.run_coroutine_threadsafe(
-                        _engine.dispose(), _engine_loop
-                    )
-                except RuntimeError:
-                    _terminate_pooled_connections(_engine)
-                else:
 
-                    def _log_disposal_result(f: "asyncio.Future[Any]") -> None:
-                        try:
-                            f.result()
-                        except Exception:
-                            logger.exception("engine_dispose_failed")
+                def _log_disposal_result(f: "asyncio.Future[Any]") -> None:
+                    try:
+                        f.result()
+                    except Exception:
+                        logger.exception("engine_dispose_failed")
 
-                    fut.add_done_callback(_log_disposal_result)
-                    await asyncio.wrap_future(fut)
+                fut.add_done_callback(_log_disposal_result)
+                await asyncio.wrap_future(fut)
         elif _engine_loop and _engine_loop.is_closed():
-            _terminate_pooled_connections(_engine)
+            pool = getattr(getattr(_engine, "sync_engine", None), "pool", None)
+            if pool is not None:
+                raw_pool = getattr(pool, "_pool", None)
+                if raw_pool is not None:
+                    while True:
+                        try:
+                            rec = raw_pool.get_nowait()
+                        except Exception:
+                            break
+                        dbapi_conn = getattr(
+                            rec, "dbapi_connection", getattr(rec, "connection", None)
+                        )
+                        raw_conn = getattr(dbapi_conn, "_connection", dbapi_conn)
+                        proto = getattr(raw_conn, "_protocol", None)
+                        if proto is not None:
+                            closer = getattr(
+                                proto,
+                                "close_transport",
+                                getattr(proto, "terminate", None),
+                            )
+                            if callable(closer):
+                                conn_id = id(raw_conn)
+                                logger.debug(
+                                    "pooled_connection_force_close",
+                                    extra={"connection_id": conn_id},
+                                )
+                                try:
+                                    closer()
+                                except (RuntimeError, InternalClientError) as exc:
+                                    logger.warning(
+                                        "pooled_connection_force_close_failed",
+                                        extra={
+                                            "connection_id": conn_id,
+                                            "error": str(exc),
+                                        },
+                                        exc_info=exc,
+                                    )
+                    # Clear the pool so SQLAlchemy does not retry termination.
+                    try:  # queue.Queue or asyncio.Queue
+                        raw_pool.queue.clear()  # type: ignore[attr-defined]
+                    except Exception:
+                        try:
+                            raw_pool.items.clear()  # type: ignore[attr-defined]
+                        except Exception:
+                            try:
+                                raw_pool._queue.clear()  # type: ignore[attr-defined]
+                            except Exception:
+                                pass
         else:
             await _engine.dispose()
     finally:
