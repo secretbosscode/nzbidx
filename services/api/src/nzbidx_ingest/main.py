@@ -7,9 +7,9 @@ import logging
 import os
 import re
 import sqlite3
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional, Any, Iterable
-from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
 try:
@@ -23,7 +23,7 @@ except ImportError:  # pragma: no cover - optional dependency
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
-from .db_migrations import migrate_release_table
+from .db_migrations import migrate_release_table, ensure_release_adult_year_partition
 
 logger = logging.getLogger(__name__)
 
@@ -332,24 +332,14 @@ def connect_db() -> Any:
                         ) PARTITION BY RANGE (category_id)
                         """
                     ),
-                    "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000) PARTITION BY RANGE (posted_at)",
-                    "CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    "CREATE TABLE IF NOT EXISTS release_movies_default PARTITION OF release_movies DEFAULT",
-                    "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000) PARTITION BY RANGE (posted_at)",
-                    "CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    "CREATE TABLE IF NOT EXISTS release_music_default PARTITION OF release_music DEFAULT",
-                    "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000) PARTITION BY RANGE (posted_at)",
-                    "CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    "CREATE TABLE IF NOT EXISTS release_tv_default PARTITION OF release_tv DEFAULT",
+                    "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
+                    "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
+                    "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
                     "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)",
                     "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
                     "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
-                    "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000) PARTITION BY RANGE (posted_at)",
-                    "CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    "CREATE TABLE IF NOT EXISTS release_books_default PARTITION OF release_books DEFAULT",
-                    "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT PARTITION BY RANGE (posted_at)",
-                    "CREATE TABLE IF NOT EXISTS release_other_2024 PARTITION OF release_other FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    "CREATE TABLE IF NOT EXISTS release_other_default PARTITION OF release_other DEFAULT",
+                    "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
+                    "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
                     "DROP INDEX IF EXISTS release_embedding_idx",
                     "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
                     "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
@@ -367,6 +357,7 @@ def connect_db() -> Any:
                     "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
                     "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
                     "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
+                    "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts",
                 )
                 if not exists or partitioned:
                     for stmt in stmts:
@@ -452,22 +443,10 @@ def connect_db() -> Any:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
     )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
+    )
     return conn
-
-
-def _ensure_year_partitions(conn: Any, years: set[int]) -> None:
-    """Create year-based partitions for all categories if missing."""
-    if not years or conn.__class__.__module__.startswith("sqlite3"):
-        return
-    cur = conn.cursor()
-    for year in years:
-        start = f"'{year}-01-01'"
-        end = f"'{year + 1}-01-01'"
-        for name in ("movies", "music", "tv", "adult", "books", "other"):
-            cur.execute(
-                f"""CREATE TABLE IF NOT EXISTS release_{name}_{year} PARTITION OF release_{name} FOR VALUES FROM ({start}) TO ({end})"""
-            )
-    conn.commit()
 
 
 def insert_release(
@@ -550,10 +529,6 @@ def insert_release(
         cleaned_group = _clean(g)
         size_val = s if isinstance(s, int) and s > 0 else None
         cleaned_posted = _clean(p)
-        if cleaned_posted is None and not conn.__class__.__module__.startswith(
-            "sqlite3"
-        ):
-            cleaned_posted = datetime.now(timezone.utc).isoformat()
         cleaned.append(
             (
                 cleaned_title,
@@ -566,9 +541,6 @@ def insert_release(
                 cleaned_posted,
             )
         )
-
-    years = {int(row[7][:4]) for row in cleaned if row[7] and row[7][:4].isdigit()}
-    _ensure_year_partitions(conn, years)
 
     placeholders = ",".join(
         [
@@ -593,10 +565,30 @@ def insert_release(
                 to_insert,
             )
         else:
-            cur.executemany(
-                "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
-                to_insert,
-            )
+            adult_rows: dict[int, list[tuple[Any, ...]]] = defaultdict(list)
+            other_rows: list[tuple[Any, ...]] = []
+            for row in to_insert:
+                category_id = row[2]
+                posted_at = row[7]
+                if (
+                    category_id is not None
+                    and 6000 <= category_id < 7000
+                    and posted_at is not None
+                ):
+                    adult_rows[posted_at.year].append(row)
+                else:
+                    other_rows.append(row)
+            for year, rows in adult_rows.items():
+                ensure_release_adult_year_partition(conn, year)
+                cur.executemany(
+                    f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                    rows,
+                )
+            if other_rows:
+                cur.executemany(
+                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                    other_rows,
+                )
     # Ensure posted_at is updated for existing rows
     if cleaned:
         updates = [(row[7], row[0], row[2]) for row in cleaned if row[7]]
