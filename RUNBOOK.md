@@ -14,6 +14,25 @@ install `psycopg[binary] >= 3.1` from the service `pyproject.toml` files. The
 `pg_trgm` and `vector` extensions must be installed by a superuser; the init
 script at `db/init/schema.sql` handles this during database provisioning.
 
+## Engine lifecycle
+`init_engine()` binds the async database engine to the currently running event loop.
+Call `dispose_engine()` on that same loop before it closes to avoid cross-loop
+`RuntimeError` from asyncpg.
+
+```python
+import asyncio
+from nzbidx_api.db import init_engine, dispose_engine
+
+async def main():
+    await init_engine()
+    try:
+        ...  # application logic
+    finally:
+        await dispose_engine()
+
+asyncio.run(main())
+```
+
 ## Release table partitioning
 The `release` table must be partitioned by `category_id` so partitions can be
 maintained independently. The application migrates and creates this table automatically on startup when provided a `DATABASE_URL` with superuser privileges. For reference, create the table and partitions:
