@@ -33,6 +33,8 @@ def test_connect_db_creates_partitions(monkeypatch):
     assert cur.fetchone() is not None
     cur.execute("SELECT 1 FROM pg_class WHERE relname='release_movies'")
     assert cur.fetchone() is not None
+    cur.execute("SELECT 1 FROM pg_class WHERE relname='release_adult_2024'")
+    assert cur.fetchone() is not None
     conn.close()
 
     try:

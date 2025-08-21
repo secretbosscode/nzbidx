@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
@@ -81,6 +82,32 @@ CATEGORY_MAP = {
     "books": "7020",
     "comics": "7030",
 }
+
+
+_ADULT_PARTITIONS: set[int] = set()
+
+
+def _ensure_adult_partition(conn: Any, posted_at: Optional[str]) -> None:
+    """Ensure a year-based partition for release_adult exists."""
+    if conn.__class__.__module__.startswith("sqlite3"):
+        return
+    if not posted_at:
+        return
+    try:
+        year = datetime.fromisoformat(posted_at).year
+    except ValueError:
+        return
+    if year in _ADULT_PARTITIONS:
+        return
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS release_adult_{year} PARTITION OF release_adult
+            FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')
+        """
+    )
+    conn.commit()
+    _ADULT_PARTITIONS.add(year)
 
 
 def _load_group_category_hints() -> list[tuple[str, str]]:
@@ -334,7 +361,16 @@ def connect_db() -> Any:
                     "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
                     "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
                     "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
-                    "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000)",
+                    (
+                        """
+                        CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
+                            FOR VALUES FROM (6000) TO (7000)
+                            PARTITION BY RANGE (posted_at)
+                        """
+                    ),
+                    "CREATE TABLE IF NOT EXISTS release_adult_2023 PARTITION OF release_adult FOR VALUES FROM ('2023-01-01') TO ('2024-01-01')",
+                    "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+                    "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
                     "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
                     "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
                     "DROP INDEX IF EXISTS release_embedding_idx",
@@ -522,6 +558,8 @@ def insert_release(
         cleaned_group = _clean(g)
         size_val = s if isinstance(s, int) and s > 0 else None
         cleaned_posted = _clean(p)
+        if 6000 <= cleaned_category_id < 7000:
+            _ensure_adult_partition(conn, cleaned_posted)
         cleaned.append(
             (
                 cleaned_title,
