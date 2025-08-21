@@ -5,6 +5,7 @@ from __future__ import annotations
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from .orjson_response import ORJSONResponse, Response
+from .config import strict_transport_security
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -33,4 +34,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         headers.setdefault("X-Frame-Options", "DENY")
         headers.setdefault("X-Download-Options", "noopen")
         headers.setdefault("Permissions-Policy", "interest-cohort=()")
+        if hsts := strict_transport_security():
+            headers.setdefault("Strict-Transport-Security", hsts)
         return response
