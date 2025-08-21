@@ -159,6 +159,22 @@ to cap overall retry time. To invoke a one-off ingest loop manually:
     export NNTP_GROUPS=alt.binaries.example  # recommended to set explicitly
     docker compose exec api python -m nzbidx_ingest
 
+### Ingest Checklist
+
+- Set the required NNTP variables before starting the worker: `NNTP_HOST`,
+  `NNTP_PORT`, `NNTP_USER`, `NNTP_PASS`, and `NNTP_GROUPS`.
+- Backfill segment data for a specific release with its numeric ID:
+
+      docker compose exec nzbidx python scripts/backfill_release_parts.py <release-id>
+
+  Replace `<release-id>` with the target `release.id`.
+- Verify the API and ingest worker share the same database connection:
+
+      docker compose exec api printenv DATABASE_URL
+      docker compose exec nzbidx printenv DATABASE_URL
+
+  Both commands should return the same `DATABASE_URL` value.
+
 ## Auth & Rate Limit
 
 Protect the `/api` endpoints by supplying one or more keys:
