@@ -10,6 +10,8 @@ from urllib.parse import urlparse, urlunparse
 
 from typing import Any, Optional
 
+from nzbidx_ingest.db_migrations import migrate_release_adult_partitions
+
 # Optional SQLAlchemy dependency
 try:  # pragma: no cover - import guard
     from sqlalchemy import text
@@ -216,7 +218,55 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
         statements = _split_sql(sql)
 
     async def _apply(conn: Any) -> None:
+        partitioned = False
+        try:
+            partitioned = bool(
+                await conn.scalar(
+                    text(
+                        "SELECT EXISTS ("\
+                        "SELECT 1 FROM pg_partitioned_table "
+                        "WHERE partrelid = to_regclass('release_adult')"
+                        ")"
+                    )
+                )
+            )
+            if not partitioned:
+                try:
+                    raw = engine.sync_engine.raw_connection()
+                    try:
+                        migrate_release_adult_partitions(raw)
+                    finally:  # pragma: no cover - connection cleanup
+                        try:
+                            raw.close()
+                        except DB_CLOSE_ERRORS:
+                            pass
+                    partitioned = bool(
+                        await conn.scalar(
+                            text(
+                                "SELECT EXISTS ("\
+                                "SELECT 1 FROM pg_partitioned_table "
+                                "WHERE partrelid = to_regclass('release_adult')"
+                                ")"
+                            )
+                        )
+                    )
+                except Exception as exc:  # pragma: no cover - best effort
+                    logger.warning(
+                        "release_adult_migration_failed",
+                        extra={"error": str(exc)},
+                    )
+        except Exception:  # pragma: no cover - system catalogs missing
+            partitioned = False
+
         for stmt in statements:
+            if (
+                not partitioned
+                and "PARTITION OF release_adult" in stmt
+            ):
+                logger.warning(
+                    "release_adult_unpartitioned", extra={"stmt": stmt}
+                )
+                continue
             try:
                 await conn.execute(text(stmt))
                 await conn.commit()
@@ -460,14 +510,24 @@ async def dispose_engine() -> None:
                                     if asyncio.isfuture(fut):
                                         try:
                                             fut.result()
-                                        except InternalClientError:
-                                            logger.exception(
-                                                "engine_dispose_terminate_failed"
+                                        except InternalClientError as exc:
+                                            logger.warning(
+                                                "pooled_connection_force_close_failed",
+                                                extra={
+                                                    "connection_id": id(raw_conn),
+                                                    "error": str(exc),
+                                                },
                                             )
                                         except Exception:
                                             pass
-                                except InternalClientError:
-                                    logger.exception("engine_dispose_terminate_failed")
+                                except InternalClientError as exc:
+                                    logger.warning(
+                                        "pooled_connection_force_close_failed",
+                                        extra={
+                                            "connection_id": id(raw_conn),
+                                            "error": str(exc),
+                                        },
+                                    )
                                 except RuntimeError:
                                     pass
                     # Clear the pool so SQLAlchemy does not retry termination.
