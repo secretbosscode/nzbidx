@@ -28,7 +28,6 @@ def migrate_release_table(conn: Any) -> None:
         return
     _, partrelid = row
     if partrelid is not None:
-        _migrate_release_adult(conn)
         return
 
     # Prepare data for partitioning.
@@ -54,31 +53,65 @@ def migrate_release_table(conn: Any) -> None:
         """
     )
 
-    # Create partitions.
+    # Create partitions with sub-partitioning by posted_at.
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
+        """
+        CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
+            FOR VALUES FROM (2000) TO (3000)
+            PARTITION BY RANGE (posted_at)
+        """,
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
+        "CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
+        """
+        CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
+            FOR VALUES FROM (3000) TO (4000)
+            PARTITION BY RANGE (posted_at)
+        """,
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
+            FOR VALUES FROM (5000) TO (6000)
+            PARTITION BY RANGE (posted_at)
+        """,
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
     )
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
             FOR VALUES FROM (6000) TO (7000)
             PARTITION BY RANGE (posted_at)
+        """,
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+    )
+    cur.execute(
         """
-    )
-
-    # Create yearly partitions for existing adult rows.
-    _migrate_release_adult(conn, source_table="release_old")
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
+        CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
+            FOR VALUES FROM (7000) TO (8000)
+            PARTITION BY RANGE (posted_at)
+        """,
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
+        "CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT
+            PARTITION BY RANGE (posted_at)
+        """,
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_other_2024 PARTITION OF release_other FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
     )
 
     # Enforce uniqueness on norm_title/category_id across partitions.
@@ -107,37 +140,60 @@ def migrate_release_table(conn: Any) -> None:
     conn.commit()
 
 
-def _migrate_release_adult(conn: Any, source_table: str = "release_adult") -> None:
-    """Ensure ``release_adult`` is partitioned by ``posted_at`` and populated."""
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT partrelid FROM pg_partitioned_table WHERE partrelid='release_adult'::regclass"
-    )
-    if cur.fetchone():
-        return
+def migrate_release_time_partitions(conn: Any) -> None:
+    """Sub-partition existing ``release_*`` tables by ``posted_at`` year."""
 
-    cur.execute("ALTER TABLE release_adult RENAME TO release_adult_old")
-    cur.execute(
-        """
-        CREATE TABLE release_adult PARTITION OF release
-            FOR VALUES FROM (6000) TO (7000)
-            PARTITION BY RANGE (posted_at)
-        """
-    )
-    cur.execute(
-        f"SELECT DISTINCT EXTRACT(YEAR FROM posted_at) FROM {source_table} WHERE posted_at IS NOT NULL"
-    )
-    for row in cur.fetchall():
-        year = int(row[0])
+    cur = conn.cursor()
+    partitions = [
+        ("release_movies", "FOR VALUES FROM (2000) TO (3000)"),
+        ("release_music", "FOR VALUES FROM (3000) TO (4000)"),
+        ("release_tv", "FOR VALUES FROM (5000) TO (6000)"),
+        ("release_adult", "FOR VALUES FROM (6000) TO (7000)"),
+        ("release_books", "FOR VALUES FROM (7000) TO (8000)"),
+        ("release_other", "DEFAULT"),
+    ]
+
+    for name, range_spec in partitions:
+        cur.execute("SELECT 1 FROM pg_class WHERE relname=%s", (name,))
+        if cur.fetchone() is None:
+            continue
+
         cur.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS release_adult_{year} PARTITION OF release_adult
-                FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')
             """
+            SELECT 1 FROM pg_partitioned_table p
+            JOIN pg_class c ON p.partrelid = c.oid
+            WHERE c.relname = %s
+            """,
+            (name,),
         )
-    cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
-    )
-    cur.execute("INSERT INTO release_adult SELECT * FROM release_adult_old")
-    cur.execute("DROP TABLE release_adult_old")
+        if cur.fetchone():
+            # Already partitioned; ensure 2024 partition exists
+            cur.execute(
+                f"CREATE TABLE IF NOT EXISTS {name}_2024 PARTITION OF {name} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+            )
+            continue
+
+        # Detach existing partition and recreate as partitioned by posted_at
+        cur.execute(f"ALTER TABLE release DETACH PARTITION {name}")
+        cur.execute(f"ALTER TABLE {name} RENAME TO {name}_old")
+        if range_spec == "DEFAULT":
+            cur.execute(
+                f"""
+                CREATE TABLE {name} PARTITION OF release DEFAULT
+                    PARTITION BY RANGE (posted_at)
+                """,
+            )
+        else:
+            cur.execute(
+                f"""
+                CREATE TABLE {name} PARTITION OF release {range_spec}
+                    PARTITION BY RANGE (posted_at)
+                """,
+            )
+        cur.execute(
+            f"CREATE TABLE IF NOT EXISTS {name}_2024 PARTITION OF {name} FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+        )
+        cur.execute(f"INSERT INTO {name} SELECT * FROM {name}_old")
+        cur.execute(f"DROP TABLE {name}_old")
+
     conn.commit()

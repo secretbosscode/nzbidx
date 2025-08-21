@@ -18,24 +18,39 @@ CREATE TABLE IF NOT EXISTS release (
 ) PARTITION BY RANGE (category_id);
 
 CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
-    FOR VALUES FROM (2000) TO (3000);
+    FOR VALUES FROM (2000) TO (3000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+
 CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
-    FOR VALUES FROM (3000) TO (4000);
+    FOR VALUES FROM (3000) TO (4000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+
 CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
-    FOR VALUES FROM (5000) TO (6000);
+    FOR VALUES FROM (5000) TO (6000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+
 CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
     FOR VALUES FROM (6000) TO (7000)
     PARTITION BY RANGE (posted_at);
-
--- Pre-create partitions for recent years to avoid run-time DDL.
-CREATE TABLE IF NOT EXISTS release_adult_2023 PARTITION OF release_adult
-    FOR VALUES FROM ('2023-01-01') TO ('2024-01-01');
 CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult
     FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT;
+
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
-    FOR VALUES FROM (7000) TO (8000);
-CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
+    FOR VALUES FROM (7000) TO (8000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+
+CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_other_2024 PARTITION OF release_other
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
 
 DROP INDEX IF EXISTS release_embedding_idx;
 ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding;
@@ -72,4 +87,3 @@ CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
 CREATE INDEX IF NOT EXISTS release_search_idx ON release USING GIN (search_vector);
 CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_key ON release (norm_title, category_id);
-CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at);
