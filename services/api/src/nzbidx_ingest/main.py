@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import sqlite3
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
@@ -22,7 +23,7 @@ except ImportError:  # pragma: no cover - optional dependency
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
-from .db_migrations import migrate_release_table
+from .db_migrations import migrate_release_table, ensure_release_adult_year_partition
 
 logger = logging.getLogger(__name__)
 
@@ -334,7 +335,9 @@ def connect_db() -> Any:
                     "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
                     "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
                     "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
-                    "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000)",
+                    "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)",
+                    "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+                    "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
                     "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
                     "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
                     "DROP INDEX IF EXISTS release_embedding_idx",
@@ -558,10 +561,30 @@ def insert_release(
                 to_insert,
             )
         else:
-            cur.executemany(
-                "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
-                to_insert,
-            )
+            adult_rows: dict[int, list[tuple[Any, ...]]] = defaultdict(list)
+            other_rows: list[tuple[Any, ...]] = []
+            for row in to_insert:
+                category_id = row[2]
+                posted_at = row[7]
+                if (
+                    category_id is not None
+                    and 6000 <= category_id < 7000
+                    and posted_at is not None
+                ):
+                    adult_rows[posted_at.year].append(row)
+                else:
+                    other_rows.append(row)
+            for year, rows in adult_rows.items():
+                ensure_release_adult_year_partition(conn, year)
+                cur.executemany(
+                    f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                    rows,
+                )
+            if other_rows:
+                cur.executemany(
+                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO UPDATE SET posted_at = EXCLUDED.posted_at",
+                    other_rows,
+                )
     # Ensure posted_at is updated for existing rows
     if cleaned:
         updates = [(row[7], row[0], row[2]) for row in cleaned if row[7]]

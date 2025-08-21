@@ -64,7 +64,13 @@ def migrate_release_table(conn: Any) -> None:
         "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000)",
+        "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
     )
     cur.execute(
         "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
@@ -96,4 +102,79 @@ def migrate_release_table(conn: Any) -> None:
     cur.execute("INSERT INTO release SELECT * FROM release_old")
     cur.execute("DROP TABLE release_old")
 
+    conn.commit()
+
+
+def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
+    """Ensure ``release_adult`` is partitioned by ``posted_at`` and migrate rows.
+
+    The existing ``release_adult`` partition is converted into a partitioned table
+    with yearly child partitions. Rows are moved in batches to avoid long locks.
+    """
+
+    cur = conn.cursor()
+
+    # Check if ``release_adult`` is already partitioned by ``posted_at``.
+    cur.execute(
+        "SELECT partrelid FROM pg_partitioned_table WHERE partrelid = 'release_adult'::regclass"
+    )
+    if cur.fetchone() is not None:
+        return
+
+    # Detach and rename existing partition.
+    cur.execute("ALTER TABLE release DETACH PARTITION release_adult")
+    cur.execute("ALTER TABLE release_adult RENAME TO release_adult_old")
+
+    # Create new partitioned table and initial partitions.
+    cur.execute(
+        "CREATE TABLE release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)"
+    )
+
+    # Determine years present in existing data.
+    cur.execute(
+        "SELECT DISTINCT EXTRACT(YEAR FROM posted_at) FROM release_adult_old WHERE posted_at IS NOT NULL"
+    )
+    years = [int(row[0]) for row in cur.fetchall()]
+    for year in years:
+        cur.execute(
+            f"CREATE TABLE IF NOT EXISTS release_adult_{year} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year+1}-01-01')"
+        )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT"
+    )
+    conn.commit()
+
+    # Copy rows in batches to new partitioned table.
+    while True:
+        cur.execute(
+            f"""
+            WITH moved AS (
+                SELECT * FROM release_adult_old ORDER BY id LIMIT {batch_size}
+            )
+            INSERT INTO release_adult SELECT * FROM moved RETURNING id
+            """
+        )
+        ids = [row[0] for row in cur.fetchall()]
+        if not ids:
+            break
+        cur.execute(
+            "DELETE FROM release_adult_old WHERE id = ANY(%s)", (ids,)
+        )
+        conn.commit()
+
+    cur.execute("DROP TABLE release_adult_old")
+    conn.commit()
+
+
+def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
+    """Create a yearly ``release_adult`` partition if it does not exist."""
+
+    table = f"release_adult_{year}"
+    cur = conn.cursor()
+    cur.execute("SELECT to_regclass(%s)", (table,))
+    if cur.fetchone()[0] is not None:
+        return
+    cur.execute(
+        f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year+1}-01-01')"
+    )
     conn.commit()
