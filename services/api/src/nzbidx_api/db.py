@@ -456,8 +456,19 @@ async def dispose_engine() -> None:
                             )
                             if callable(closer):
                                 try:
-                                    closer()
-                                except (RuntimeError, InternalClientError):
+                                    fut = closer()
+                                    if asyncio.isfuture(fut):
+                                        try:
+                                            fut.result()
+                                        except InternalClientError:
+                                            logger.exception(
+                                                "engine_dispose_terminate_failed"
+                                            )
+                                        except Exception:
+                                            pass
+                                except InternalClientError:
+                                    logger.exception("engine_dispose_terminate_failed")
+                                except RuntimeError:
                                     pass
                     # Clear the pool so SQLAlchemy does not retry termination.
                     try:  # queue.Queue or asyncio.Queue
