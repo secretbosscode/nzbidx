@@ -178,3 +178,13 @@ def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
         f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year+1}-01-01')"
     )
     conn.commit()
+
+
+def add_release_has_parts_index(conn: Any) -> None:
+    """Create partial index on ``release`` rows that have parts."""
+
+    cur = conn.cursor()
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (id) WHERE has_parts",
+    )
+    conn.commit()
