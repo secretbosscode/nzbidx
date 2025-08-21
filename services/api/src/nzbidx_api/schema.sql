@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS release (
     segments JSONB,
     has_parts BOOLEAN NOT NULL DEFAULT FALSE,
     part_count INT NOT NULL DEFAULT 0,
-    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(norm_title,'') || ' ' || coalesce(tags,''))) STORED,
     UNIQUE (norm_title, category_id)
 ) PARTITION BY RANGE (category_id);
 
@@ -24,14 +23,7 @@ CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
 CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
     FOR VALUES FROM (5000) TO (6000);
 CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
-    FOR VALUES FROM (6000) TO (7000)
-    PARTITION BY RANGE (posted_at);
-
-CREATE TABLE IF NOT EXISTS release_adult_2023 PARTITION OF release_adult
-    FOR VALUES FROM ('2023-01-01') TO ('2024-01-01');
-CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult
-    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT;
+    FOR VALUES FROM (6000) TO (7000);
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
     FOR VALUES FROM (7000) TO (8000);
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
@@ -50,7 +42,6 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0;
-ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(norm_title,'') || ' ' || coalesce(tags,''))) STORED;
 ALTER TABLE IF EXISTS release DROP CONSTRAINT IF EXISTS release_norm_title_key;
 DO $$
 BEGIN
@@ -75,6 +66,5 @@ CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_
 CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
-CREATE INDEX IF NOT EXISTS release_search_idx ON release USING GIN (search_vector);
-CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_key ON release (norm_title, category_id);
 CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at);
+CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_key ON release (norm_title, category_id);
