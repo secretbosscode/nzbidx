@@ -496,15 +496,30 @@ async def dispose_engine() -> None:
                         if proto is not None:
                             closer = getattr(
                                 proto,
-                                "close_transport",
-                                getattr(proto, "terminate", None),
+                                "terminate",
+                                getattr(proto, "close_transport", None),
                             )
                             if callable(closer):
                                 try:
                                     fut = closer()
-                                    if asyncio.isfuture(fut):
+                                    if asyncio.iscoroutine(fut):
                                         try:
-                                            fut.result()
+                                            await fut
+                                        except InternalClientError as exc:
+                                            logger.warning(
+                                                "pooled_connection_force_close_failed",
+                                                extra={
+                                                    "connection_id": id(raw_conn),
+                                                    "error": str(exc),
+                                                },
+                                            )
+                                        except Exception:
+                                            pass
+                                    elif asyncio.isfuture(fut):
+                                        if not fut.done():
+                                            fut.cancel()
+                                        try:
+                                            fut.exception()
                                         except InternalClientError as exc:
                                             logger.warning(
                                                 "pooled_connection_force_close_failed",
