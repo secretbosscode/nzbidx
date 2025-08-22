@@ -11,6 +11,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
+from datetime import datetime, timezone
+
+try:  # pragma: no cover - optional dependency
+    from dateutil import parser as dateutil_parser
+except Exception:  # pragma: no cover - optional dependency
+    dateutil_parser = None  # type: ignore
 
 try:
     from dotenv import load_dotenv
@@ -582,7 +588,16 @@ def insert_release(
         return set()
 
     cleaned: list[
-        tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[str]]
+        tuple[
+            str,
+            str,
+            int,
+            str,
+            str,
+            Optional[str],
+            Optional[int],
+            Optional[datetime],
+        ]
     ] = []
     titles: list[str] = []
     for n, c, lang, t, g, s, p in items:
@@ -597,7 +612,19 @@ def insert_release(
         cleaned_tags = ",".join(_clean(tag) or "" for tag in t)
         cleaned_group = _clean(g)
         size_val = s if isinstance(s, int) and s > 0 else None
-        cleaned_posted = _clean(p)
+        cleaned_posted_str = _clean(p)
+        cleaned_posted: Optional[datetime] = None
+        if cleaned_posted_str:
+            try:
+                cleaned_posted = datetime.fromisoformat(cleaned_posted_str)
+            except ValueError:
+                if dateutil_parser is not None:
+                    try:
+                        cleaned_posted = dateutil_parser.parse(cleaned_posted_str)
+                    except Exception:
+                        cleaned_posted = None
+            if cleaned_posted and cleaned_posted.tzinfo is None:
+                cleaned_posted = cleaned_posted.replace(tzinfo=timezone.utc)
         cleaned.append(
             (
                 cleaned_title,
@@ -618,7 +645,7 @@ def insert_release(
         ]
     )
     existing: set[tuple[str, int]] = set()
-    updates: list[tuple[Optional[str], str, int]] = []
+    updates: list[tuple[Optional[datetime], str, int]] = []
     if titles:
         cur.execute(
             f"SELECT norm_title, category_id FROM release WHERE norm_title IN ({placeholders})",
@@ -626,7 +653,9 @@ def insert_release(
         )
         existing = {(row[0], row[1]) for row in cur.fetchall()}
 
-    to_insert: list[tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[str]]] = []
+    to_insert: list[
+        tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[datetime]]
+    ] = []
     for row in cleaned:
         key = (row[0], row[2])
         if key not in existing:
@@ -637,9 +666,22 @@ def insert_release(
     inserted = {row[0] for row in to_insert}
     if to_insert:
         if conn.__class__.__module__.startswith("sqlite3"):
+            sqlite_rows = [
+                (
+                    row[0],
+                    row[1],
+                    row[2],
+                    row[3],
+                    row[4],
+                    row[5],
+                    row[6],
+                    row[7].isoformat() if row[7] else None,
+                )
+                for row in to_insert
+            ]
             cur.executemany(
                 "INSERT OR IGNORE INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                to_insert,
+                sqlite_rows,
             )
         else:
             adult_rows: dict[int, list[tuple[Any, ...]]] = defaultdict(list)
@@ -671,10 +713,19 @@ def insert_release(
         placeholder = (
             "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
         )
-        cur.executemany(
-            f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
-            updates,
-        )
+        if conn.__class__.__module__.startswith("sqlite3"):
+            sqlite_updates = [
+                (u[0].isoformat() if u[0] else None, u[1], u[2]) for u in updates
+            ]
+            cur.executemany(
+                f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
+                sqlite_updates,
+            )
+        else:
+            cur.executemany(
+                f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
+                updates,
+            )
     conn.commit()
     return inserted
 
