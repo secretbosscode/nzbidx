@@ -9,7 +9,7 @@ def test_dispose_engine_handles_closed_loop(monkeypatch):
     closed = False
 
     class DummyProtocol:
-        def close_transport(self) -> None:
+        def terminate(self) -> None:
             nonlocal closed
             closed = True
 
@@ -52,7 +52,7 @@ def test_dispose_engine_handles_closed_loop(monkeypatch):
 
 def test_dispose_engine_no_unretrieved_future_warning(monkeypatch, capsys):
     class DummyProtocol:
-        def close_transport(self):
+        def terminate(self):
             fut = asyncio.Future()
             fut.set_exception(db.InternalClientError("boom"))
             return fut

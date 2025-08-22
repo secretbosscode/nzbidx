@@ -50,7 +50,7 @@ def test_dispose_engine_after_loop_closed(monkeypatch, caplog):
     closed = False
 
     class DummyProtocol:
-        def close_transport(self) -> None:
+        def terminate(self) -> None:
             nonlocal closed
             closed = True
             raise asyncpg.InternalClientError("close called")
@@ -78,7 +78,7 @@ def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch, caplog):
     closed = False
 
     class DummyProtocol:
-        def close_transport(self) -> None:
+        def terminate(self) -> None:
             nonlocal closed
             closed = True
             raise asyncpg.InternalClientError("close called")
@@ -148,7 +148,7 @@ def test_dispose_engine_after_loop_closed_with_proxy(monkeypatch, caplog):
 
 def test_dispose_engine_no_unretrieved_future(monkeypatch, capfd):
     class DummyProtocol:
-        def close_transport(self) -> None:
+        def terminate(self) -> None:
             pass
 
     _setup_dummy_engine(monkeypatch, DummyProtocol)
