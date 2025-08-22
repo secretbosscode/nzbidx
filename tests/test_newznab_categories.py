@@ -47,5 +47,5 @@ def test_caps_xml_respects_adult_flags(monkeypatch, env, expected) -> None:
 
     xml = newznab.caps_xml()
 
-    assert ("<category id=\"6000\"" in xml) is expected
-    assert ("<category id=\"6090\"" in xml) is expected
+    assert ('<category id="6000"' in xml) is expected
+    assert ('<category id="6090"' in xml) is expected
