@@ -35,6 +35,9 @@ def test_apply_schema_creates_database(monkeypatch):
         async def rollback(self):
             return None
 
+        async def scalar(self, stmt, params=None):
+            return 1
+
     class DummyEngine:
         def __init__(self):
             self.calls = 0
@@ -132,6 +135,9 @@ def test_apply_schema_handles_function_with_semicolons_without_sqlparse(monkeypa
         async def rollback(self):
             return None
 
+        async def scalar(self, stmt, params=None):
+            return 1
+
     class DummyEngine:
         def connect(self):
             return DummyConn()
@@ -183,6 +189,9 @@ def test_apply_schema_handles_tagged_dollar_quotes(monkeypatch):
 
         async def rollback(self):
             return None
+
+        async def scalar(self, stmt, params=None):
+            return 1
 
     class DummyEngine:
         def connect(self):
@@ -319,6 +328,9 @@ def test_apply_schema_after_migrate_release_adult_partitions(monkeypatch):
 
         async def rollback(self):
             return None
+
+        async def scalar(self, stmt, params=None):
+            return 1
 
     class DummyEngine:
         def connect(self):

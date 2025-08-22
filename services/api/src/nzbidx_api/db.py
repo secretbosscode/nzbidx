@@ -261,8 +261,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
         for stmt in statements:
             if not partitioned and "PARTITION OF release_adult" in stmt:
-                logger.warning("release_adult_unpartitioned", extra={"stmt": stmt})
-                continue
+                raise RuntimeError(f"release_adult_unpartitioned: {stmt}")
             try:
                 await conn.execute(text(stmt))
                 await conn.commit()

@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
 ```
 
+Startup verifies that the `release_adult` table is partitioned. If it remains
+unpartitioned, the service raises a `RuntimeError` and refuses to continue
+until the migration succeeds.
+
 ## Graceful shutdown
 - **Steps:**
   1. Wait for outstanding tasks to complete.
