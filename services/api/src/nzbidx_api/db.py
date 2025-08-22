@@ -223,7 +223,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             partitioned = bool(
                 await conn.scalar(
                     text(
-                        "SELECT EXISTS ("\
+                        "SELECT EXISTS ("
                         "SELECT 1 FROM pg_partitioned_table "
                         "WHERE partrelid = to_regclass('release_adult')"
                         ")"
@@ -243,7 +243,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                     partitioned = bool(
                         await conn.scalar(
                             text(
-                                "SELECT EXISTS ("\
+                                "SELECT EXISTS ("
                                 "SELECT 1 FROM pg_partitioned_table "
                                 "WHERE partrelid = to_regclass('release_adult')"
                                 ")"
@@ -253,19 +253,15 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 except Exception as exc:  # pragma: no cover - best effort
                     logger.warning(
                         "release_adult_migration_failed",
+                        exc_info=True,
                         extra={"error": str(exc)},
                     )
         except Exception:  # pragma: no cover - system catalogs missing
             partitioned = False
 
         for stmt in statements:
-            if (
-                not partitioned
-                and "PARTITION OF release_adult" in stmt
-            ):
-                logger.warning(
-                    "release_adult_unpartitioned", extra={"stmt": stmt}
-                )
+            if not partitioned and "PARTITION OF release_adult" in stmt:
+                logger.warning("release_adult_unpartitioned", extra={"stmt": stmt})
                 continue
             try:
                 await conn.execute(text(stmt))
@@ -338,9 +334,7 @@ async def _create_database(url: str) -> None:
             )
             if not exists:
                 try:
-                    await conn.execute(
-                        text("CREATE DATABASE :name"), {"name": dbname}
-                    )
+                    await conn.execute(text("CREATE DATABASE :name"), {"name": dbname})
                 except Exception as exc:  # pragma: no cover - db may exist
                     msg = str(getattr(exc, "orig", exc)).lower()
                     if "already exists" not in msg and "duplicate database" not in msg:

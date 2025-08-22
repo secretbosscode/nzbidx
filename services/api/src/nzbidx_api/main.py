@@ -177,6 +177,27 @@ class JsonFormatter(logging.Formatter):
         return orjson.dumps(payload, default=str).decode()
 
 
+class PlainFormatter(logging.Formatter):
+    """Plain formatter that appends extra fields."""
+
+    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+        base = super().format(record)
+        extras = [
+            f"{k}={v}"
+            for k, v in record.__dict__.items()
+            if k not in logging.LogRecord("", 0, "", 0, "", (), None).__dict__
+        ]
+        if extras:
+            if record.exc_info:
+                first, *rest = base.splitlines()
+                base = " ".join([first, " ".join(extras)])
+                if rest:
+                    base += "\n" + "\n".join(rest)
+            else:
+                base = " ".join([base, " ".join(extras)])
+        return base
+
+
 _LOG_LOCK = threading.Lock()
 
 
@@ -194,7 +215,7 @@ def setup_logging() -> None:
             handler.setFormatter(JsonFormatter())
         else:
             handler.setFormatter(
-                logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+                PlainFormatter("%(asctime)s %(levelname)s %(message)s")
             )
         handler.addFilter(LogSanitizerFilter())
 
