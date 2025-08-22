@@ -314,7 +314,9 @@ def connect_db() -> Any:
                         logger.info("release_adult_table_auto_migrated")
                 if adult_exists and not adult_partitioned:
                     logger.error("release_adult_table_not_partitioned")
-                    raise RuntimeError("release_adult table must be partitioned by posted_at")
+                    raise RuntimeError(
+                        "release_adult table must be partitioned by posted_at"
+                    )
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
@@ -345,7 +347,9 @@ def connect_db() -> Any:
                     )
                 ).fetchone()[0]
                 adult_exists = conn.execute(
-                    text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_adult')")
+                    text(
+                        "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_adult')"
+                    )
                 ).fetchone()[0]
                 adult_partitioned = conn.execute(
                     text(
@@ -710,9 +714,7 @@ def insert_release(
                 )
     # Ensure posted_at is updated for existing rows
     if updates:
-        placeholder = (
-            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-        )
+        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
         if conn.__class__.__module__.startswith("sqlite3"):
             sqlite_updates = [
                 (u[0].isoformat() if u[0] else None, u[1], u[2]) for u in updates
