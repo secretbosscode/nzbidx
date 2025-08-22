@@ -33,4 +33,3 @@ def test_api_returns_extended_attrs(monkeypatch):
     assert '<attr name="imdbid" value="tt1234567"/>' in xml
     assert '<attr name="size" value="123"/>' in xml
     assert '<attr name="category" value="2030"/>' in xml
-

@@ -536,8 +536,10 @@ def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
 
     xml = nzb_builder.build_nzb_for_release("123")
     assert '<segment bytes="123" number="1">m1</segment>' in xml
-    assert str(executed.get("sql", "")).lower().startswith(
-        "select segments from release where id"
+    assert (
+        str(executed.get("sql", ""))
+        .lower()
+        .startswith("select segments from release where id")
     )
     assert executed.get("params") == (123,)
 

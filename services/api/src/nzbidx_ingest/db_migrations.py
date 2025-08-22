@@ -137,7 +137,7 @@ def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
     years = [int(row[0]) for row in cur.fetchall()]
     for year in years:
         cur.execute(
-            f"CREATE TABLE IF NOT EXISTS release_adult_{year} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year+1}-01-01')"
+            f"CREATE TABLE IF NOT EXISTS release_adult_{year} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')"
         )
     cur.execute(
         "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT"
@@ -157,9 +157,7 @@ def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
         ids = [row[0] for row in cur.fetchall()]
         if not ids:
             break
-        cur.execute(
-            "DELETE FROM release_adult_old WHERE id = ANY(%s)", (ids,)
-        )
+        cur.execute("DELETE FROM release_adult_old WHERE id = ANY(%s)", (ids,))
         conn.commit()
 
     cur.execute("DROP TABLE release_adult_old")
@@ -175,7 +173,7 @@ def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
     if cur.fetchone()[0] is not None:
         return
     cur.execute(
-        f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year+1}-01-01')"
+        f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')"
     )
     conn.commit()
 

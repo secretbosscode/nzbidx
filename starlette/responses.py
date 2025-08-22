@@ -1,7 +1,9 @@
 import json
+
 try:  # pragma: no cover - optional dependency
     import orjson  # type: ignore
 except Exception:  # pragma: no cover - minimal fallback
+
     class _OrjsonFallback:  # pragma: no cover - trivial
         @staticmethod
         def dumps(obj, *args, **kwargs):

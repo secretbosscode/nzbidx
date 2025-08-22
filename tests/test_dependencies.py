@@ -41,7 +41,9 @@ except ModuleNotFoundError:  # pragma: no cover
                     return resp
             return SimpleNamespace(status_code=404, body=b"", headers={})
 
-        def post(self, path: str, json: dict | None = None, headers: dict | None = None):  # type: ignore[override]
+        def post(
+            self, path: str, json: dict | None = None, headers: dict | None = None
+        ):  # type: ignore[override]
             async def _json() -> dict:
                 return json or {}
 
