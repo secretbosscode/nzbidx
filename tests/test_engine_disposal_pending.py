@@ -38,7 +38,10 @@ def test_dispose_engine_with_pending_tasks(monkeypatch):
     asyncio.set_event_loop(None)
     try:
         asyncio.run(db.dispose_engine())
-    except (RuntimeError, db.InternalClientError) as exc:  # pragma: no cover - failure path
+    except (
+        RuntimeError,
+        db.InternalClientError,
+    ) as exc:  # pragma: no cover - failure path
         pytest.fail(f"dispose_engine raised {exc!r}")
 
     assert db.get_engine() is None
@@ -48,4 +51,3 @@ def test_dispose_engine_with_pending_tasks(monkeypatch):
         pass
     assert conn.closed
     loop.close()
-

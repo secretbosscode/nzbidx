@@ -37,6 +37,13 @@ def test_rss_xml_extended_attrs() -> None:
     xml = rss_xml([item], extended=True)
     root = ET.fromstring(xml)
     attrs = root.findall("./channel/item/attr")
-    assert any(a.get("name") == "imdbid" and a.get("value") == item["imdbid"] for a in attrs)
-    assert any(a.get("name") == "size" and a.get("value") == item["size"] for a in attrs)
-    assert any(a.get("name") == "category" and a.get("value") == item["category"] for a in attrs)
+    assert any(
+        a.get("name") == "imdbid" and a.get("value") == item["imdbid"] for a in attrs
+    )
+    assert any(
+        a.get("name") == "size" and a.get("value") == item["size"] for a in attrs
+    )
+    assert any(
+        a.get("name") == "category" and a.get("value") == item["category"]
+        for a in attrs
+    )

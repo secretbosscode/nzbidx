@@ -89,4 +89,3 @@ def test_connect_db_adult_auto_migrate(monkeypatch, caplog):
     assert called["partitioned"] is True
     assert conn is not None
     assert "release_adult_table_migrating" in caplog.text
-
