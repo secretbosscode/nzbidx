@@ -40,3 +40,10 @@ connections run as an ordinary user. Point `DATABASE_URL` at the database, e.g.
 `postgres://nzbidx:nzbidx@localhost:5432/nzbidx`.
 
 Existing deployments with an unpartitioned `release` table are migrated automatically when the application starts using a superuser `DATABASE_URL`; no manual script is required.
+
+## Event loop considerations
+
+The API uses a global async SQLAlchemy engine that is bound to the event loop
+where it was initialized. Reusing this engine across different event loops is
+unsupported and will raise a `RuntimeError` when accessed. Each event loop
+should invoke `init_engine()` before using the database.

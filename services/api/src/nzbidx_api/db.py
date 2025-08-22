@@ -1,4 +1,11 @@
-"""Database utilities for the API service."""
+"""Database utilities for the API service.
+
+The global async SQLAlchemy engine is bound to the event loop on which
+``init_engine`` was last called.  Reusing the engine across different event
+loops is unsupported and will raise a ``RuntimeError`` when ``get_engine`` is
+invoked from a foreign loop.  Each loop should initialize its own engine
+instance.
+"""
 
 from __future__ import annotations
 
@@ -90,9 +97,27 @@ async def init_engine() -> None:
 
 
 def get_engine() -> Optional[AsyncEngine]:
-    """Return the loop-bound engine instance if initialized."""
+    """Return the loop-bound engine instance if initialized.
 
-    return _engine
+    The engine may only be retrieved from the event loop that initialized it.
+    Calling this function from a different running loop raises ``RuntimeError``
+    to avoid cross-loop reuse which can leave connections hanging.
+    """
+
+    engine = _engine
+    if engine is None:
+        return None
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop; allow access for cleanup or synchronous callers.
+        return engine
+    if _engine_loop is not loop:
+        raise RuntimeError(
+            "database engine initialized on a different event loop; call"
+            " init_engine() for this loop first"
+        )
+    return engine
 
 
 def _split_sql(sql: str) -> list[str]:
