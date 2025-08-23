@@ -409,8 +409,9 @@ def _search(
             sort=sort,
             api_key=api_key,
         )
-    except Exception:
-        return []
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("search_failed", extra={"error": str(exc)})
+        raise
 
 
 def _xml_response(body: str) -> Response:
