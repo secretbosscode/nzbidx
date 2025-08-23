@@ -62,17 +62,33 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
 def backfill_release_parts(
     progress_cb: Optional[Callable[[int], None]] = None,
     release_ids: Optional[Iterable[int]] = None,
+    *,
+    auto: bool = False,
 ) -> int:
     """Populate segment metadata for existing releases.
 
     A ``progress_cb`` may be supplied to receive the number of processed
     releases after each successful iteration. ``release_ids`` may restrict the
-    job to a specific set of releases.
+    job to a specific set of releases.  When ``auto`` is ``True`` the helper
+    processes only releases marked with ``has_parts`` but missing ``segments``
+    data.
     """
     conn = connect_db()
     _cursor = conn.cursor()
     cursor_cm = _cursor if hasattr(_cursor, "__enter__") else closing(_cursor)
     with cursor_cm as cur:
+        if auto:
+            cur.execute(
+                """
+                SELECT r.id FROM release r
+                WHERE r.has_parts AND r.segments IS NULL
+                ORDER BY r.id
+                """
+            )
+            release_ids = [row[0] for row in cur.fetchall()]
+            if not release_ids:
+                conn.close()
+                return 0
         placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
         base_sql = "SELECT id, norm_title, source_group FROM release"
         params: list[int] | tuple[int, ...] = []
