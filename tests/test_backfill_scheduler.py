@@ -7,6 +7,7 @@ import importlib
 def test_scheduler_triggers(monkeypatch):
     monkeypatch.setenv("BACKFILL_INTERVAL_SECONDS", "1")
     import nzbidx_api.main as main
+
     importlib.reload(main)
 
     async def runner():
