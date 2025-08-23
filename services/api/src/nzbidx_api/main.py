@@ -261,6 +261,22 @@ def start_ingest() -> None:
     _ingest_thread.start()
 
 
+def start_auto_backfill() -> None:
+    """Launch a background thread to backfill missing release segments."""
+
+    def _progress(count: int) -> None:
+        logger.info("auto_backfill_progress", extra={"processed": count})
+
+    def _run() -> None:
+        try:
+            processed = backfill_release_parts(auto=True, progress_cb=_progress)
+            logger.info("auto_backfill_complete", extra={"processed": processed})
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("auto_backfill_failed", exc_info=exc)
+
+    threading.Thread(target=_run, daemon=True, name="auto-backfill").start()
+
+
 def stop_ingest() -> None:
     if _ingest_stop:
         _ingest_stop.set()
@@ -725,6 +741,7 @@ app = Starlette(
         init_engine,
         apply_schema,
         start_ingest,
+        start_auto_backfill,
         lambda: _set_stop(start_metrics()),
     ],
     on_shutdown=[
