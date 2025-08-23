@@ -250,9 +250,6 @@ setup_tracing()
 
 _START_TIME = time.monotonic()
 INGEST_STALE_SECONDS = int(os.getenv("INGEST_STALE_SECONDS", "600"))
-BACKFILL_INTERVAL_SECONDS = int(os.getenv("BACKFILL_INTERVAL_SECONDS", "0"))
-
-_auto_backfill_task: asyncio.Task | None = None
 
 
 def start_ingest() -> None:
@@ -264,41 +261,27 @@ def start_ingest() -> None:
     _ingest_thread.start()
 
 
+def start_auto_backfill() -> None:
+    """Launch a background thread to backfill missing release segments."""
+
+    def _progress(count: int) -> None:
+        logger.info("auto_backfill_progress", extra={"processed": count})
+
+    def _run() -> None:
+        try:
+            processed = backfill_release_parts(auto=True, progress_cb=_progress)
+            logger.info("auto_backfill_complete", extra={"processed": processed})
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("auto_backfill_failed", exc_info=exc)
+
+    threading.Thread(target=_run, daemon=True, name="auto-backfill").start()
+
+
 def stop_ingest() -> None:
     if _ingest_stop:
         _ingest_stop.set()
     if _ingest_thread:
         _ingest_thread.join(timeout=5)
-
-
-async def _auto_backfill_loop() -> None:
-    interval = BACKFILL_INTERVAL_SECONDS
-    try:
-        while True:
-            await asyncio.sleep(interval)
-            try:
-                await asyncio.to_thread(backfill_release_parts, auto=True)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.exception("scheduled_backfill_failed", exc_info=exc)
-    except asyncio.CancelledError:  # pragma: no cover - expected on shutdown
-        pass
-
-
-async def start_backfill_scheduler() -> None:
-    global _auto_backfill_task
-    if BACKFILL_INTERVAL_SECONDS > 0 and _auto_backfill_task is None:
-        _auto_backfill_task = asyncio.create_task(_auto_backfill_loop())
-
-
-async def stop_backfill_scheduler() -> None:
-    global _auto_backfill_task
-    if _auto_backfill_task:
-        _auto_backfill_task.cancel()
-        try:
-            await _auto_backfill_task
-        except Exception:
-            pass
-        _auto_backfill_task = None
 
 
 def _find_version_file() -> Path:
@@ -442,9 +425,8 @@ def _search(
             sort=sort,
             api_key=api_key,
         )
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.exception("search_failed", extra={"error": str(exc)})
-        raise
+    except Exception:
+        return []
 
 
 def _xml_response(body: str) -> Response:
@@ -759,12 +741,11 @@ app = Starlette(
         init_engine,
         apply_schema,
         start_ingest,
-        start_backfill_scheduler,
+        start_auto_backfill,
         lambda: _set_stop(start_metrics()),
     ],
     on_shutdown=[
         stop_ingest,
-        stop_backfill_scheduler,
         lambda: _stop_metrics() if _stop_metrics else None,
         dispose_engine,
         close_connection,
