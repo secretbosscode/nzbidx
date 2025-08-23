@@ -22,24 +22,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_api.backfill_release_parts import backfill_release_parts
-from nzbidx_ingest.main import connect_db
 
 
 def _auto_mode() -> None:
     """Backfill only releases missing segment rows."""
-    conn = connect_db()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT r.id FROM release r
-        WHERE r.has_parts AND r.segments IS NULL
-        ORDER BY r.id
-        """,
-    )
-    ids = [row[0] for row in cur.fetchall()]
-    conn.close()
-    if ids:
-        backfill_release_parts(release_ids=ids)
+    backfill_release_parts(auto=True)
 
 
 def main(
