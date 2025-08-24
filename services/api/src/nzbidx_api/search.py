@@ -104,7 +104,11 @@ async def search_releases_async(
     items: List[Dict[str, str]] = []
     engine = get_engine()
     if not engine or text is None:
-        return items
+        logger.error(
+            "search_backend_unconfigured",
+            extra={"engine": bool(engine), "sqlalchemy": text is not None},
+        )
+        raise RuntimeError("search backend unavailable")
 
     rows = []
     max_attempts = 2
