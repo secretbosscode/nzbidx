@@ -34,11 +34,11 @@ and `REINDEX` jobs via APScheduler.
 
 Seed a fresh PostgreSQL instance before starting ingestion. Apply the schema
 file to install required extensions and create the partitioned `release` table,
-then add the full-text search column and index:
+then add the full-text search column and index via the Python migration:
 
 ```bash
 psql "$DATABASE_URL" -f db/init/schema.sql
-psql "$DATABASE_URL" -f db/migrations/20240524_add_search_vector.sql
+python -m nzbidx_api.migrations.0001_add_search_vector
 psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
 ```
 

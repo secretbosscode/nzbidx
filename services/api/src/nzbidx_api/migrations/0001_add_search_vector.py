@@ -34,3 +34,18 @@ def migrate(conn: Any) -> None:
             conn.autocommit = autocommit
     if not getattr(conn, "autocommit", False):
         conn.commit()
+
+
+if __name__ == "__main__":  # pragma: no cover - script entry
+    import os
+
+    try:
+        import psycopg
+    except Exception:  # pragma: no cover - dependency check
+        raise SystemExit("psycopg is required to run this migration")
+
+    conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+    try:
+        migrate(conn)
+    finally:
+        conn.close()

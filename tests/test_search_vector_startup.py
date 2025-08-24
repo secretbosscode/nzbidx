@@ -30,10 +30,11 @@ async def test_startup_fails_when_search_vector_missing(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR):
         with pytest.raises(
             RuntimeError,
-            match="search_vector column missing; run db/migrations/20240524_add_search_vector.sql",
+            match=
+            "search_vector column missing; run `python -m nzbidx_api.migrations.0001_add_search_vector`",
         ):
             await main_mod.ensure_search_vector()
     assert (
-        "search_vector column missing; run db/migrations/20240524_add_search_vector.sql"
+        "search_vector column missing; run `python -m nzbidx_api.migrations.0001_add_search_vector`"
         in caplog.text
     )
