@@ -39,5 +39,7 @@ def invalid_params(message: str = "invalid parameters") -> ORJSONResponse:
     return error_response("invalid_params", message, 400)
 
 
-def search_unavailable(message: str = "search backend unavailable") -> ORJSONResponse:
-    return error_response("search_unavailable", message, 500)
+def search_unavailable(
+    message: str = "search backend unavailable", *, status_code: int = 500
+) -> ORJSONResponse:
+    return error_response("search_unavailable", message, status_code)
