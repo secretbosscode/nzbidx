@@ -76,7 +76,14 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 from .orjson_response import ORJSONResponse, Response
-from .db import apply_schema, close_connection, dispose_engine, init_engine, ping
+from .db import (
+    apply_schema,
+    close_connection,
+    dispose_engine,
+    get_engine,
+    init_engine,
+    ping,
+)
 from . import newznab
 from .newznab import (
     caps_xml,
@@ -102,11 +109,12 @@ from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker
 from .otel import current_trace_id, setup_tracing
 from .errors import (
-    invalid_params,
     breaker_open,
-    nzb_timeout,
+    invalid_params,
     nzb_not_found,
+    nzb_timeout,
     nzb_unavailable,
+    search_unavailable,
 )
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
@@ -448,6 +456,8 @@ def _search(
     """Run a database search and return RSS item dicts."""
     q = q.strip() if isinstance(q, str) else None
     try:
+        if not get_engine():
+            raise RuntimeError("database engine not initialized")
         return search_releases(
             q,
             category=category,
@@ -457,8 +467,9 @@ def _search(
             sort=sort,
             api_key=api_key,
         )
-    except Exception:
-        return []
+    except Exception as exc:
+        logger.exception("search_failed", exc_info=exc)
+        raise
 
 
 def _xml_response(body: str) -> Response:
@@ -535,16 +546,19 @@ async def api(request: Request) -> Response:
         if q and len(q) > 256:
             return invalid_params("query too long")
         tag = params.get("tag")
-        items = await asyncio.to_thread(
-            _search,
-            q,
-            category=cat,
-            tag=tag,
-            limit=limit,
-            offset=offset,
-            sort=sort,
-            api_key=api_key,
-        )
+        try:
+            items = await asyncio.to_thread(
+                _search,
+                q,
+                category=cat,
+                tag=tag,
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                api_key=api_key,
+            )
+        except Exception:
+            return search_unavailable()
         xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
@@ -562,17 +576,20 @@ async def api(request: Request) -> Response:
         episode = params.get("ep")
         tag = params.get("tag")
         cats = cat or ",".join(TV_CATEGORY_IDS)
-        items = await asyncio.to_thread(
-            _search,
-            q,
-            category=cats,
-            tag=tag,
-            extra={"season": season, "episode": episode},
-            limit=limit,
-            offset=offset,
-            sort=sort,
-            api_key=api_key,
-        )
+        try:
+            items = await asyncio.to_thread(
+                _search,
+                q,
+                category=cats,
+                tag=tag,
+                extra={"season": season, "episode": episode},
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                api_key=api_key,
+            )
+        except Exception:
+            return search_unavailable()
         xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
@@ -589,17 +606,20 @@ async def api(request: Request) -> Response:
         imdbid = params.get("imdbid")
         tag = params.get("tag")
         cats = cat or ",".join(MOVIE_CATEGORY_IDS)
-        items = await asyncio.to_thread(
-            _search,
-            q,
-            category=cats,
-            tag=tag,
-            extra={"imdbid": imdbid, "resolution": params.get("resolution")},
-            limit=limit,
-            offset=offset,
-            sort=sort,
-            api_key=api_key,
-        )
+        try:
+            items = await asyncio.to_thread(
+                _search,
+                q,
+                category=cats,
+                tag=tag,
+                extra={"imdbid": imdbid, "resolution": params.get("resolution")},
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                api_key=api_key,
+            )
+        except Exception:
+            return search_unavailable()
         if not q and not items:
             first_cat = cats.split(",")[0] if cats else MOVIE_CATEGORY_IDS[0]
             link = "/api?t=getnzb&id=0"
@@ -635,17 +655,20 @@ async def api(request: Request) -> Response:
         if year:
             extra["year"] = year
         cats = cat or ",".join(AUDIO_CATEGORY_IDS)
-        items = await asyncio.to_thread(
-            _search,
-            q,
-            category=cats,
-            tag=tag,
-            extra=extra,
-            limit=limit,
-            offset=offset,
-            sort=sort,
-            api_key=api_key,
-        )
+        try:
+            items = await asyncio.to_thread(
+                _search,
+                q,
+                category=cats,
+                tag=tag,
+                extra=extra,
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                api_key=api_key,
+            )
+        except Exception:
+            return search_unavailable()
         xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)
@@ -666,17 +689,20 @@ async def api(request: Request) -> Response:
         if year:
             extra["year"] = year
         cats = cat or ",".join(BOOKS_CATEGORY_IDS)
-        items = await asyncio.to_thread(
-            _search,
-            q,
-            category=cats,
-            tag=tag,
-            extra=extra,
-            limit=limit,
-            offset=offset,
-            sort=sort,
-            api_key=api_key,
-        )
+        try:
+            items = await asyncio.to_thread(
+                _search,
+                q,
+                category=cats,
+                tag=tag,
+                extra=extra,
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                api_key=api_key,
+            )
+        except Exception:
+            return search_unavailable()
         xml = rss_xml(items, extended=extended)
         if not no_cache:
             await cache_rss(cache_key, xml)

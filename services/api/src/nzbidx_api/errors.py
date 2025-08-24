@@ -37,3 +37,7 @@ def nzb_not_found(message: str = "nzb not found") -> ORJSONResponse:
 
 def invalid_params(message: str = "invalid parameters") -> ORJSONResponse:
     return error_response("invalid_params", message, 400)
+
+
+def search_unavailable(message: str = "search backend unavailable") -> ORJSONResponse:
+    return error_response("search_unavailable", message, 500)
