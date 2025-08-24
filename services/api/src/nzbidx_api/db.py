@@ -214,9 +214,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 )
                 if cur.fetchone():
                     continue
-                module = importlib.import_module(
-                    f"{migrations_pkg.__name__}.{name}"
-                )
+                module = importlib.import_module(f"{migrations_pkg.__name__}.{name}")
                 migrate = getattr(module, "migrate", None)
                 if migrate:
                     migrate(raw)

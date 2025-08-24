@@ -4,17 +4,12 @@ import asyncio
 import importlib
 import sqlite3
 
-import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from nzbidx_api import db
 
-m_posted = importlib.import_module(
-    "nzbidx_api.migrations.0001_add_posted_at_index"
-)
-m_search = importlib.import_module(
-    "nzbidx_api.migrations.0001_add_search_vector"
-)
+m_posted = importlib.import_module("nzbidx_api.migrations.0001_add_posted_at_index")
+m_search = importlib.import_module("nzbidx_api.migrations.0001_add_search_vector")
 
 
 def test_apply_schema_runs_migrations(tmp_path, monkeypatch):
@@ -53,9 +48,13 @@ def test_apply_schema_runs_migrations(tmp_path, monkeypatch):
 
     conn = sqlite3.connect(db_path)
     try:
-        cols = [row[1] for row in conn.execute("PRAGMA table_info('release')").fetchall()]
+        cols = [
+            row[1] for row in conn.execute("PRAGMA table_info('release')").fetchall()
+        ]
         assert "search_vector" in cols
-        idxs = [row[1] for row in conn.execute("PRAGMA index_list('release')").fetchall()]
+        idxs = [
+            row[1] for row in conn.execute("PRAGMA index_list('release')").fetchall()
+        ]
         assert "release_search_idx" in idxs
     finally:
         conn.close()
