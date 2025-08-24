@@ -25,3 +25,26 @@ more time for the NZB build to complete.
 Use `/api/config` to retrieve the effective `NNTP_TOTAL_TIMEOUT` and
 `NZB_TIMEOUT_SECONDS` values for troubleshooting.
 
+## Search Requirements and Backfilling
+
+The `/api/search` endpoint only returns rows where `has_parts` is set. If a
+release was ingested without segment metadata it will be hidden from search
+results until the segments are populated and `has_parts` becomes `TRUE`.
+
+Run the helper to populate missing segments:
+
+```
+docker compose exec nzbidx python scripts/backfill_release_parts.py --auto
+```
+
+The script scans the `release` table for entries marked with `has_parts` but
+missing `segments`, fills in the `segments` and `part_count` columns when
+possible, and deletes releases that can no longer be retrieved.
+
+To verify the flag, inspect the `release` table directly:
+
+```
+SELECT id, has_parts, part_count FROM release WHERE has_parts = TRUE;
+```
+
+
