@@ -61,7 +61,7 @@ async def search_releases_async(
     if offset > MAX_OFFSET:
         offset = MAX_OFFSET
 
-    conditions = ["has_parts = TRUE"]
+    conditions = ["has_parts = TRUE", "size_bytes > 0"]
     params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
     if q:
@@ -143,9 +143,11 @@ async def search_releases_async(
             logger.warning("search_query_failed", extra=extra_info)
             raise
 
+    skip_count = 0
     for row in rows:
         size = row.size_bytes
         if size is None or size <= 0:
+            skip_count += 1
             continue
         release_id = str(row.id)
         link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
@@ -161,6 +163,8 @@ async def search_releases_async(
                 "size": str(size),
             }
         )
+    if skip_count:
+        logger.info("search_invalid_size", extra={"skip_count": skip_count})
     return items
 
 
