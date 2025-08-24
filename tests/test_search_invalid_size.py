@@ -54,6 +54,7 @@ def test_excludes_zero_size(monkeypatch, caplog) -> None:
     assert items == []
     assert "size_bytes > 0" in engine.sql
     assert any(
-        record.message == "search_invalid_size" and getattr(record, "skip_count", 0) == 1
+        record.message == "search_invalid_size"
+        and getattr(record, "skip_count", 0) == 1
         for record in caplog.records
     )
