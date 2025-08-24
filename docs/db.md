@@ -41,28 +41,18 @@ connections run as an ordinary user. Point `DATABASE_URL` at the database, e.g.
 
 Existing deployments with an unpartitioned `release` table are migrated automatically when the application starts using a superuser `DATABASE_URL`; no manual script is required.
 
+Once the base schema is in place, the service applies any later migrations automatically when it starts. No additional manual database steps are required.
+
 ## Full-text search
 
-After the base schema is applied, run the migration that adds the full-text
-search vector:
+The migration that adds the `search_vector` column and `release_search_idx` index
+is applied automatically on service startup. Verify the index exists:
 
-```bash
-psql -U postgres -d nzbidx -f db/migrations/20240524_add_search_vector.sql
+```sql
+SELECT to_regclass('release_search_idx');
 ```
 
-This migration must be executed by a superuser.
-
-Confirm the column was created:
-
-```psql
-\d release
-```
-
-The output should include a line similar to:
-
-```
-search_vector tsvector
-```
+If the query returns `release_search_idx`, the migration succeeded.
 
 ## Event loop considerations
 
