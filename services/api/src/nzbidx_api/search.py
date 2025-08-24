@@ -91,15 +91,6 @@ async def search_releases_async(
     sort_field = order_map.get(sort_key, "posted_at")
 
     where_clause = " AND ".join(conditions)
-
-    items: List[Dict[str, str]] = []
-    engine = get_engine()
-    if not engine or text is None:
-        logger.error(
-            "search unavailable: missing engine or SQLAlchemy",
-        )
-        raise RuntimeError("search unavailable: missing engine or SQLAlchemy")
-
     sql = text(
         f"""
         SELECT id, norm_title, category, size_bytes, posted_at
@@ -109,6 +100,15 @@ async def search_releases_async(
         LIMIT :limit OFFSET :offset
         """
     )
+
+    items: List[Dict[str, str]] = []
+    engine = get_engine()
+    if not engine or text is None:
+        logger.error(
+            "search_backend_unconfigured",
+            extra={"engine": bool(engine), "sqlalchemy": text is not None},
+        )
+        raise RuntimeError("search backend unavailable")
 
     rows = []
     max_attempts = 2
@@ -147,15 +147,11 @@ async def search_releases_async(
             logger.warning("search_query_failed", extra=extra_info)
             raise
 
-    if not rows:
-        logger.warning(
-            "search_empty", extra={"query": q, "category": category}
-        )
-        return items
-
+    skip_count = 0
     for row in rows:
         size = row.size_bytes
         if size is None or size <= 0:
+            skip_count += 1
             continue
         release_id = str(row.id)
         link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
@@ -171,6 +167,8 @@ async def search_releases_async(
                 "size": str(size),
             }
         )
+    if skip_count:
+        logger.info("search_invalid_size", extra={"skip_count": skip_count})
     return items
 
 
