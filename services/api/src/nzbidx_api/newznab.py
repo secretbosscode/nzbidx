@@ -193,10 +193,15 @@ def caps_xml() -> str:
         if adult_content_allowed() or not is_adult_category(c["id"])
     ]
     cats_xml = f"<categories>{''.join(categories)}</categories>"
+    searching_xml = (
+        "<searching>"
+        '<search available="yes" supportedParams="q,cat,limit,offset"/>'
+        "</searching>"
+    )
     return (
         '<caps><server version="0.1" title="nzbidx"/>'
         '<limits max="100" default="50"/>'
-        f"{cats_xml}</caps>"
+        f"{searching_xml}{cats_xml}</caps>"
     )
 
 

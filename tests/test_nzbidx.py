@@ -714,6 +714,16 @@ def test_caps_xml_defaults(monkeypatch) -> None:
     assert '<category id="6090" name="XXX/WEB-DL"/>' in xml
 
 
+def test_caps_xml_includes_searching_block(monkeypatch) -> None:
+    """caps.xml should describe supported search parameters."""
+    for var in ("ALLOW_XXX", "SAFESEARCH", "CATEGORY_CONFIG"):
+        monkeypatch.delenv(var, raising=False)
+    reloaded = importlib.reload(newznab)
+    xml = reloaded.caps_xml()
+    assert "<searching>" in xml
+    assert '<search available="yes" supportedParams="q,cat,limit,offset"/>' in xml
+
+
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
 def test_failed_fetch_not_cached(monkeypatch, cache_cls) -> None:
     cache = cache_cls()
