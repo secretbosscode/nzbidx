@@ -40,6 +40,7 @@ def test_auto_backfill_runs_on_startup(tmp_path, monkeypatch) -> None:
         return 1
 
     monkeypatch.setattr(main, "backfill_release_parts", dummy_backfill)
+    monkeypatch.setenv("AUTO_BACKFILL", "1")
 
     assert main.start_auto_backfill in main.app.on_startup
 
@@ -57,3 +58,20 @@ def test_auto_backfill_runs_on_startup(tmp_path, monkeypatch) -> None:
     else:
         assert False, "backfill did not run"
     assert seg == "[]"
+
+
+def test_auto_backfill_disabled(monkeypatch) -> None:
+    from nzbidx_api import main
+
+    called = False
+
+    def dummy_backfill(*a, **k):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(main, "backfill_release_parts", dummy_backfill)
+    monkeypatch.delenv("AUTO_BACKFILL", raising=False)
+
+    main.start_auto_backfill()
+
+    assert not called
