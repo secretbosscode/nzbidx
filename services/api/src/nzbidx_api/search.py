@@ -17,7 +17,6 @@ except Exception:  # pragma: no cover - optional dependency
 
 from .config import _int_env
 from .db import get_engine
-from .newznab import ADULT_CATEGORY_ID, adult_content_allowed
 from .metrics_log import inc
 
 logger = logging.getLogger(__name__)
@@ -82,10 +81,6 @@ async def search_releases_async(
     if tag:
         conditions.append("tags LIKE :tag")
         params["tag"] = f"{tag}%"
-
-    if not adult_content_allowed():
-        conditions.append("left(category, 1) != :adult")
-        params["adult"] = str(ADULT_CATEGORY_ID)[0]
 
     order_map = {
         "date": "posted_at",

@@ -40,13 +40,6 @@ class NzbDatabaseError(Exception):
     """Raised when database queries fail while fetching NZB data."""
 
 
-def adult_content_allowed() -> bool:
-    """Return ``True`` if XXX content may be shown."""
-    allow_xxx = os.getenv("ALLOW_XXX", "true").lower() != "false"
-    safesearch_on = os.getenv("SAFESEARCH", "off").lower() == "on"
-    return allow_xxx and not safesearch_on
-
-
 def is_adult_category(cat: Optional[str]) -> bool:
     """Return ``True`` if ``cat`` is an adult category id."""
     try:
@@ -187,11 +180,7 @@ ADULT_CATEGORY_IDS = _collect_category_ids("XXX")
 
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
-    categories = [
-        f'<category id="{c["id"]}" name="{c["name"]}"/>'
-        for c in CATEGORIES
-        if adult_content_allowed() or not is_adult_category(c["id"])
-    ]
+    categories = [f'<category id="{c["id"]}" name="{c["name"]}"/>' for c in CATEGORIES]
     cats_xml = f"<categories>{''.join(categories)}</categories>"
     searching_xml = (
         "<searching>"
@@ -220,18 +209,13 @@ def rss_xml(
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
     ``category`` and ``link`` keys. ``size`` is optional and used for the
     enclosure length when it is present and greater than ``0``. No escaping is
-    performed as the values are expected to be safe for XML. Adult items are
-    stripped when not allowed. ``language`` and ``feed_url`` are optional and
-    when ``feed_url`` is provided an ``atom:link`` element pointing to it is
-    included in the channel.
+    performed as the values are expected to be safe for XML. ``language`` and
+    ``feed_url`` are optional and when ``feed_url`` is provided an ``atom:link``
+    element pointing to it is included in the channel.
     """
-    allow_adult = adult_content_allowed()
-    safe_items = [
-        i for i in items if allow_adult or not is_adult_category(i.get("category"))
-    ]
     channel_date = format_datetime(datetime.now(timezone.utc))
     item_parts = []
-    for i in safe_items:
+    for i in items:
         size = str(i.get("size", ""))
         enclosure = (
             f'<enclosure url="{html.escape(i["link"])}" type="application/x-nzb" length="{html.escape(size)}"/>'
@@ -341,8 +325,3 @@ async def get_nzb(release_id: str, cache: Optional[Any]) -> str:
             log.warning("cache setex failed for %s: %s", release_id, exc)
 
     return xml
-
-
-def adult_disabled_xml() -> str:
-    """Return an empty RSS feed noting adult content is disabled."""
-    return '<rss version="2.0"><channel><!-- adult content disabled --></channel></rss>'

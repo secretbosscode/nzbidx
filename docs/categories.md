@@ -65,12 +65,3 @@ Whisparr uses the same Newznab category IDs when configuring an indexer. Add nzb
 
 You can also include non-adult categories such as `2000` (Movies), `5000` (TV), `3000` (Audio), or `7020` (EBook) if you want Whisparr to use those.
 
-## Adult Content Controls
-
-Adult categories (`6000`–`6099`) are filtered based on two environment variables:
-
-- `ALLOW_XXX` — when set to `false`, all XXX categories are disabled and requests targeting them return empty results.
-- `SAFESEARCH` — when set to `on`, adult categories are hidden from search results and from the `caps` category listing.
-
-To expose XXX results to Whisparr, leave `ALLOW_XXX` as `true` and ensure `SAFESEARCH` is `off`.
-

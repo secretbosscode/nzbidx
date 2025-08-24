@@ -636,15 +636,6 @@ def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     assert resp.headers["content-type"] == "application/x-nzb"
 
 
-def test_caps_xml_omits_adult_when_disabled(monkeypatch) -> None:
-    """caps.xml should exclude adult categories when disabled."""
-
-    monkeypatch.setenv("SAFESEARCH", "on")
-    reloaded = importlib.reload(newznab)
-    xml = reloaded.caps_xml()
-    assert '<category id="6000"' not in xml
-
-
 def test_infer_category_from_group() -> None:
     """Group names should hint at the correct category."""
     assert (
@@ -716,8 +707,7 @@ def test_caps_xml_defaults(monkeypatch) -> None:
 
 def test_caps_xml_includes_searching_block(monkeypatch) -> None:
     """caps.xml should describe supported search parameters."""
-    for var in ("ALLOW_XXX", "SAFESEARCH", "CATEGORY_CONFIG"):
-        monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("CATEGORY_CONFIG", raising=False)
     reloaded = importlib.reload(newznab)
     xml = reloaded.caps_xml()
     assert "<searching>" in xml
