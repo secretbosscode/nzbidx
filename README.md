@@ -82,8 +82,6 @@ faster serializer once compatible.
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Superuser applied to `schema.sql` during init | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
 | `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
-| `SAFESEARCH` | `on` hides adult categories | `off` |
-| `ALLOW_XXX` | `true` enables the XXX category | `true` |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
 | `NZBIDX_USE_STD_JSON` | `0` uses `orjson` if installed; `1` or unset uses the standard library `json` module | `1` |
@@ -280,15 +278,6 @@ supported as fallbacks for overriding the built-in defaults.
 | 7020 | EBook               |
 | 7030 | Comics              |
 
-### SafeSearch and XXX Control
-
-* `SAFESEARCH` (default `off`): when enabled (`on`), adult categories are
-  removed from all responses and from the `caps` category listing.
-* `ALLOW_XXX` (default `true`): when `false`, the XXX category (id `6000`) is
-  entirely disabled. Requests that explicitly target this category receive an
-  empty RSS feed with a comment noting that adult content is disabled. Leave
-  this flag enabled and ensure `SAFESEARCH=off` to expose XXX results.
-
 ## Production Deployment
 
 Use the production override file to run the stack with persistent data stores and healthcheck ordering:
@@ -297,8 +286,6 @@ Use the production override file to run the stack with persistent data stores an
 
 ## Configuration
 
-- `ALLOW_XXX` controls whether adult content is searchable. It is enabled by
-  default and can be set to `false` to disable it.
 - Only metadata is indexed; binaries are stripped during ingest. An admin
   takedown endpoint (`POST /api/admin/takedown`) accepts a release ID and removes
   it from the search index. The endpoint requires a valid `X-Api-Key`.

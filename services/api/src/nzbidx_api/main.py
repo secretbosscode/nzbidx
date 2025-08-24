@@ -79,15 +79,12 @@ from .orjson_response import ORJSONResponse, Response
 from .db import apply_schema, close_connection, dispose_engine, init_engine, ping
 from . import newznab
 from .newznab import (
-    adult_content_allowed,
-    adult_disabled_xml,
     caps_xml,
     get_nzb,
     NzbFetchError,
     NzbDatabaseError,
     NntpConfigError,
     NntpNoArticlesError,
-    is_adult_category,
     rss_xml,
     MOVIE_CATEGORY_IDS,
     TV_CATEGORY_IDS,
@@ -521,21 +518,9 @@ async def api(request: Request) -> Response:
     sort = params.get("sort")
     extended = params.get("extended") == "1"
 
-    # Adult category gating
     if cat:
         cats = [c.strip() for c in cat.split(",") if c.strip()]
         cats = expand_category_ids(cats)
-        if not adult_content_allowed():
-            original_cats = list(cats)
-            cats = [c for c in cats if not is_adult_category(c)]
-            filtered_ids = [c for c in original_cats if c not in cats]
-            if filtered_ids:
-                logger.warning(
-                    "adult_categories_filtered",
-                    extra={"filtered_ids": ",".join(filtered_ids)},
-                )
-            if not cats:
-                return _xml_response(adult_disabled_xml())
         cat = ",".join(cats) if cats else None
 
     if t == "caps":
