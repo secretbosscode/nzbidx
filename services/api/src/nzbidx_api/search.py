@@ -147,6 +147,12 @@ async def search_releases_async(
             logger.warning("search_query_failed", extra=extra_info)
             raise
 
+    if not rows:
+        logger.warning(
+            "search_empty", extra={"query": q, "category": category}
+        )
+        return items
+
     for row in rows:
         size = row.size_bytes
         if size is None or size <= 0:
