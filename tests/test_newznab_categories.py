@@ -28,6 +28,7 @@ def test_load_categories_warns_on_bad_config(
     assert expected in caplog.text
     assert categories == newznab._default_categories()
 
+
 def test_caps_xml_includes_adult_categories() -> None:
     """caps.xml should list XXX categories."""
 

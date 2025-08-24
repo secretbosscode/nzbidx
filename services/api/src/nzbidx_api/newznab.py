@@ -180,10 +180,7 @@ ADULT_CATEGORY_IDS = _collect_category_ids("XXX")
 
 def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
-    categories = [
-        f'<category id="{c["id"]}" name="{c["name"]}"/>'
-        for c in CATEGORIES
-    ]
+    categories = [f'<category id="{c["id"]}" name="{c["name"]}"/>' for c in CATEGORIES]
     cats_xml = f"<categories>{''.join(categories)}</categories>"
     searching_xml = (
         "<searching>"

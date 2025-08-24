@@ -634,6 +634,8 @@ def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     assert resp.status_code == 200
     assert resp.headers["Content-Disposition"] == 'attachment; filename="123.nzb"'
     assert resp.headers["content-type"] == "application/x-nzb"
+
+
 def test_infer_category_from_group() -> None:
     """Group names should hint at the correct category."""
     assert (
