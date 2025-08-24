@@ -84,6 +84,11 @@ from .db import (
     init_engine,
     ping,
 )
+
+try:  # pragma: no cover - optional dependency
+    from sqlalchemy import text
+except Exception:  # pragma: no cover - optional dependency
+    text = None  # type: ignore
 from . import newznab
 from .newznab import (
     caps_xml,
@@ -442,6 +447,32 @@ async def admin_backfill(request: Request) -> ORJSONResponse:
     return ORJSONResponse({"status": "started"})
 
 
+async def ensure_search_vector() -> None:
+    """Verify required ``search_vector`` column exists."""
+
+    engine = get_engine()
+    if not engine or text is None:  # pragma: no cover - dependency check
+        return
+    async with engine.connect() as conn:
+        exists = await conn.scalar(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name='release'
+                  AND column_name='search_vector'
+                """
+            )
+        )
+    if not exists:
+        msg = (
+            "search_vector column missing; run "
+            "db/migrations/20240524_add_search_vector.sql"
+        )
+        logger.error(msg)
+        raise RuntimeError(msg)
+
+
 async def _search(
     q: Optional[str],
     *,
@@ -781,6 +812,7 @@ app = Starlette(
     on_startup=[
         init_engine,
         apply_schema,
+        ensure_search_vector,
         start_ingest,
         start_auto_backfill,
         lambda: _set_stop(start_metrics()),
