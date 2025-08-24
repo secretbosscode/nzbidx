@@ -14,6 +14,17 @@ install `psycopg[binary] >= 3.1` from the service `pyproject.toml` files. The
 `pg_trgm` and `vector` extensions must be installed by a superuser; the init
 script at `db/init/schema.sql` handles this during database provisioning.
 
+Run `db/migrations/20240524_add_search_vector.sql` after the schema is in place
+to add the `search_vector` column and `release_search_idx` index:
+
+```bash
+psql "$DATABASE_URL" -f db/migrations/20240524_add_search_vector.sql
+psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
+```
+
+`to_regclass` returns `release_search_idx` when the index exists. See
+[docs/db.md#full-text-search](docs/db.md#full-text-search).
+
 ## Engine lifecycle
 `init_engine()` binds the async database engine to the currently running event loop.
 Call `dispose_engine()` on that same loop before it closes to avoid cross-loop
