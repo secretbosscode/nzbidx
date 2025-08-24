@@ -205,14 +205,25 @@ def caps_xml() -> str:
     )
 
 
-def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
+def rss_xml(
+    items: list[dict[str, str]],
+    *,
+    extended: bool = False,
+    title: str = "nzbidx",
+    link: str = "/",
+    description: str = "nzbidx RSS feed",
+    language: Optional[str] = None,
+    feed_url: Optional[str] = None,
+) -> str:
     """Return a simple RSS feed with the provided items.
 
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
     ``category`` and ``link`` keys. ``size`` is optional and used for the
     enclosure length when it is present and greater than ``0``. No escaping is
     performed as the values are expected to be safe for XML. Adult items are
-    stripped when not allowed.
+    stripped when not allowed. ``language`` and ``feed_url`` are optional and
+    when ``feed_url`` is provided an ``atom:link`` element pointing to it is
+    included in the channel.
     """
     allow_adult = adult_content_allowed()
     safe_items = [
@@ -253,13 +264,32 @@ def rss_xml(items: list[dict[str, str]], *, extended: bool = False) -> str:
             )
         )
     items_xml = "".join(item_parts)
-    return (
-        '<rss version="2.0">'
-        "<channel>"
-        f"<pubDate>{html.escape(channel_date)}</pubDate>"
-        f"{items_xml}"
-        "</channel>"
-        "</rss>"
+    channel_parts = [
+        "<channel>",
+        f"<title>{html.escape(title)}</title>",
+        f"<link>{html.escape(link)}</link>",
+        f"<description>{html.escape(description)}</description>",
+    ]
+    if language:
+        channel_parts.append(f"<language>{html.escape(language)}</language>")
+    if feed_url:
+        channel_parts.append(
+            f'<atom:link href="{html.escape(feed_url)}" rel="self" type="application/rss+xml"/>'
+        )
+    channel_parts.append(f"<pubDate>{html.escape(channel_date)}</pubDate>")
+    channel_parts.append(items_xml)
+    channel_parts.append("</channel>")
+
+    rss_attrs = ['version="2.0"']
+    if feed_url:
+        rss_attrs.append('xmlns:atom="http://www.w3.org/2005/Atom"')
+
+    return "".join(
+        [
+            f"<rss {' '.join(rss_attrs)}>",
+            "".join(channel_parts),
+            "</rss>",
+        ]
     )
 
 

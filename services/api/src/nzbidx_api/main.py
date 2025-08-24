@@ -131,6 +131,7 @@ _ingest_stop: threading.Event | None = None
 _ingest_thread: threading.Thread | None = None
 _backfill_thread: threading.Thread | None = None
 _backfill_status: dict[str, object] = {"status": "idle", "processed": 0}
+_backfill_scheduler_task: asyncio.Task | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +276,40 @@ def start_auto_backfill() -> None:
             logger.exception("auto_backfill_failed", exc_info=exc)
 
     threading.Thread(target=_run, daemon=True, name="auto-backfill").start()
+
+
+async def _backfill_scheduler_loop(interval: int) -> None:
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await asyncio.to_thread(backfill_release_parts)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception("scheduled_backfill_failed", exc_info=exc)
+    except asyncio.CancelledError:  # pragma: no cover - cancellation
+        pass
+
+
+async def start_backfill_scheduler() -> None:
+    """Start a background task that periodically backfills release parts."""
+    global _backfill_scheduler_task
+    interval = int(os.getenv("BACKFILL_INTERVAL_SECONDS", "3600"))
+    if _backfill_scheduler_task is None or _backfill_scheduler_task.done():
+        _backfill_scheduler_task = asyncio.create_task(
+            _backfill_scheduler_loop(interval)
+        )
+
+
+async def stop_backfill_scheduler() -> None:
+    """Stop the background backfill task if running."""
+    global _backfill_scheduler_task
+    if _backfill_scheduler_task:
+        _backfill_scheduler_task.cancel()
+        try:
+            await _backfill_scheduler_task
+        except Exception:  # pragma: no cover - cancellation/cleanup
+            pass
+        _backfill_scheduler_task = None
 
 
 def stop_ingest() -> None:
