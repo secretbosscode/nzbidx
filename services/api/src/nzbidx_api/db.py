@@ -228,8 +228,9 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
         try:
             await conn.run_sync(_migrate)
-        except Exception:
-            return
+        except Exception as exc:
+            logger.error("migration_failed", exc_info=True, extra={"error": str(exc)})
+            raise
 
     async def _drop_privileges(conn: Any) -> None:
         """Revoke superuser rights from the current role if possible."""
