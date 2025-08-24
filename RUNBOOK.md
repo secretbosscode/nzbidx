@@ -14,11 +14,11 @@ install `psycopg[binary] >= 3.1` from the service `pyproject.toml` files. The
 `pg_trgm` and `vector` extensions must be installed by a superuser; the init
 script at `db/init/schema.sql` handles this during database provisioning.
 
-Run `db/migrations/20240524_add_search_vector.sql` after the schema is in place
-to add the `search_vector` column and `release_search_idx` index:
+The `search_vector` column and `release_search_idx` index are created by the
+`0001_add_search_vector` migration on startup. After the service runs, verify
+the index exists:
 
 ```bash
-psql "$DATABASE_URL" -f db/migrations/20240524_add_search_vector.sql
 psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
 ```
 
