@@ -27,13 +27,22 @@ async def test_startup_fails_when_search_vector_missing(monkeypatch, caplog):
     assert main_mod.ensure_search_vector in main_mod.app.on_startup
     dummy_engine = DummyEngine()
     monkeypatch.setattr(main_mod, "get_engine", lambda: dummy_engine)
+
+    called = False
+
+    async def fake_apply_schema() -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(main_mod, "apply_schema", fake_apply_schema)
     with caplog.at_level(logging.ERROR):
         with pytest.raises(
             RuntimeError,
-            match="search_vector column missing; run db/migrations/20240524_add_search_vector.sql",
+            match="search_vector column missing; run nzbidx_api.migrations.0001_add_search_vector",
         ):
             await main_mod.ensure_search_vector()
+    assert called
     assert (
-        "search_vector column missing; run db/migrations/20240524_add_search_vector.sql"
+        "search_vector column missing; run nzbidx_api.migrations.0001_add_search_vector"
         in caplog.text
     )

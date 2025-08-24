@@ -33,18 +33,18 @@ and `REINDEX` jobs via APScheduler.
 ## Database Initialization
 
 Seed a fresh PostgreSQL instance before starting ingestion. Apply the schema
-file to install required extensions and create the partitioned `release` table,
-then add the full-text search column and index:
+file to install required extensions and create the partitioned `release` table.
+The application adds the full-text search column and index on startup:
 
 ```bash
 psql "$DATABASE_URL" -f db/init/schema.sql
-psql "$DATABASE_URL" -f db/migrations/20240524_add_search_vector.sql
 psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
 ```
 
 Run these commands once with a superuser account or via your migration tool.
-The `to_regclass` query returns `release_search_idx` when the migration succeeds.
-See [docs/db.md#full-text-search](docs/db.md#full-text-search) for details.
+The `to_regclass` query returns `release_search_idx` after the migration
+completes. See [docs/db.md#full-text-search](docs/db.md#full-text-search) for
+details.
 
 The application migrates the `release` table automatically on startup when
 provided a `DATABASE_URL` with superuser privileges, so no separate migration
