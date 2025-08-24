@@ -68,4 +68,3 @@ def test_api_returns_503_on_introspection_error(monkeypatch) -> None:
     resp = asyncio.run(main_mod.api(req))
     assert resp.status_code == 503
     assert b"full-text search unavailable" in resp.body
-

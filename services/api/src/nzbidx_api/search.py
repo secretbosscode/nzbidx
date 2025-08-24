@@ -23,6 +23,7 @@ from .metrics_log import inc
 class SearchVectorUnavailable(RuntimeError):
     """Raised when full text search vector is unavailable."""
 
+
 logger = logging.getLogger(__name__)
 
 MAX_LIMIT = _int_env("MAX_LIMIT", 100)
@@ -90,9 +91,7 @@ async def search_releases_async(
                 )
                 has_vector = bool(result.scalar())
         except Exception as exc:
-            logger.warning(
-                "search_vector_check_failed", extra={"error": str(exc)}
-            )
+            logger.warning("search_vector_check_failed", extra={"error": str(exc)})
             raise SearchVectorUnavailable("full-text search not available") from exc
 
     conditions = ["has_parts = TRUE", "size_bytes > 0"]
