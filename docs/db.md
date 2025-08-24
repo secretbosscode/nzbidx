@@ -43,26 +43,8 @@ Existing deployments with an unpartitioned `release` table are migrated automati
 
 ## Full-text search
 
-After the base schema is applied, run the migration that adds the full-text
-search vector:
-
-```bash
-psql -U postgres -d nzbidx -f db/migrations/20240524_add_search_vector.sql
-```
-
-This migration must be executed by a superuser.
-
-Confirm the column was created:
-
-```psql
-\d release
-```
-
-The output should include a line similar to:
-
-```
-search_vector tsvector
-```
+The application automatically creates the `search_vector` column and GIN
+index when it starts. No manual migration is required.
 
 ## Event loop considerations
 

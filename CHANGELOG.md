@@ -11,6 +11,7 @@
 - Ensure release `language` and `tags` columns have non-null defaults.
 - Include `langdetect` dependency for automatic language detection.
 - Ignore empty search queries to avoid returning entire categories.
+- Handle search vector migration automatically at startup; manual SQL script removed.
 
 ## [0.0.0] - 2024-01-01
 - Initial release.
