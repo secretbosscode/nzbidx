@@ -34,6 +34,7 @@ from .db_migrations import (
     ensure_release_adult_year_partition,
     migrate_release_adult_partitions,
 )
+from nzbidx_migrations import apply_sync
 
 logger = logging.getLogger(__name__)
 
@@ -391,80 +392,8 @@ def connect_db() -> Any:
                         extra={"next_step": "ensuring_partitions"},
                     )
 
-                stmts = (
-                    "CREATE EXTENSION IF NOT EXISTS pg_trgm",
-                    (
-                        """
-                        CREATE TABLE IF NOT EXISTS release (
-                            id BIGSERIAL,
-                            norm_title TEXT,
-                            category TEXT,
-                            category_id INT,
-                            language TEXT NOT NULL DEFAULT 'und',
-                            tags TEXT NOT NULL DEFAULT '',
-                            source_group TEXT,
-                            size_bytes BIGINT,
-                            posted_at TIMESTAMPTZ,
-                            segments JSONB,
-                            has_parts BOOLEAN NOT NULL DEFAULT FALSE,
-                            part_count INT NOT NULL DEFAULT 0
-                        ) PARTITION BY RANGE (category_id)
-                        """
-                    ),
-                    "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
-                    "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
-                    "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
-                    "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)",
-                    "CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-                    "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
-                    "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
-                    "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
-                    "DROP INDEX IF EXISTS release_embedding_idx",
-                    "ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS source_group TEXT",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS size_bytes BIGINT",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0",
-                    "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS category_id INT",
-                    "CREATE INDEX IF NOT EXISTS release_category_idx ON release (category)",
-                    "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)",
-                    "CREATE INDEX IF NOT EXISTS release_language_idx ON release (language)",
-                    "CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_ops)",
-                    "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops)",
-                    "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)",
-                    "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)",
-                    "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
-                    "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts",
-                )
                 if not exists or partitioned:
-                    for stmt in stmts:
-                        try:
-                            conn.execute(text(stmt))
-                            conn.commit()
-                        except Exception as exc:
-                            # Creating extensions requires superuser privileges.  If
-                            # unavailable, log the failure and roll back so that
-                            # subsequent statements can proceed.
-                            conn.rollback()
-                            if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
-                                logger.warning(
-                                    "extension_unavailable",
-                                    extra={"stmt": stmt, "error": str(exc)},
-                                )
-                            else:
-                                raise
-                        if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
-                            installed = conn.execute(
-                                text(
-                                    "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_trgm')"
-                                )
-                            ).fetchone()[0]
-                            if not installed:
-                                raise RuntimeError(
-                                    "pg_trgm extension is required; enable the extension or provide a fallback index definition"
-                                )
+                    apply_sync(conn, text)
             return engine.raw_connection()
 
         try:

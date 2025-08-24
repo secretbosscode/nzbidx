@@ -22,6 +22,7 @@ from typing import Any, Optional
 from . import migrations as migrations_pkg
 
 from nzbidx_ingest.db_migrations import migrate_release_adult_partitions
+from nzbidx_migrations import apply_async, _split_sql
 
 # Optional SQLAlchemy dependency
 try:  # pragma: no cover - import guard
@@ -33,8 +34,8 @@ except Exception:  # pragma: no cover - optional dependency
     create_async_engine = None  # type: ignore
 
 # Optional sqlparse dependency for parsing schema statements.  When unavailable
-# a lightweight internal splitter handles common PostgreSQL quoting constructs.
-try:  # pragma: no cover - import guard
+# the internal splitter from nzbidx_migrations is used.
+try:  # pragma: no cover - optional dependency
     import sqlparse
 except Exception:  # pragma: no cover - optional dependency
     sqlparse = None  # type: ignore
@@ -124,113 +125,13 @@ def get_engine() -> Optional[AsyncEngine]:
     return engine
 
 
-def _split_sql(sql: str) -> list[str]:
-    """Split ``sql`` into individual statements.
-
-    The implementation intentionally handles only a small subset of PostgreSQL
-    syntax but correctly preserves semicolons that appear inside quoted strings
-    or dollar-quoted PL/pgSQL blocks.  It also skips over line comments (``--``)
-    and C-style block comments (``/* ... */``) so that any semicolons contained
-    within them do not terminate a statement.  The function is designed as a
-    lightweight fallback when :mod:`sqlparse` is not available.
-    """
-
-    import re
-
-    statements: list[str] = []
-    buf: list[str] = []
-    i = 0
-    n = len(sql)
-    in_single = False
-    in_double = False
-    line_comment = False
-    block_comment = False
-    dollars: list[str] = []
-
-    while i < n:
-        ch = sql[i]
-        nxt = sql[i : i + 2]
-
-        if line_comment:
-            buf.append(ch)
-            i += 1
-            if ch == "\n":
-                line_comment = False
-            continue
-        if block_comment:
-            buf.append(ch)
-            i += 1
-            if nxt == "*/":
-                buf.append("/")
-                i += 1
-                block_comment = False
-            continue
-        if dollars:
-            tag = dollars[-1]
-            if sql.startswith(tag, i):
-                buf.append(tag)
-                i += len(tag)
-                dollars.pop()
-                continue
-            buf.append(ch)
-            i += 1
-            continue
-        if in_single:
-            buf.append(ch)
-            i += 1
-            if ch == "'":
-                in_single = False
-            continue
-        if in_double:
-            buf.append(ch)
-            i += 1
-            if ch == '"':
-                in_double = False
-            continue
-
-        if nxt == "--":
-            line_comment = True
-            buf.append(nxt)
-            i += 2
-            continue
-        if nxt == "/*":
-            block_comment = True
-            buf.append(nxt)
-            i += 2
-            continue
-        if ch == "'":
-            in_single = True
-            buf.append(ch)
-            i += 1
-            continue
-        if ch == '"':
-            in_double = True
-            buf.append(ch)
-            i += 1
-            continue
-        if ch == "$":
-            m = re.match(r"\$[A-Za-z0-9_]*\$", sql[i:])
-            if m:
-                tag = m.group(0)
-                dollars.append(tag)
-                buf.append(tag)
-                i += len(tag)
-                continue
-        if ch == ";":
-            stmt = "".join(buf).strip()
-            if stmt:
-                statements.append(stmt)
-            buf.clear()
-            i += 1
-            continue
-
-        buf.append(ch)
-        i += 1
-
-    stmt = "".join(buf).strip()
-    if stmt:
-        statements.append(stmt)
-    return statements
+def load_schema_statements() -> list[str]:
+    sql = (
+        resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
+    )
+    if sqlparse:
+        return [s.strip() for s in sqlparse.split(sql) if s.strip()]
+    return _split_sql(sql)
 
 
 async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
@@ -238,13 +139,8 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     engine = get_engine()
     if not engine or not text:
         return
-    sql = (
-        resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
-    )
-    if sqlparse:
-        statements = [s.strip() for s in sqlparse.split(sql) if s.strip()]
-    else:  # pragma: no cover - sqlparse not installed
-        statements = _split_sql(sql)
+
+    statements = load_schema_statements()
 
     async def _apply(conn: Any) -> None:
         partitioned = False
@@ -288,24 +184,12 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
         except Exception:  # pragma: no cover - system catalogs missing
             partitioned = False
 
-        for stmt in statements:
+        def _predicate(stmt: str) -> bool:
             if not partitioned and "PARTITION OF release_adult" in stmt:
                 raise RuntimeError(f"release_adult_unpartitioned: {stmt}")
-            try:
-                await conn.execute(text(stmt))
-                await conn.commit()
-            except Exception as exc:
-                # Creating extensions requires superuser privileges.  If the
-                # current role lacks permission, log the failure but continue
-                # applying the remaining schema.  Roll back the failed
-                # statement so subsequent statements can proceed.
-                await conn.rollback()
-                if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
-                    logger.warning(
-                        "extension_unavailable", extra={"stmt": stmt, "error": str(exc)}
-                    )
-                else:
-                    raise
+            return True
+
+        await apply_async(conn, text, statements=statements, predicate=_predicate)
 
     async def _run_migrations(conn: Any) -> None:
         """Import and execute database migrations."""
