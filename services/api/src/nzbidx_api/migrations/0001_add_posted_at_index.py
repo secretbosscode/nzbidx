@@ -20,10 +20,10 @@ def migrate(conn: Any) -> None:
         )
         tables = ["release"] + [row[0] for row in cur.fetchall()]
         for table in tables:
+            table_ident = sql.Identifier(table).as_string(conn)
             cur.execute(
-                sql.SQL(
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS release_posted_at_idx ON {} (posted_at)"
-                ).format(sql.Identifier(table))
+                f"CREATE INDEX CONCURRENTLY IF NOT EXISTS "
+                f"release_posted_at_idx ON {table_ident} (posted_at)"
             )
     finally:
         cur.close()
