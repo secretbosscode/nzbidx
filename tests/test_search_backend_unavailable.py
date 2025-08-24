@@ -8,7 +8,8 @@ def test_search_backend_unavailable(monkeypatch):
     search_cache._CACHE.clear()
     monkeypatch.setattr(api_main, "get_engine", lambda: None)
     req = SimpleNamespace(
-        query_params={"t": "search"}, headers={"Cache-Control": "no-cache"}
+        query_params={"t": "search"},
+        headers={"Cache-Control": "no-cache"},
     )
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 500
