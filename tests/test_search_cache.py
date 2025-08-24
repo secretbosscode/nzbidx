@@ -51,9 +51,7 @@ def test_concurrent_cache_access(monkeypatch):
     search_cache._CACHE.clear()
 
     async def writer(i: int) -> None:
-        await search_cache.cache_rss(
-            f"k{i % 5}", f"<rss><item>{i}</item></rss>"
-        )
+        await search_cache.cache_rss(f"k{i % 5}", f"<rss><item>{i}</item></rss>")
 
     async def reader(i: int) -> None:
         await search_cache.get_cached_rss(f"k{i % 5}")
