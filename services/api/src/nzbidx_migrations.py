@@ -79,7 +79,9 @@ def _split_sql(sql: str) -> list[str]:
 
 def load_schema_statements() -> list[str]:
     """Return SQL statements from the bundled schema file."""
-    sql = resources.files("nzbidx_api").joinpath("schema.sql").read_text(encoding="utf-8")
+    sql = (
+        resources.files("nzbidx_api").joinpath("schema.sql").read_text(encoding="utf-8")
+    )
     if sqlparse:
         return [s.strip() for s in sqlparse.split(sql) if s.strip()]
     return _split_sql(sql)

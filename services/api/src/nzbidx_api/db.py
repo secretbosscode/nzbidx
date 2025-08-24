@@ -122,7 +122,9 @@ def get_engine() -> Optional[AsyncEngine]:
 
 
 def load_schema_statements() -> list[str]:
-    sql = resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
+    sql = (
+        resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
+    )
     if sqlparse:
         return [s.strip() for s in sqlparse.split(sql) if s.strip()]
     return _split_sql(sql)
