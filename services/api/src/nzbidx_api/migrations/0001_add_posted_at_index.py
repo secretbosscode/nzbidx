@@ -8,7 +8,7 @@ from psycopg import sql
 
 
 def migrate(conn: Any) -> None:
-    """Create release_posted_at_idx concurrently for all partitions."""
+    """Create posted_at indexes concurrently for all partitions."""
     cur = conn.cursor()
     try:
         cur.execute(
@@ -20,10 +20,11 @@ def migrate(conn: Any) -> None:
         )
         tables = ["release"] + [row[0] for row in cur.fetchall()]
         for table in tables:
+            index_name = f"{table.replace('.', '_')}_posted_at_idx"
             cur.execute(
                 sql.SQL(
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS release_posted_at_idx ON {} (posted_at)"
-                ).format(sql.Identifier(table))
+                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS {} ON {} (posted_at)"
+                ).format(sql.Identifier(index_name), sql.Identifier(table))
             )
     finally:
         cur.close()
