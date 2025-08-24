@@ -10,12 +10,16 @@ instance.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 import os
+import pkgutil
 from importlib import resources
 from urllib.parse import urlparse, urlunparse
 
 from typing import Any, Optional
+
+from . import migrations as migrations_pkg
 
 from nzbidx_ingest.db_migrations import migrate_release_adult_partitions
 
@@ -303,6 +307,48 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 else:
                     raise
 
+    async def _run_migrations(conn: Any) -> None:
+        """Import and execute database migrations."""
+
+        def _migrate(sync_conn: Any) -> None:
+            raw = sync_conn.connection.dbapi_connection
+            cur = raw.cursor()
+            cur.execute(
+                "CREATE TABLE IF NOT EXISTS nzbidx_schema_migrations (name TEXT PRIMARY KEY)"
+            )
+            try:
+                raw.commit()
+            except Exception:
+                pass
+            modules = sorted(
+                pkgutil.iter_modules(migrations_pkg.__path__), key=lambda m: m.name
+            )
+            for info in modules:
+                name = info.name
+                cur.execute(
+                    f"SELECT 1 FROM nzbidx_schema_migrations WHERE name = '{name}'"
+                )
+                if cur.fetchone():
+                    continue
+                module = importlib.import_module(
+                    f"{migrations_pkg.__name__}.{name}"
+                )
+                migrate = getattr(module, "migrate", None)
+                if migrate:
+                    migrate(raw)
+                    cur.execute(
+                        f"INSERT INTO nzbidx_schema_migrations (name) VALUES ('{name}')"
+                    )
+                    try:
+                        raw.commit()
+                    except Exception:
+                        pass
+
+        try:
+            await conn.run_sync(_migrate)
+        except Exception:
+            return
+
     async def _drop_privileges(conn: Any) -> None:
         """Revoke superuser rights from the current role if possible."""
         try:
@@ -315,6 +361,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
         try:
             async with engine.connect() as conn:
                 await _apply(conn)
+                await _run_migrations(conn)
                 await _drop_privileges(conn)
             return
         except OSError as exc:
