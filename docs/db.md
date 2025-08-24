@@ -43,24 +43,8 @@ Existing deployments with an unpartitioned `release` table are migrated automati
 
 ## Full-text search
 
-After the base schema is applied, run the migration that adds the full-text
-search vector. This step is required before search endpoints will function:
-
-```bash
-psql -U postgres -d nzbidx -f db/migrations/20240524_add_search_vector.sql
-```
-
-This migration must be executed by a superuser.
-
-Verify the column and index were created:
-
-```psql
-\d release
-SELECT to_regclass('release_search_idx');
-```
-
-The `\d` output should include `search_vector tsvector`, and the
-`to_regclass` call returns `release_search_idx` when the index exists.
+The application automatically creates the `search_vector` column and GIN
+index when it starts. No manual migration is required.
 
 ## Event loop considerations
 

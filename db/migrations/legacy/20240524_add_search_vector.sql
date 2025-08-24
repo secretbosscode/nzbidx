@@ -1,3 +1,4 @@
+-- Legacy migration; handled automatically at startup
 -- Add generated search_vector column; existing rows are populated automatically
 ALTER TABLE IF EXISTS release
     ADD COLUMN IF NOT EXISTS search_vector tsvector
