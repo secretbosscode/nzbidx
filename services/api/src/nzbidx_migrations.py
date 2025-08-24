@@ -37,11 +37,12 @@ def _split_sql(sql: str) -> list[str]:
             i += 1
             continue
         if dollars:
-            buf.append(ch)
             if sql.startswith(dollars[-1], i):
-                i += len(dollars[-1])
-                dollars.pop()
+                tag = dollars.pop()
+                buf.append(tag)
+                i += len(tag)
             else:
+                buf.append(ch)
                 i += 1
             continue
         if ch == "'":
@@ -63,6 +64,7 @@ def _split_sql(sql: str) -> list[str]:
                 i += len(tag)
                 continue
         if ch == ";":
+            buf.append(ch)
             stmt = "".join(buf).strip()
             if stmt:
                 statements.append(stmt)
