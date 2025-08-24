@@ -91,6 +91,15 @@ async def search_releases_async(
     sort_field = order_map.get(sort_key, "posted_at")
 
     where_clause = " AND ".join(conditions)
+
+    items: List[Dict[str, str]] = []
+    engine = get_engine()
+    if not engine or text is None:
+        logger.error(
+            "search unavailable: missing engine or SQLAlchemy",
+        )
+        raise RuntimeError("search unavailable: missing engine or SQLAlchemy")
+
     sql = text(
         f"""
         SELECT id, norm_title, category, size_bytes, posted_at
@@ -100,15 +109,6 @@ async def search_releases_async(
         LIMIT :limit OFFSET :offset
         """
     )
-
-    items: List[Dict[str, str]] = []
-    engine = get_engine()
-    if not engine or text is None:
-        logger.error(
-            "search_backend_unconfigured",
-            extra={"engine": bool(engine), "sqlalchemy": text is not None},
-        )
-        raise RuntimeError("search backend unavailable")
 
     rows = []
     max_attempts = 2
