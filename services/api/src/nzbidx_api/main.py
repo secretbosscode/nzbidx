@@ -103,7 +103,7 @@ from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
 from .middleware_quota import QuotaMiddleware
 from .search_cache import cache_rss, get_cached_rss
-from .search import MAX_LIMIT, MAX_OFFSET, search_releases, _format_pubdate
+from .search import MAX_LIMIT, MAX_OFFSET, search_releases_async, _format_pubdate
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker
@@ -442,7 +442,7 @@ async def admin_backfill(request: Request) -> ORJSONResponse:
     return ORJSONResponse({"status": "started"})
 
 
-def _search(
+async def _search(
     q: Optional[str],
     *,
     category: Optional[str] = None,
@@ -458,7 +458,7 @@ def _search(
     try:
         if not get_engine():
             raise RuntimeError("database engine not initialized")
-        return search_releases(
+        return await search_releases_async(
             q,
             category=category,
             tag=tag,
@@ -547,8 +547,7 @@ async def api(request: Request) -> Response:
             return invalid_params("query too long")
         tag = params.get("tag")
         try:
-            items = await asyncio.to_thread(
-                _search,
+            items = await _search(
                 q,
                 category=cat,
                 tag=tag,
@@ -577,8 +576,7 @@ async def api(request: Request) -> Response:
         tag = params.get("tag")
         cats = cat or ",".join(TV_CATEGORY_IDS)
         try:
-            items = await asyncio.to_thread(
-                _search,
+            items = await _search(
                 q,
                 category=cats,
                 tag=tag,
@@ -607,8 +605,7 @@ async def api(request: Request) -> Response:
         tag = params.get("tag")
         cats = cat or ",".join(MOVIE_CATEGORY_IDS)
         try:
-            items = await asyncio.to_thread(
-                _search,
+            items = await _search(
                 q,
                 category=cats,
                 tag=tag,
@@ -656,8 +653,7 @@ async def api(request: Request) -> Response:
             extra["year"] = year
         cats = cat or ",".join(AUDIO_CATEGORY_IDS)
         try:
-            items = await asyncio.to_thread(
-                _search,
+            items = await _search(
                 q,
                 category=cats,
                 tag=tag,
@@ -690,8 +686,7 @@ async def api(request: Request) -> Response:
             extra["year"] = year
         cats = cat or ",".join(BOOKS_CATEGORY_IDS)
         try:
-            items = await asyncio.to_thread(
-                _search,
+            items = await _search(
                 q,
                 category=cats,
                 tag=tag,
