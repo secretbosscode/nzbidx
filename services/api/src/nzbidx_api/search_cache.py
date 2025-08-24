@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Dict, Optional, Tuple
 
@@ -11,6 +12,8 @@ _CACHE: Dict[str, Tuple[float, str]] = {}
 
 # Guard access to ``_CACHE`` so readers/writers don't interfere with each other
 _CACHE_LOCK = asyncio.Lock()
+
+logger = logging.getLogger(__name__)
 
 
 def _purge_expired_locked(now: Optional[float] = None) -> None:
@@ -41,6 +44,7 @@ async def get_cached_rss(key: str) -> Optional[str]:
             # Drop stale entry
             del _CACHE[key]
             return None
+        logger.info("search_cache_hit", extra={"key": key})
         return xml
 
 
@@ -50,4 +54,6 @@ async def cache_rss(key: str, xml: str) -> None:
 
     async with _CACHE_LOCK:
         _purge_expired_locked()
+        if "<item>" not in xml:
+            return
         _CACHE[key] = (time.monotonic() + search_ttl_seconds(), xml)
