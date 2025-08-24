@@ -41,9 +41,16 @@ psql "$DATABASE_URL" -f db/init/schema.sql
 
 Run the command once with a superuser account or via your migration tool. This
 ensures the partitions exist and prevents costly migrations after data is
-ingested. The application migrates the `release` table automatically on startup
-when provided a `DATABASE_URL` with superuser privileges, so no separate
-migration script is required.
+ingested. The service applies migrations automatically on startup when provided
+with a superuser `DATABASE_URL`; no additional manual steps are required after
+the base schema is applied. Verify the search index exists:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
+```
+
+The query returns `release_search_idx` when the full-text search migration has
+run.
 
 ## Performance Tuning
 
