@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from nzbidx_api import search as search_mod  # type: ignore
+from types import SimpleNamespace
+from datetime import datetime
 
 
 class _FakeResult:
+    def __init__(self, rows: list[object]):
+        self._rows = rows
+
     def fetchall(self) -> list[object]:
-        return []
+        return self._rows
 
 
 class _FakeConn:
@@ -15,7 +20,7 @@ class _FakeConn:
     async def execute(self, sql: str, params: dict[str, object]) -> _FakeResult:
         self._engine.sql = sql
         self._engine.params = params
-        return _FakeResult()
+        return _FakeResult(self._engine.rows)
 
     async def __aenter__(self) -> "_FakeConn":
         return self
@@ -25,12 +30,15 @@ class _FakeConn:
 
 
 class _FakeEngine:
+    def __init__(self, rows: list[object] | None = None) -> None:
+        self.rows = rows or []
+
     def connect(self) -> _FakeConn:
         return _FakeConn(self)
 
 
-def _setup_engine(monkeypatch) -> _FakeEngine:
-    engine = _FakeEngine()
+def _setup_engine(monkeypatch, rows: list[object] | None = None) -> _FakeEngine:
+    engine = _FakeEngine(rows)
     monkeypatch.setattr(search_mod, "get_engine", lambda: engine)
     monkeypatch.setattr(search_mod, "text", lambda s: s)
     return engine
@@ -50,3 +58,16 @@ def test_query_with_reserved_operator(monkeypatch) -> None:
     search_mod.search_releases(q, limit=1)
     assert "plainto_tsquery('simple', :tsquery)" in engine.sql
     assert engine.params["tsquery"] == q
+
+
+def test_zero_size_release_not_returned(monkeypatch) -> None:
+    row = SimpleNamespace(
+        id=1,
+        norm_title="zero",
+        category="cat",
+        size_bytes=0,
+        posted_at=datetime.now(),
+    )
+    engine = _setup_engine(monkeypatch, rows=[row])
+    assert search_mod.search_releases(None, limit=1) == []
+    assert "size_bytes > 0" in engine.sql

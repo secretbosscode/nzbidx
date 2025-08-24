@@ -61,7 +61,7 @@ async def search_releases_async(
     if offset > MAX_OFFSET:
         offset = MAX_OFFSET
 
-    conditions = ["has_parts = TRUE"]
+    conditions = ["has_parts = TRUE", "size_bytes > 0"]
     params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
     if q:
