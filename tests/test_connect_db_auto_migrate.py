@@ -57,6 +57,8 @@ def test_connect_db_auto_migrate(monkeypatch, caplog):
                 return (True,)
             if "pg_partitioned_table" in self.stmt:
                 return (True,)
+            if "pg_extension" in self.stmt:
+                return (True,)
             return (None,)
 
     class DummyEngine:

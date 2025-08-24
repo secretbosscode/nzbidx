@@ -103,7 +103,13 @@ from .api_key import ApiKeyMiddleware
 from .rate_limit import RateLimitMiddleware
 from .middleware_quota import QuotaMiddleware
 from .search_cache import cache_rss, get_cached_rss
-from .search import MAX_LIMIT, MAX_OFFSET, search_releases_async, _format_pubdate
+from .search import (
+    MAX_LIMIT,
+    MAX_OFFSET,
+    search_releases_async,
+    _format_pubdate,
+    SearchVectorUnavailable,
+)
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
 from .middleware_circuit import CircuitOpenError, os_breaker
@@ -270,6 +276,10 @@ def start_ingest() -> None:
 def start_auto_backfill() -> None:
     """Launch a background thread to backfill missing release segments."""
 
+    if os.getenv("AUTO_BACKFILL", "").lower() not in {"1", "true", "yes"}:
+        logger.info("auto_backfill_disabled")
+        return
+
     def _progress(count: int) -> None:
         logger.info("auto_backfill_progress", extra={"processed": count})
 
@@ -280,6 +290,7 @@ def start_auto_backfill() -> None:
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("auto_backfill_failed", exc_info=exc)
 
+    logger.info("auto_backfill_start")
     threading.Thread(target=_run, daemon=True, name="auto-backfill").start()
 
 
@@ -556,6 +567,8 @@ async def api(request: Request) -> Response:
                 sort=sort,
                 api_key=api_key,
             )
+        except SearchVectorUnavailable as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         xml = rss_xml(items, extended=extended)
@@ -586,6 +599,8 @@ async def api(request: Request) -> Response:
                 sort=sort,
                 api_key=api_key,
             )
+        except SearchVectorUnavailable as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         xml = rss_xml(items, extended=extended)
@@ -615,6 +630,8 @@ async def api(request: Request) -> Response:
                 sort=sort,
                 api_key=api_key,
             )
+        except SearchVectorUnavailable as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         if not q and not items:
@@ -663,6 +680,8 @@ async def api(request: Request) -> Response:
                 sort=sort,
                 api_key=api_key,
             )
+        except SearchVectorUnavailable as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         xml = rss_xml(items, extended=extended)
@@ -696,6 +715,8 @@ async def api(request: Request) -> Response:
                 sort=sort,
                 api_key=api_key,
             )
+        except SearchVectorUnavailable as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         xml = rss_xml(items, extended=extended)
