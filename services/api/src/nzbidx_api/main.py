@@ -276,6 +276,10 @@ def start_ingest() -> None:
 def start_auto_backfill() -> None:
     """Launch a background thread to backfill missing release segments."""
 
+    if os.getenv("AUTO_BACKFILL", "").lower() not in {"1", "true", "yes"}:
+        logger.info("auto_backfill_disabled")
+        return
+
     def _progress(count: int) -> None:
         logger.info("auto_backfill_progress", extra={"processed": count})
 
@@ -286,6 +290,7 @@ def start_auto_backfill() -> None:
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("auto_backfill_failed", exc_info=exc)
 
+    logger.info("auto_backfill_start")
     threading.Thread(target=_run, daemon=True, name="auto-backfill").start()
 
 
