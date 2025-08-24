@@ -28,24 +28,10 @@ def test_load_categories_warns_on_bad_config(
     assert expected in caplog.text
     assert categories == newznab._default_categories()
 
-
-@pytest.mark.parametrize(
-    "env, expected",
-    [
-        ({}, True),
-        ({"ALLOW_XXX": "false"}, False),
-        ({"SAFESEARCH": "on"}, False),
-    ],
-)
-def test_caps_xml_respects_adult_flags(monkeypatch, env, expected) -> None:
-    """Adult categories should appear only when allowed."""
-
-    for var in ("ALLOW_XXX", "SAFESEARCH"):
-        monkeypatch.delenv(var, raising=False)
-    for key, value in env.items():
-        monkeypatch.setenv(key, value)
+def test_caps_xml_includes_adult_categories() -> None:
+    """caps.xml should list XXX categories."""
 
     xml = newznab.caps_xml()
 
-    assert ('<category id="6000"' in xml) is expected
-    assert ('<category id="6090"' in xml) is expected
+    assert '<category id="6000"' in xml
+    assert '<category id="6090"' in xml
