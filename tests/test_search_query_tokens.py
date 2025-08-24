@@ -6,20 +6,28 @@ from datetime import datetime
 
 
 class _FakeResult:
-    def __init__(self, rows: list[object]):
-        self._rows = rows
+    def __init__(self, rows: list[object] | None = None, *, scalar: bool | None = None):
+        self._rows = rows or []
+        self._scalar = scalar
 
     def fetchall(self) -> list[object]:
         return self._rows
+
+    def scalar(self) -> bool | None:
+        return self._scalar
 
 
 class _FakeConn:
     def __init__(self, engine: "_FakeEngine") -> None:
         self._engine = engine
 
-    async def execute(self, sql: str, params: dict[str, object]) -> _FakeResult:
+    async def execute(
+        self, sql: str, params: dict[str, object] | None = None
+    ) -> _FakeResult:
+        if "pg_attribute" in sql:
+            return _FakeResult(scalar=True)
         self._engine.sql = sql
-        self._engine.params = params
+        self._engine.params = params or {}
         return _FakeResult(self._engine.rows)
 
     async def __aenter__(self) -> "_FakeConn":

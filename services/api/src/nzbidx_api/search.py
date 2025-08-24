@@ -19,6 +19,11 @@ from .config import _int_env
 from .db import get_engine
 from .metrics_log import inc
 
+
+class SearchVectorUnavailable(RuntimeError):
+    """Raised when full text search vector is unavailable."""
+
+
 logger = logging.getLogger(__name__)
 
 MAX_LIMIT = _int_env("MAX_LIMIT", 100)
@@ -61,12 +66,44 @@ async def search_releases_async(
     if offset > MAX_OFFSET:
         offset = MAX_OFFSET
 
+    engine = get_engine()
+    if not engine or text is None:
+        logger.error(
+            "search_backend_unconfigured",
+            extra={"engine": bool(engine), "sqlalchemy": text is not None},
+        )
+        raise RuntimeError("search backend unavailable")
+
+    has_vector = True
+    if q:
+        try:
+            async with engine.connect() as conn:
+                result = await conn.execute(
+                    text(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1 FROM pg_attribute
+                            WHERE attrelid = 'release'::regclass
+                            AND attname = 'search_vector'
+                        )
+                        """
+                    )
+                )
+                has_vector = bool(result.scalar())
+        except Exception as exc:
+            logger.warning("search_vector_check_failed", extra={"error": str(exc)})
+            raise SearchVectorUnavailable("full-text search not available") from exc
+
     conditions = ["has_parts = TRUE", "size_bytes > 0"]
     params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
     if q:
-        conditions.append("search_vector @@ plainto_tsquery('simple', :tsquery)")
-        params["tsquery"] = q
+        if has_vector:
+            conditions.append("search_vector @@ plainto_tsquery('simple', :tsquery)")
+            params["tsquery"] = q
+        else:
+            conditions.append("norm_title ILIKE :title_like")
+            params["title_like"] = f"%{q}%"
 
     if category:
         cats = [c.strip() for c in category.split(",") if c.strip()]
@@ -102,13 +139,6 @@ async def search_releases_async(
     )
 
     items: List[Dict[str, str]] = []
-    engine = get_engine()
-    if not engine or text is None:
-        logger.error(
-            "search_backend_unconfigured",
-            extra={"engine": bool(engine), "sqlalchemy": text is not None},
-        )
-        raise RuntimeError("search backend unavailable")
 
     rows = []
     max_attempts = 2
