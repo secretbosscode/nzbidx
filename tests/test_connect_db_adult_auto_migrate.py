@@ -66,6 +66,8 @@ def test_connect_db_adult_auto_migrate(monkeypatch, caplog):
                 return (True,)
             if "pg_class" in sql and "release_adult" in sql:
                 return (True,)
+            if "pg_extension" in sql:
+                return (True,)
             return (None,)
 
     class DummyEngine:
