@@ -455,6 +455,16 @@ def connect_db() -> Any:
                                 )
                             else:
                                 raise
+                        if stmt.lstrip().upper().startswith("CREATE EXTENSION"):
+                            installed = conn.execute(
+                                text(
+                                    "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pg_trgm')"
+                                )
+                            ).fetchone()[0]
+                            if not installed:
+                                raise RuntimeError(
+                                    "pg_trgm extension is required; enable the extension or provide a fallback index definition"
+                                )
             return engine.raw_connection()
 
         try:
