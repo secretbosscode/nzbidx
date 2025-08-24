@@ -9,7 +9,8 @@ from psycopg import sql
 
 def migrate(conn: Any) -> None:
     """Create release_posted_at_idx concurrently for all partitions."""
-    with conn.cursor() as cur:
+    cur = conn.cursor()
+    try:
         cur.execute(
             """
             SELECT inhrelid::regclass::text
@@ -24,4 +25,6 @@ def migrate(conn: Any) -> None:
                     "CREATE INDEX CONCURRENTLY IF NOT EXISTS release_posted_at_idx ON {} (posted_at)"
                 ).format(sql.Identifier(table))
             )
+    finally:
+        cur.close()
     conn.commit()
