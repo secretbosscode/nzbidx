@@ -6,7 +6,9 @@ import sqlite3
 from nzbidx_api import backfill_release_parts as backfill_mod
 
 
-def test_auto_backfill_populates_segments_and_is_idempotent(tmp_path, monkeypatch) -> None:
+def test_auto_backfill_populates_segments_and_is_idempotent(
+    tmp_path, monkeypatch
+) -> None:
     dbfile = tmp_path / "test.db"
     conn = sqlite3.connect(dbfile)
     cur = conn.cursor()
@@ -30,7 +32,9 @@ def test_auto_backfill_populates_segments_and_is_idempotent(tmp_path, monkeypatc
     conn.close()
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
-    monkeypatch.setattr(backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)])
+    monkeypatch.setattr(
+        backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)]
+    )
 
     processed = backfill_mod.backfill_release_parts(auto=True)
     assert processed == 1

@@ -76,7 +76,9 @@ def backfill_release_parts(
         _cursor = conn.cursor()
         cursor_cm = _cursor if hasattr(_cursor, "__enter__") else closing(_cursor)
         with cursor_cm as cur:
-            placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+            placeholder = (
+                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+            )
             base_sql = "SELECT id, norm_title, source_group, segments FROM release"
             params: list[int] | tuple[int, ...] = []
             if auto and not release_ids:
@@ -151,7 +153,9 @@ def backfill_release_parts(
                 if to_delete:
                     ids = [r for r, _ in to_delete]
                     placeholders = ",".join([placeholder] * len(ids))
-                    conn.execute(f"DELETE FROM release WHERE id IN ({placeholders})", ids)
+                    conn.execute(
+                        f"DELETE FROM release WHERE id IN ({placeholders})", ids
+                    )
                     conn.commit()
                     log.info("deleted %d invalid releases", len(ids))
                     to_delete.clear()
