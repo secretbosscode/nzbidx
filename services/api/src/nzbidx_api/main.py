@@ -464,38 +464,24 @@ async def ensure_search_vector() -> None:
     engine = get_engine()
     if not engine or text is None:  # pragma: no cover - dependency check
         return
-
-    async def _exists() -> bool:
-        async with engine.connect() as conn:
-            return bool(
-                await conn.scalar(
-                    text(
-                        """
-                        SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_name='release'
-                          AND column_name='search_vector'
-                        """
-                    )
-                )
+    async with engine.connect() as conn:
+        exists = await conn.scalar(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name='release'
+                  AND column_name='search_vector'
+                """
             )
-
-    if await _exists():
-        return
-
-    logger.warning(
-        "search_vector column missing; applying nzbidx_api.migrations.0001_add_search_vector"
-    )
-    await apply_schema()
-
-    if await _exists():
-        return
-
-    msg = (
-        "search_vector column missing; run nzbidx_api.migrations.0001_add_search_vector"
-    )
-    logger.error(msg)
-    raise RuntimeError(msg)
+        )
+    if not exists:
+        msg = (
+            "search_vector column missing; run "
+            "`python -m nzbidx_api.migrations.0001_add_search_vector`"
+        )
+        logger.error(msg)
+        raise RuntimeError(msg)
 
 
 async def _search(
