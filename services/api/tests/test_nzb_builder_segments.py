@@ -40,9 +40,7 @@ DummyConn.__module__ = "sqlite3"
 @pytest.mark.parametrize(
     "seg_data",
     [
-        json.dumps(
-            [{"number": 1, "message_id": "m1", "group": "g", "size": 123}]
-        ),
+        json.dumps([{"number": 1, "message_id": "m1", "group": "g", "size": 123}]),
         json.dumps([[1, "m1", "g", 123]]),
     ],
 )
@@ -67,4 +65,3 @@ def test_build_nzb_for_release_invalid_segments(monkeypatch, seg_data):
 
     with pytest.raises(newznab.NzbFetchError, match="invalid segment entry"):
         nzb_builder.build_nzb_for_release("123")
-
