@@ -99,14 +99,14 @@ class CircuitBreaker(Generic[T]):
             return result
 
 
-def call_with_retry(
+async def _call_with_retry_core(
     breaker: CircuitBreaker[T],
     dep: str,
-    func: Callable[..., T],
-    *args,
-    **kwargs,
+    call_cb: Callable[[], T | Awaitable[T]],
+    sleep_cb: Callable[[float], None | Awaitable[None]],
+    on_failure: Callable[[], None],
 ) -> T:
-    """Call ``func`` with jittered retries and circuit breaker tracking."""
+    """Internal helper implementing retry logic with jitter and metrics."""
 
     retries = retry_max()
     delay = retry_base_ms() / 1000
@@ -115,7 +115,9 @@ def call_with_retry(
         try:
             with start_span("dep_call"):
                 set_span_attr("dep", dep)
-                result = breaker.call(func, *args, **kwargs)
+                result = call_cb()
+                if inspect.isawaitable(result):
+                    result = await result
                 state = "open" if breaker.is_open() else "closed"
                 set_span_attr("breaker_state", state)
             logger.info(
@@ -136,6 +138,7 @@ def call_with_retry(
             inc_breaker_open(dep)
             raise
         except Exception:
+            on_failure()
             state = "half-open" if breaker.is_open() else "closed"
             set_span_attr("breaker_state", state)
             if breaker.is_open() or attempt >= retries:
@@ -145,9 +148,28 @@ def call_with_retry(
                 )
                 raise
             jitter = random.uniform(0, retry_jitter_ms() / 1000)
-            time.sleep(delay + jitter)
+            sleep_res = sleep_cb(delay + jitter)
+            if inspect.isawaitable(sleep_res):
+                await sleep_res
             delay *= 2
             attempt += 1
+
+
+def call_with_retry(
+    breaker: CircuitBreaker[T],
+    dep: str,
+    func: Callable[..., T],
+    *args,
+    **kwargs,
+) -> T:
+    """Call ``func`` with jittered retries and circuit breaker tracking."""
+
+    def call_cb() -> T:
+        return breaker.call(func, *args, **kwargs)
+
+    return asyncio.run(
+        _call_with_retry_core(breaker, dep, call_cb, time.sleep, lambda: None)
+    )
 
 
 async def call_with_retry_async(
@@ -159,52 +181,18 @@ async def call_with_retry_async(
 ) -> T:
     """Async wrapper around ``func`` with retries and circuit breaker."""
 
-    retries = retry_max()
-    delay = retry_base_ms() / 1000
-    attempt = 0
-    while True:
-        try:
-            with start_span("dep_call"):
-                set_span_attr("dep", dep)
-                if breaker.is_open():
-                    raise CircuitOpenError("circuit open")
-                result = func(*args, **kwargs)
-                if inspect.isawaitable(result):
-                    result = await result
-                breaker.record_success()
-                state = "open" if breaker.is_open() else "closed"
-                set_span_attr("breaker_state", state)
-            logger.info(
-                "dep_call",
-                extra={
-                    "dep": dep,
-                    "retries": attempt,
-                    "breaker_state": state,
-                },
-            )
-            return result
-        except CircuitOpenError:
-            set_span_attr("breaker_state", "open")
-            logger.warning(
-                "dep_unavailable",
-                extra={"dep": dep, "retries": attempt, "breaker_state": "open"},
-            )
-            inc_breaker_open(dep)
-            raise
-        except Exception:
-            breaker.record_failure()
-            state = "half-open" if breaker.is_open() else "closed"
-            set_span_attr("breaker_state", state)
-            if breaker.is_open() or attempt >= retries:
-                logger.warning(
-                    "dep_fail",
-                    extra={"dep": dep, "retries": attempt, "breaker_state": state},
-                )
-                raise
-            jitter = random.uniform(0, retry_jitter_ms() / 1000)
-            await asyncio.sleep(delay + jitter)
-            delay *= 2
-            attempt += 1
+    async def call_cb() -> T:
+        if breaker.is_open():
+            raise CircuitOpenError("circuit open")
+        result = func(*args, **kwargs)
+        if inspect.isawaitable(result):
+            result = await result
+        breaker.record_success()
+        return result
+
+    return await _call_with_retry_core(
+        breaker, dep, call_cb, asyncio.sleep, breaker.record_failure
+    )
 
 
 os_breaker: CircuitBreaker[object] = CircuitBreaker(
