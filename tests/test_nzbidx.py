@@ -253,8 +253,8 @@ def test_missing_segments_logs(monkeypatch, caplog) -> None:
     )
 
 
-def test_invalid_segments_json_logs(monkeypatch, caplog) -> None:
-    """Invalid JSON in the segments field should be logged."""
+def test_invalid_segments_json_raises_db_error(monkeypatch, caplog) -> None:
+    """Invalid JSON in the segments field should trigger a database error."""
 
     class DummyCursor:
         def __enter__(self):  # type: ignore[override]
@@ -283,11 +283,13 @@ def test_invalid_segments_json_logs(monkeypatch, caplog) -> None:
 
     monkeypatch.setattr(main, "connect_db", _connect)
     with caplog.at_level(logging.WARNING):
-        with pytest.raises(newznab.NzbFetchError, match="release has no segments"):
+        with pytest.raises(newznab.NzbDatabaseError, match="invalid segment data"):
             nzb_builder.build_nzb_for_release("123")
 
     assert any(
-        rec.message == "invalid_segments_json" and rec.release_id == 123
+        rec.message == "invalid_segments_json"
+        and rec.release_id == 123
+        and rec.seg_data == "{invalid"
         for rec in caplog.records
     )
 
