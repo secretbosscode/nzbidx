@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-from typing import List
+from typing import List, Sequence, Tuple
 
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -17,20 +17,24 @@ class FeatureNotSupportedError(Exception):
 
 
 class FakeCursor:
-    def __init__(self, executed: List[str]) -> None:
+    def __init__(self, executed: List[str], partitions: Sequence[Tuple[str, bool]]) -> None:
         self.executed = executed
-        self._fetch: List[tuple[str]] = []
+        self.partitions = partitions
+        self._fetch: Sequence[Tuple[str, bool]] = []
+        self._partitioned = {t for t, is_leaf in partitions if not is_leaf}
 
     def execute(self, sql: str) -> None:
         self.executed.append(sql)
-        if "FROM pg_inherits" in sql:
-            self._fetch = [("release_child",)]
-        elif sql.startswith("CREATE INDEX CONCURRENTLY") and 'ON "release"' in sql:
+        if "FROM pg_partition_tree" in sql:
+            self._fetch = self.partitions
+        elif sql.startswith("CREATE INDEX CONCURRENTLY") and any(
+            f'ON "{t}"' in sql for t in self._partitioned
+        ):
             raise FeatureNotSupportedError(
-                "cannot create index concurrently on partitioned table"
+                "cannot create index concurrently on partitioned table",
             )
 
-    def fetchall(self) -> List[tuple[str]]:
+    def fetchall(self) -> Sequence[Tuple[str, bool]]:
         return self._fetch
 
     def close(self) -> None:  # pragma: no cover - included for interface completeness
@@ -38,16 +42,18 @@ class FakeCursor:
 
 
 class FakeConn:
-    def __init__(self, executed: List[str]) -> None:
+    def __init__(self, executed: List[str], partitions: Sequence[Tuple[str, bool]]) -> None:
         self.executed = executed
+        self.partitions = partitions
 
     def cursor(self) -> FakeCursor:
-        return FakeCursor(self.executed)
+        return FakeCursor(self.executed, self.partitions)
 
 
 def test_migrate_handles_partitioned_parent() -> None:
+    partitions = [("release_child", True), ("release", False)]
     executed: List[str] = []
-    conn = FakeConn(executed)
+    conn = FakeConn(executed, partitions)
     m_posted.migrate(conn)
     assert (
         'CREATE INDEX IF NOT EXISTS "release_posted_at_idx" ON "release" (posted_at)'
@@ -59,9 +65,32 @@ def test_migrate_handles_partitioned_parent() -> None:
     )
 
 
-def test_apply_schema_runs_migration_without_feature_not_supported(
-    tmp_path, monkeypatch
-) -> None:
+def test_migrate_handles_partitioned_partition() -> None:
+    partitions = [
+        ("release_adult_yes", True),
+        ("release_adult_no", True),
+        ("release_adult", False),
+        ("release_child", True),
+        ("release", False),
+    ]
+    executed: List[str] = []
+    conn = FakeConn(executed, partitions)
+    m_posted.migrate(conn)
+    assert (
+        'CREATE INDEX IF NOT EXISTS "release_adult_posted_at_idx" ON "release_adult" (posted_at)'
+        in executed
+    )
+    assert (
+        'CREATE INDEX CONCURRENTLY IF NOT EXISTS "release_adult_yes_posted_at_idx" ON "release_adult_yes" (posted_at)'
+        in executed
+    )
+    assert (
+        'CREATE INDEX CONCURRENTLY IF NOT EXISTS "release_adult_no_posted_at_idx" ON "release_adult_no" (posted_at)'
+        in executed
+    )
+
+
+def test_apply_schema_runs_migration_without_feature_not_supported(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "test.db"
     engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
     monkeypatch.setattr(db, "get_engine", lambda: engine)
@@ -79,7 +108,8 @@ def test_apply_schema_runs_migration_without_feature_not_supported(
 
     def wrapper(_conn):
         executed: List[str] = []
-        fake_conn = FakeConn(executed)
+        partitions = [("release_child", True), ("release", False)]
+        fake_conn = FakeConn(executed, partitions)
         orig_migrate(fake_conn)
 
     monkeypatch.setattr(m_posted, "migrate", wrapper)
