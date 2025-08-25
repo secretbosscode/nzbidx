@@ -36,7 +36,9 @@ def test_apply_schema_asyncpg(monkeypatch) -> None:
         await db.init_engine()
         try:
             await db.apply_schema()
-        except asyncpg.exceptions.ActiveSQLTransactionError as exc:  # pragma: no cover - regression
+        except (
+            asyncpg.exceptions.ActiveSQLTransactionError
+        ) as exc:  # pragma: no cover - regression
             pytest.fail(f"ActiveSQLTransactionError: {exc}")
         finally:
             await db.dispose_engine()
@@ -47,4 +49,3 @@ def test_apply_schema_asyncpg(monkeypatch) -> None:
     admin.autocommit = True
     admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
     admin.close()
-
