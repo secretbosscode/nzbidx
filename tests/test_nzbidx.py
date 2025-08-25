@@ -120,8 +120,8 @@ def test_nzb_timeout_defaults(monkeypatch) -> None:
 
     monkeypatch.delenv("NZB_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("NNTP_TOTAL_TIMEOUT", raising=False)
-    api_config.nzb_timeout_seconds.cache_clear()
-    assert api_config.nzb_timeout_seconds() == 600
+    api_config.settings.reload()
+    assert api_config.settings.nzb_timeout_seconds == 600
 
 
 def test_nzb_timeout_uses_nntp_total(monkeypatch) -> None:
@@ -129,8 +129,8 @@ def test_nzb_timeout_uses_nntp_total(monkeypatch) -> None:
 
     monkeypatch.delenv("NZB_TIMEOUT_SECONDS", raising=False)
     monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "90")
-    api_config.nzb_timeout_seconds.cache_clear()
-    assert api_config.nzb_timeout_seconds() == 90
+    api_config.settings.reload()
+    assert api_config.settings.nzb_timeout_seconds == 90
 
 
 def test_nzb_timeout_clamped(monkeypatch) -> None:
@@ -138,8 +138,8 @@ def test_nzb_timeout_clamped(monkeypatch) -> None:
 
     monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "50")
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "10")
-    api_config.nzb_timeout_seconds.cache_clear()
-    assert api_config.nzb_timeout_seconds() == 50
+    api_config.settings.reload()
+    assert api_config.settings.nzb_timeout_seconds == 50
 
 
 def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
@@ -148,11 +148,11 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "10")
     monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "10")
-    api_config.nzb_timeout_seconds.cache_clear()
-    assert api_config.nzb_timeout_seconds() == 10
+    api_config.settings.reload()
+    assert api_config.settings.nzb_timeout_seconds == 10
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "20")
-    assert api_config.nzb_timeout_seconds() == 10
+    assert api_config.settings.nzb_timeout_seconds == 10
 
     monkeypatch.setattr(
         nzb_builder, "_segments_from_db", lambda _rid: [(1, "m1", "g", 123)]
@@ -160,7 +160,7 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
 
     nzb_builder.build_nzb_for_release("123")
 
-    assert api_config.nzb_timeout_seconds() == 20
+    assert api_config.settings.nzb_timeout_seconds == 20
 
 
 def test_build_nzb_missing_segments_raises(monkeypatch) -> None:
@@ -576,7 +576,7 @@ def test_segment_limit_exceeded(monkeypatch, caplog) -> None:
     monkeypatch.setenv("NZB_MAX_SEGMENTS", "5")
     from nzbidx_api import config as api_config
 
-    api_config.nzb_max_segments.cache_clear()
+    api_config.settings.reload()
     segs = [(i, f"msg{i}@example.com", "g", 0) for i in range(1, 11)]
     monkeypatch.setattr(nzb_builder, "_segments_from_db", lambda _rid: segs)
     with caplog.at_level(logging.WARNING):
@@ -607,7 +607,7 @@ def test_getnzb_timeout(monkeypatch) -> None:
         return "<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", slow_get_nzb)
-    monkeypatch.setattr(api_main, "nzb_timeout_seconds", lambda: 0.01)
+    monkeypatch.setattr(api_main.settings, "nzb_timeout_seconds", 0.01)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 504

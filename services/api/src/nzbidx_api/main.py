@@ -129,15 +129,7 @@ from .errors import (
 )
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
-from .config import (
-    cors_origins,
-    max_request_bytes,
-    max_query_bytes,
-    max_param_bytes,
-    search_ttl_seconds,
-    nzb_timeout_seconds,
-    nntp_total_timeout_seconds,
-)
+from .config import cors_origins, settings
 from .metrics_log import start as start_metrics, inc_api_5xx, get_counters
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
@@ -436,8 +428,8 @@ async def metrics(request: Request) -> ORJSONResponse:
 async def config_endpoint(request: Request) -> ORJSONResponse:
     """Expose effective timeout configuration values."""
     payload = {
-        "nzb_timeout_seconds": nzb_timeout_seconds(),
-        "nntp_total_timeout_seconds": nntp_total_timeout_seconds(),
+        "nzb_timeout_seconds": settings.nzb_timeout_seconds,
+        "nntp_total_timeout_seconds": settings.nntp_total_timeout_seconds,
     }
     return ORJSONResponse(payload)
 
@@ -525,7 +517,7 @@ def _cached_xml_response(
     """Return ``body`` with caching headers and optional 304 support."""
     etag = hashlib.sha1(body.encode("utf-8")).hexdigest()
     headers = {
-        "Cache-Control": f"public, max-age={search_ttl_seconds()}",
+        "Cache-Control": f"public, max-age={settings.search_ttl_seconds}",
         "ETag": etag,
     }
     if allow_304 and request.headers.get("If-None-Match") == etag:
@@ -547,10 +539,10 @@ async def api(request: Request) -> Response:
         qs_len = len(raw_qs)
     else:
         qs_len = sum(len(k) + len(v) + 1 for k, v in params.items())
-    if qs_len > max_query_bytes():
+    if qs_len > settings.max_query_bytes:
         return invalid_params("query string too long")
     for value in params.values():
-        if value and len(value) > max_param_bytes():
+        if value and len(value) > settings.max_param_bytes:
             return invalid_params("invalid parameters")
     t = params.get("t")
     cat = params.get("cat")
@@ -764,7 +756,7 @@ async def api(request: Request) -> Response:
         try:
             xml = await asyncio.wait_for(
                 get_nzb(release_id, None),
-                timeout=nzb_timeout_seconds(),
+                timeout=settings.nzb_timeout_seconds,
             )
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.info(
@@ -790,7 +782,7 @@ async def api(request: Request) -> Response:
         except asyncio.TimeoutError:
             logger.warning(
                 "nzb fetch timed out after %ss",
-                nzb_timeout_seconds(),
+                settings.nzb_timeout_seconds,
                 extra={"release_id": release_id},
             )
             resp = nzb_timeout("nzb fetch timed out")
@@ -820,7 +812,7 @@ middleware = [
     Middleware(ApiKeyMiddleware),
     Middleware(QuotaMiddleware),
     Middleware(RateLimitMiddleware),
-    Middleware(SecurityMiddleware, max_request_bytes=max_request_bytes()),
+    Middleware(SecurityMiddleware, max_request_bytes=settings.max_request_bytes),
     Middleware(TimingMiddleware),
     Middleware(AccessLogMiddleware),
 ]

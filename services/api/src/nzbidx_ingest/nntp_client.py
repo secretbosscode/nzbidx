@@ -28,7 +28,7 @@ class NNTPClient:
         self.user = os.getenv("NNTP_USER")
         self.password = os.getenv("NNTP_PASS")
         # Default to a generous timeout to handle slow or flaky providers
-        self.timeout = float(config.nntp_timeout_seconds())
+        self.timeout = float(config.settings.nntp_timeout_seconds)
         self._server: Optional[nntplib.NNTP] = None
 
     # ------------------------------------------------------------------

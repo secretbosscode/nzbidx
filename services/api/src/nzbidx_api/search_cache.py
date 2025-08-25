@@ -7,6 +7,8 @@ import logging
 import time
 from typing import Dict, Optional, Tuple
 
+from .config import settings
+
 # Simple in-memory cache mapping keys to (expiry, xml)
 _CACHE: Dict[str, Tuple[float, str]] = {}
 
@@ -50,10 +52,8 @@ async def get_cached_rss(key: str) -> Optional[str]:
 
 async def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` using the configured TTL."""
-    from .config import search_ttl_seconds
-
     async with _CACHE_LOCK:
         _purge_expired_locked()
         if "<item>" not in xml:
             return
-        _CACHE[key] = (time.monotonic() + search_ttl_seconds(), xml)
+        _CACHE[key] = (time.monotonic() + settings.search_ttl_seconds, xml)
