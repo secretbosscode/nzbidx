@@ -65,9 +65,12 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             data = (
                 json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
-        except Exception:
-            log.warning("invalid_segments_json", extra={"release_id": rid})
-            data = []
+        except json.JSONDecodeError as exc:
+            log.warning(
+                "invalid_segments_json",
+                extra={"release_id": rid, "seg_data": seg_data},
+            )
+            raise newznab.NzbDatabaseError("invalid segment data") from exc
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
             segments.append(
