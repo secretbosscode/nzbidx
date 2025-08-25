@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 NNTP_GROUPS: list[str] = []
 
+
 def _int_env(name: str, default: int) -> int:
     value = os.getenv(name)
     if value is None:
