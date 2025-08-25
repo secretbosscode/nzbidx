@@ -45,6 +45,7 @@ class DummyConn:
 def test_cursor_closed_on_exception(monkeypatch):
     conn = DummyConn()
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: conn)
+    monkeypatch.setattr(backfill_mod.config, "NNTP_GROUPS", ["g"], raising=False)
     with pytest.raises(RuntimeError):
         backfill_mod.backfill_release_parts()
     assert conn.cursor_obj.closed
