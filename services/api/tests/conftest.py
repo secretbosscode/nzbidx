@@ -22,4 +22,3 @@ def _nntp_env(monkeypatch) -> None:
     monkeypatch.setenv("NNTP_USER", "user")
     monkeypatch.setenv("NNTP_PASS", "pass")
     monkeypatch.setenv("NNTP_GROUPS", "alt.binaries.example")
-
