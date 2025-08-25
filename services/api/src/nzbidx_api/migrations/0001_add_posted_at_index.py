@@ -19,8 +19,13 @@ def migrate(conn: Any) -> None:
         tables = ["release"] + [row[0] for row in cur.fetchall()]
         for table in tables:
             index_name = f"{table.replace('.', '_')}_posted_at_idx"
-            cur.execute(
-                f'CREATE INDEX CONCURRENTLY IF NOT EXISTS "{index_name}" ON "{table}" (posted_at)'
-            )
+            if table == "release":
+                cur.execute(
+                    f'CREATE INDEX IF NOT EXISTS "{index_name}" ON "{table}" (posted_at)'
+                )
+            else:
+                cur.execute(
+                    f'CREATE INDEX CONCURRENTLY IF NOT EXISTS "{index_name}" ON "{table}" (posted_at)'
+                )
     finally:
         cur.close()
