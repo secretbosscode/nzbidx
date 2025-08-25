@@ -8,11 +8,7 @@ from typing import Any
 def migrate(conn: Any) -> None:
     """Create posted_at indexes concurrently for all partitions."""
     cur = conn.cursor()
-    # CREATE INDEX CONCURRENTLY cannot run inside a transaction block
-    autocommit = getattr(conn, "autocommit", False)
     try:
-        if hasattr(conn, "autocommit"):
-            conn.autocommit = True
         cur.execute(
             """
             SELECT inhrelid::regclass::text
@@ -28,7 +24,3 @@ def migrate(conn: Any) -> None:
             )
     finally:
         cur.close()
-        if hasattr(conn, "autocommit"):
-            conn.autocommit = autocommit
-    if not getattr(conn, "autocommit", False):
-        conn.commit()
