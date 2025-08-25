@@ -39,7 +39,9 @@ class Settings:
     rate_limit: int = field(default_factory=lambda: _int_env("RATE_LIMIT", 60))
     rate_window: int = field(default_factory=lambda: _int_env("RATE_WINDOW", 60))
     key_rate_limit: int = field(default_factory=lambda: _int_env("KEY_RATE_LIMIT", 100))
-    key_rate_window: int = field(default_factory=lambda: _int_env("KEY_RATE_WINDOW", 60))
+    key_rate_window: int = field(
+        default_factory=lambda: _int_env("KEY_RATE_WINDOW", 60)
+    )
     max_request_bytes: int = field(
         default_factory=lambda: _int_env("MAX_REQUEST_BYTES", 1_048_576)
     )
