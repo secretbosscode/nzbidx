@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from psycopg import sql
-
 
 def migrate(conn: Any) -> None:
     """Create posted_at indexes concurrently for all partitions."""
@@ -26,9 +24,7 @@ def migrate(conn: Any) -> None:
         for table in tables:
             index_name = f"{table.replace('.', '_')}_posted_at_idx"
             cur.execute(
-                sql.SQL(
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS {} ON {} (posted_at)"
-                ).format(sql.Identifier(index_name), sql.Identifier(table))
+                f'CREATE INDEX CONCURRENTLY IF NOT EXISTS "{index_name}" ON "{table}" (posted_at)'
             )
     finally:
         cur.close()
