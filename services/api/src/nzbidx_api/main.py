@@ -153,8 +153,8 @@ logger = logging.getLogger(__name__)
 
 NNTP_ERROR_MESSAGES = {
     NntpConfigError: (
-        "NNTP configuration missing; set NNTP_HOST, NNTP_PORT, NNTP_USER, "
-        "NNTP_PASS and NNTP_GROUPS environment variables."
+        "NNTP configuration missing; set NNTP_HOST, NNTP_PORT, NNTP_USER "
+        "and NNTP_PASS environment variables."
     ),
     NntpNoArticlesError: (
         "No NNTP articles found for release; verify NNTP_GROUPS and the "

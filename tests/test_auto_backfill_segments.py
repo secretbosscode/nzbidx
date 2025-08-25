@@ -35,6 +35,7 @@ def test_auto_backfill_populates_segments_and_is_idempotent(
     monkeypatch.setattr(
         backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)]
     )
+    monkeypatch.setattr(backfill_mod.config, "NNTP_GROUPS", ["g1"], raising=False)
 
     processed = backfill_mod.backfill_release_parts(auto=True)
     assert processed == 1
