@@ -44,7 +44,11 @@ def normalize() -> int:
     updated = 0
     for rid, seg_json in rows:
         try:
-            data = json.loads(seg_json or "[]") if isinstance(seg_json, (str, bytes)) else seg_json or []
+            data = (
+                json.loads(seg_json or "[]")
+                if isinstance(seg_json, (str, bytes))
+                else seg_json or []
+            )
         except Exception:
             continue
         try:
