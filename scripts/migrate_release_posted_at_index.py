@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Add the ``release_posted_at_idx`` index for existing databases."""
+"""Add the ``release_posted_at_idx`` index (and per-partition indexes)."""
 
 from __future__ import annotations
 
