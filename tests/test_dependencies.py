@@ -110,8 +110,7 @@ def test_config_endpoint(monkeypatch) -> None:
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "80")
     from nzbidx_api import config as cfg
 
-    cfg.nzb_timeout_seconds.cache_clear()
-    cfg.nntp_total_timeout_seconds.cache_clear()
+    cfg.settings.reload()
     with TestClient(app) as client:
         response = client.get("/api/config", params={"apikey": "secret"})
         assert response.status_code == 200
@@ -121,5 +120,4 @@ def test_config_endpoint(monkeypatch) -> None:
             data = json.loads(response.body)
         assert data["nzb_timeout_seconds"] == 80
         assert data["nntp_total_timeout_seconds"] == 77
-    cfg.nzb_timeout_seconds.cache_clear()
-    cfg.nntp_total_timeout_seconds.cache_clear()
+    cfg.settings.reload()

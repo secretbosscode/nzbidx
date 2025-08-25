@@ -7,16 +7,13 @@ import logging
 import time
 from typing import Dict, Optional, Tuple
 
-from .config import search_ttl_seconds
+from .config import settings
 
 # Simple in-memory cache mapping keys to (expiry, xml)
 _CACHE: Dict[str, Tuple[float, str]] = {}
 
 # Guard access to ``_CACHE`` so readers/writers don't interfere with each other
 _CACHE_LOCK = asyncio.Lock()
-
-# Cache the configured TTL once the cache is populated
-_SEARCH_TTL_SECONDS: Optional[int] = None
 
 logger = logging.getLogger(__name__)
 
@@ -55,12 +52,8 @@ async def get_cached_rss(key: str) -> Optional[str]:
 
 async def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` using the configured TTL."""
-
     async with _CACHE_LOCK:
         _purge_expired_locked()
         if "<item>" not in xml:
             return
-        global _SEARCH_TTL_SECONDS
-        if not _CACHE or _SEARCH_TTL_SECONDS is None:
-            _SEARCH_TTL_SECONDS = search_ttl_seconds()
-        _CACHE[key] = (time.monotonic() + _SEARCH_TTL_SECONDS, xml)
+        _CACHE[key] = (time.monotonic() + settings.search_ttl_seconds, xml)
