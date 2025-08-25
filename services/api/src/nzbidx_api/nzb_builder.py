@@ -11,6 +11,7 @@ import json
 import logging
 import sqlite3
 import xml.etree.ElementTree as ET
+from collections.abc import Mapping, Sequence
 from typing import List, Tuple
 
 from . import config
@@ -70,14 +71,43 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             data = []
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
-            segments.append(
-                (
-                    int(seg.get("number", 0)),
-                    str(seg.get("message_id", "")),
-                    str(seg.get("group", "")),
-                    int(seg.get("size", 0) or 0),
+            if isinstance(seg, Mapping):
+                segments.append(
+                    (
+                        int(seg.get("number", 0)),
+                        str(seg.get("message_id", "")),
+                        str(seg.get("group", "")),
+                        int(seg.get("size", 0) or 0),
+                    )
                 )
-            )
+            elif isinstance(seg, Sequence) and not isinstance(seg, (str, bytes)):
+                if len(seg) != 4:
+                    log.warning(
+                        "malformed_segment_length",
+                        extra={"release_id": rid, "segment": repr(seg)},
+                    )
+                    continue
+                number, message_id, group, size = seg
+                try:
+                    segments.append(
+                        (
+                            int(number),
+                            str(message_id),
+                            str(group),
+                            int(size or 0),
+                        )
+                    )
+                except Exception:
+                    log.warning(
+                        "malformed_segment_types",
+                        extra={"release_id": rid, "segment": repr(seg)},
+                    )
+                    continue
+            else:
+                log.warning(
+                    "malformed_segment",
+                    extra={"release_id": rid, "segment": repr(seg)},
+                )
         if not segments:
             log.warning("missing_segments", extra={"release_id": rid})
             raise LookupError("release has no segments")
