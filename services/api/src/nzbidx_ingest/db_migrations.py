@@ -186,3 +186,44 @@ def add_release_has_parts_index(conn: Any) -> None:
         "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (id) WHERE has_parts",
     )
     conn.commit()
+
+
+def create_release_posted_at_index(conn: Any) -> None:
+    """Ensure ``release_posted_at_idx`` exists on ``release`` and its partitions."""
+
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT inhrelid::regclass::text
+            FROM pg_inherits
+            WHERE inhparent = 'release'::regclass
+            """
+        )
+        tables = ["release"] + [row[0] for row in cur.fetchall()]
+        seen: set[str] = set()
+        while tables:
+            table = tables.pop()
+            if table in seen:
+                continue
+            seen.add(table)
+            index = (
+                "release_posted_at_idx"
+                if table == "release"
+                else f"{table}_posted_at_idx"
+            )
+            cur.execute(f"CREATE INDEX IF NOT EXISTS {index} ON {table} (posted_at)")
+            cur.execute(
+                """
+                SELECT inhrelid::regclass::text
+                FROM pg_inherits
+                WHERE inhparent = %s::regclass
+                """,
+                (table,),
+            )
+            tables.extend(row[0] for row in cur.fetchall())
+    except Exception:
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
+        )
+    conn.commit()
