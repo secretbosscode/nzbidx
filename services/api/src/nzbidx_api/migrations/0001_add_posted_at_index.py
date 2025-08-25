@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-
-def _quote_ident(name: str) -> str:
-    """Return ``name`` quoted as an SQL identifier."""
-    return '"' + name.replace('"', '""') + '"'
+from psycopg import sql
 
 
 def migrate(conn: Any) -> None:
-    """Create release_posted_at_idx concurrently for all partitions."""
+    """Create posted_at indexes concurrently for all partitions."""
     cur = conn.cursor()
     # CREATE INDEX CONCURRENTLY cannot run inside a transaction block
     autocommit = getattr(conn, "autocommit", False)
@@ -27,10 +24,11 @@ def migrate(conn: Any) -> None:
         )
         tables = ["release"] + [row[0] for row in cur.fetchall()]
         for table in tables:
-            table_ident = _quote_ident(table)
+            index_name = f"{table.replace('.', '_')}_posted_at_idx"
             cur.execute(
-                f"CREATE INDEX CONCURRENTLY IF NOT EXISTS "
-                f"release_posted_at_idx ON {table_ident} (posted_at)"
+                sql.SQL(
+                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS {} ON {} (posted_at)"
+                ).format(sql.Identifier(index_name), sql.Identifier(table))
             )
     finally:
         cur.close()
