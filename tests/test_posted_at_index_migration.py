@@ -17,7 +17,9 @@ class FeatureNotSupportedError(Exception):
 
 
 class FakeCursor:
-    def __init__(self, executed: List[str], partitions: Sequence[Tuple[str, bool]]) -> None:
+    def __init__(
+        self, executed: List[str], partitions: Sequence[Tuple[str, bool]]
+    ) -> None:
         self.executed = executed
         self.partitions = partitions
         self._fetch: Sequence[Tuple[str, bool]] = []
@@ -42,7 +44,9 @@ class FakeCursor:
 
 
 class FakeConn:
-    def __init__(self, executed: List[str], partitions: Sequence[Tuple[str, bool]]) -> None:
+    def __init__(
+        self, executed: List[str], partitions: Sequence[Tuple[str, bool]]
+    ) -> None:
         self.executed = executed
         self.partitions = partitions
 
@@ -90,7 +94,9 @@ def test_migrate_handles_partitioned_partition() -> None:
     )
 
 
-def test_apply_schema_runs_migration_without_feature_not_supported(tmp_path, monkeypatch) -> None:
+def test_apply_schema_runs_migration_without_feature_not_supported(
+    tmp_path, monkeypatch
+) -> None:
     db_path = tmp_path / "test.db"
     engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
     monkeypatch.setattr(db, "get_engine", lambda: engine)
