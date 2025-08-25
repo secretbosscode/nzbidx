@@ -19,6 +19,22 @@ from .errors import unauthorized
 logger = logging.getLogger(__name__)
 
 
+def _basic_credentials(auth: str) -> Set[str]:
+    """Extract credentials from a Basic Authorization header.
+
+    Returns an empty set when the header cannot be decoded or parsed.
+    """
+    try:
+        decoded = base64.b64decode(auth.split(" ", 1)[1]).decode()
+        username, _, password = decoded.partition(":")
+        return {username, password}
+    except (binascii.Error, UnicodeDecodeError):
+        return set()
+    except Exception:  # pragma: no cover - unexpected errors
+        logger.debug("Unexpected error decoding Basic auth header", exc_info=True)
+        return set()
+
+
 class ApiKeyMiddleware(BaseHTTPMiddleware):
     """Very small middleware that checks for a valid ``X-Api-Key`` header.
 
@@ -45,25 +61,10 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         if not provided:
             auth = request.headers.get("Authorization")
             if auth and auth.lower().startswith("basic "):
-                try:
-                    decoded = base64.b64decode(auth.split(" ", 1)[1]).decode()
-                    username, _, password = decoded.partition(":")
-                    for cred in (username, password):
-                        for valid in self.valid_keys:
-                            if compare_digest(cred, valid):
-                                provided = cred
-                                break
-                        if provided:
-                            break
-                except (binascii.Error, UnicodeDecodeError):
-                    pass
-                except Exception:
-                    logger.debug(
-                        "Unexpected error decoding Basic auth header", exc_info=True
-                    )
-        for valid in self.valid_keys:
-            if compare_digest(provided or "", valid):
-                break
-        else:
+                creds = _basic_credentials(auth)
+                match = creds & self.valid_keys
+                if match:
+                    provided = match.pop()
+        if not any(compare_digest(provided or "", valid) for valid in self.valid_keys):
             return unauthorized()
         return await call_next(request)
