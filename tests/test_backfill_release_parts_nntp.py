@@ -48,6 +48,7 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
     monkeypatch.setattr(backfill_mod, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(backfill_mod.config, "NNTP_GROUPS", ["alt.test"], raising=False)
 
     processed = backfill_mod.backfill_release_parts(release_ids=[1])
     assert processed == 1
@@ -103,6 +104,7 @@ def test_backfill_propagates_connection_error(tmp_path, monkeypatch) -> None:
         raise ConnectionError("nntp fail")
 
     monkeypatch.setattr(backfill_mod, "_fetch_segments", _fail)
+    monkeypatch.setattr(backfill_mod.config, "NNTP_GROUPS", ["g1"], raising=False)
 
     with pytest.raises(ConnectionError, match="nntp fail"):
         backfill_mod.backfill_release_parts(release_ids=[1])

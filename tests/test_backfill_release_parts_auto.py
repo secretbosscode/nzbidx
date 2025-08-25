@@ -38,6 +38,7 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)]
     )
+    monkeypatch.setattr(backfill_mod.config, "NNTP_GROUPS", ["g1"], raising=False)
 
     processed = backfill_mod.backfill_release_parts(release_ids=[1])
     assert processed == 1

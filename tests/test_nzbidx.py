@@ -91,6 +91,30 @@ def test_build_nzb_missing_credentials(monkeypatch) -> None:
     assert "NNTP_USER" in msg and "NNTP_PASS" in msg
 
 
+def test_build_nzb_autoload_groups(monkeypatch) -> None:
+    from nzbidx_api import config as api_config
+    import nzbidx_ingest.config as ingest_config
+
+    monkeypatch.delenv("NNTP_GROUPS", raising=False)
+    monkeypatch.setattr(api_config, "NNTP_GROUPS", [], raising=False)
+
+    called = {"value": False}
+
+    def _fake_load() -> list[str]:
+        called["value"] = True
+        return ["alt.auto"]
+
+    monkeypatch.setattr(ingest_config, "_load_groups", _fake_load)
+    monkeypatch.setattr(
+        nzb_builder, "_segments_from_db", lambda _rid: [(1, "m1", "g", 123)]
+    )
+
+    nzb = nzb_builder.build_nzb_for_release("123")
+    assert "<nzb" in nzb
+    assert called["value"]
+    assert api_config.NNTP_GROUPS == ["alt.auto"]
+
+
 def test_nzb_timeout_defaults(monkeypatch) -> None:
     from nzbidx_api import config as api_config
 

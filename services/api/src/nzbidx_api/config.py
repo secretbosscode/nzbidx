@@ -9,6 +9,8 @@ from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 
+NNTP_GROUPS: list[str] = []
+
 def _int_env(name: str, default: int) -> int:
     value = os.getenv(name)
     if value is None:
@@ -161,14 +163,18 @@ def validate_nntp_config() -> list[str]:
     perform NNTP operations.
     """
 
-    required = [
-        "NNTP_HOST",
-        "NNTP_PORT",
-        "NNTP_USER",
-        "NNTP_PASS",
-        "NNTP_GROUPS",
-    ]
+    required = ["NNTP_HOST", "NNTP_PORT", "NNTP_USER", "NNTP_PASS"]
     missing = [name for name in required if not os.getenv(name)]
+
+    env_groups = os.getenv("NNTP_GROUPS")
+    global NNTP_GROUPS
+    if env_groups:
+        NNTP_GROUPS = [g.strip() for g in env_groups.split(",") if g.strip()]
+    else:
+        from nzbidx_ingest.config import _load_groups
+
+        NNTP_GROUPS = _load_groups()
+
     if missing:
         logger.error("missing NNTP configuration: %s", ", ".join(missing))
     return missing

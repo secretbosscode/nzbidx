@@ -11,6 +11,7 @@ from typing import Callable, Iterable, Optional
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.nntp_client import NNTPClient
 from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
+from . import config
 
 log = logging.getLogger(__name__)
 
@@ -21,42 +22,52 @@ XOVER_LOOKBACK = int(os.getenv("BACKFILL_XOVER_LOOKBACK", "10000"))
 def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
     """Return ``(number, message_id, size)`` tuples for ``release_id``."""
     client = NNTPClient()
-    try:
-        high = client.high_water_mark(group)
-        start = max(0, high - XOVER_LOOKBACK + 1) if XOVER_LOOKBACK > 0 else 0
-        headers = client.xover(group, start, high) if high > 0 else []
-    except Exception as exc:
+    groups = [group] if group else config.NNTP_GROUPS
+    last_exc: Exception | None = None
+    last_group = ""
+    for grp in groups:
+        try:
+            high = client.high_water_mark(grp)
+            start = max(0, high - XOVER_LOOKBACK + 1) if XOVER_LOOKBACK > 0 else 0
+            headers = client.xover(grp, start, high) if high > 0 else []
+        except Exception as exc:
+            last_exc = exc
+            last_group = grp
+            continue
+        segments: list[tuple[int, str, int]] = []
+        target = release_id.lower()
+        seen_numbers: set[int] = set()
+        for header in headers:
+            subject = str(header.get("subject", ""))
+            if normalize_subject(subject).lower() != target:
+                continue
+            msg_id = str(header.get("message-id") or "").strip("<>")
+            if not msg_id:
+                continue
+            size = int(header.get("bytes") or 0)
+            if size <= 0:
+                size = client.body_size(msg_id)
+            if size <= 0:
+                continue
+            number = extract_segment_number(subject)
+            if number in seen_numbers:
+                continue
+            segments.append((number, msg_id, size))
+            seen_numbers.add(number)
+            if (
+                1 in seen_numbers
+                and len(seen_numbers) == max(seen_numbers)
+                and max(seen_numbers) > 1
+            ):
+                break
+        if segments:
+            segments.sort(key=lambda s: s[0])
+            return segments
+    if last_exc:
         raise ConnectionError(
-            f"error fetching segments for {release_id} in {group}: {exc}"
-        ) from exc
-    segments: list[tuple[int, str, int]] = []
-    target = release_id.lower()
-    seen_numbers: set[int] = set()
-    for header in headers:
-        subject = str(header.get("subject", ""))
-        if normalize_subject(subject).lower() != target:
-            continue
-        msg_id = str(header.get("message-id") or "").strip("<>")
-        if not msg_id:
-            continue
-        size = int(header.get("bytes") or 0)
-        if size <= 0:
-            size = client.body_size(msg_id)
-        if size <= 0:
-            continue
-        number = extract_segment_number(subject)
-        if number in seen_numbers:
-            continue
-        segments.append((number, msg_id, size))
-        seen_numbers.add(number)
-        if (
-            1 in seen_numbers
-            and len(seen_numbers) == max(seen_numbers)
-            and max(seen_numbers) > 1
-        ):
-            break
-    segments.sort(key=lambda s: s[0])
-    return segments
+            f"error fetching segments for {release_id} in {last_group}: {last_exc}"
+        ) from last_exc
+    return []
 
 
 def backfill_release_parts(
@@ -71,6 +82,8 @@ def backfill_release_parts(
     job to a specific set of releases.  When ``auto`` is ``True``, only releases
     marked with ``has_parts`` but missing ``segments`` are processed.
     """
+    if not config.NNTP_GROUPS:
+        config.validate_nntp_config()
     conn = connect_db()
     try:
         _cursor = conn.cursor()
