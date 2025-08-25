@@ -42,7 +42,7 @@ def test_circuit_breaker_thread_safety() -> None:
 
 
 def test_circuit_breaker_async_concurrency(monkeypatch) -> None:
-    monkeypatch.setattr("nzbidx_api.middleware_circuit.retry_max", lambda: 0)
+    monkeypatch.setattr("nzbidx_api.middleware_circuit.settings.retry_max", 0)
 
     breaker = CircuitBreaker(max_failures=1, reset_seconds=60)
     count_lock = threading.Lock()

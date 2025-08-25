@@ -140,9 +140,7 @@ def build_nzb_for_release(release_id: str) -> str:
     from . import newznab
 
     # Ensure environment changes to timeouts are honored across calls.
-    config.nntp_timeout_seconds.cache_clear()
-    config.nntp_total_timeout_seconds.cache_clear()
-    config.nzb_timeout_seconds.cache_clear()
+    config.settings.reload()
 
     missing = config.validate_nntp_config()
     _groups = config.NNTP_GROUPS  # ensure groups are loaded
@@ -184,7 +182,7 @@ def build_nzb_for_release(release_id: str) -> str:
 
         if not segments:
             raise newznab.NzbFetchError("no segments found")
-        max_segments = config.nzb_max_segments()
+        max_segments = config.settings.nzb_max_segments
         if len(segments) > max_segments:
             log.warning(
                 "segment_limit_exceeded",

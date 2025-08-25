@@ -7,7 +7,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from .rate_limit import RateLimiter
-from .config import key_rate_limit, key_rate_window
+from .config import settings
 from .errors import rate_limited
 from .metrics_log import inc_rate_limited
 
@@ -19,8 +19,8 @@ class QuotaMiddleware(BaseHTTPMiddleware):
         self, app, limit: int | None = None, window: int | None = None
     ) -> None:
         super().__init__(app)
-        limit_val = limit if limit is not None else key_rate_limit()
-        window_val = window if window is not None else key_rate_window()
+        limit_val = limit if limit is not None else settings.key_rate_limit
+        window_val = window if window is not None else settings.key_rate_window
         self.limiter = RateLimiter(limit_val, window_val)
         self.limit = limit_val
 

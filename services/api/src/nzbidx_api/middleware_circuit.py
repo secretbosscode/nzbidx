@@ -10,13 +10,7 @@ import inspect
 import threading
 from typing import Callable, Generic, TypeVar, Awaitable
 
-from .config import (
-    cb_failure_threshold,
-    cb_reset_seconds,
-    retry_base_ms,
-    retry_jitter_ms,
-    retry_max,
-)
+from .config import settings
 from .metrics_log import inc_breaker_open
 from .otel import set_span_attr, start_span
 
@@ -108,8 +102,8 @@ def call_with_retry(
 ) -> T:
     """Call ``func`` with jittered retries and circuit breaker tracking."""
 
-    retries = retry_max()
-    delay = retry_base_ms() / 1000
+    retries = settings.retry_max
+    delay = settings.retry_base_ms / 1000
     attempt = 0
     while True:
         try:
@@ -144,7 +138,7 @@ def call_with_retry(
                     extra={"dep": dep, "retries": attempt, "breaker_state": state},
                 )
                 raise
-            jitter = random.uniform(0, retry_jitter_ms() / 1000)
+            jitter = random.uniform(0, settings.retry_jitter_ms / 1000)
             time.sleep(delay + jitter)
             delay *= 2
             attempt += 1
@@ -159,8 +153,8 @@ async def call_with_retry_async(
 ) -> T:
     """Async wrapper around ``func`` with retries and circuit breaker."""
 
-    retries = retry_max()
-    delay = retry_base_ms() / 1000
+    retries = settings.retry_max
+    delay = settings.retry_base_ms / 1000
     attempt = 0
     while True:
         try:
@@ -201,13 +195,13 @@ async def call_with_retry_async(
                     extra={"dep": dep, "retries": attempt, "breaker_state": state},
                 )
                 raise
-            jitter = random.uniform(0, retry_jitter_ms() / 1000)
+            jitter = random.uniform(0, settings.retry_jitter_ms / 1000)
             await asyncio.sleep(delay + jitter)
             delay *= 2
             attempt += 1
 
 
 os_breaker: CircuitBreaker[object] = CircuitBreaker(
-    max_failures=cb_failure_threshold(),
-    reset_seconds=cb_reset_seconds(),
+    max_failures=settings.cb_failure_threshold,
+    reset_seconds=settings.cb_reset_seconds,
 )

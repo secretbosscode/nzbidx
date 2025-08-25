@@ -15,7 +15,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - optional dependency
     text = None  # type: ignore
 
-from .config import _int_env
+from .config import settings
 from .db import get_engine
 from .metrics_log import inc
 
@@ -26,8 +26,8 @@ class SearchVectorUnavailable(RuntimeError):
 
 logger = logging.getLogger(__name__)
 
-MAX_LIMIT = _int_env("MAX_LIMIT", 100)
-MAX_OFFSET = _int_env("MAX_OFFSET", 10_000)
+MAX_LIMIT = settings.max_limit
+MAX_OFFSET = settings.max_offset
 
 
 def _format_pubdate(dt: datetime | str | None) -> str:

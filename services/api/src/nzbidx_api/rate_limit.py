@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from .config import rate_limit, rate_window
+from .config import settings
 from .errors import rate_limited
 
 
@@ -44,8 +44,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self, app, limit: int | None = None, window: int | None = None
     ) -> None:
         super().__init__(app)
-        limit_val = limit if limit is not None else rate_limit()
-        window_val = window if window is not None else rate_window()
+        limit_val = limit if limit is not None else settings.rate_limit
+        window_val = window if window is not None else settings.rate_window
         self.limiter = RateLimiter(limit_val, window_val)
         self.limit = limit_val
 

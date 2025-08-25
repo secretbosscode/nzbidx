@@ -15,7 +15,7 @@ def test_cache_purges_expired_entries(monkeypatch):
         return t[0]
 
     monkeypatch.setattr(search_cache.time, "time", fake_time)
-    monkeypatch.setattr(config, "search_ttl_seconds", lambda: 1)
+    monkeypatch.setattr(config.settings, "search_ttl_seconds", 1)
     search_cache._CACHE.clear()
 
     asyncio.run(search_cache.cache_rss("old", "<rss><item>old</item></rss>"))
@@ -47,7 +47,7 @@ def test_get_cached_rss_purges_expired_entries(monkeypatch):
 
 def test_concurrent_cache_access(monkeypatch):
     """Concurrent readers and writers should not raise runtime errors."""
-    monkeypatch.setattr(config, "search_ttl_seconds", lambda: 60)
+    monkeypatch.setattr(config.settings, "search_ttl_seconds", 60)
     search_cache._CACHE.clear()
 
     async def writer(i: int) -> None:
@@ -69,7 +69,7 @@ def test_concurrent_cache_access(monkeypatch):
 
 
 def test_cache_skips_empty_response(monkeypatch) -> None:
-    monkeypatch.setattr(config, "search_ttl_seconds", lambda: 60)
+    monkeypatch.setattr(config.settings, "search_ttl_seconds", 60)
     search_cache._CACHE.clear()
 
     asyncio.run(search_cache.cache_rss("empty", "<rss></rss>"))
