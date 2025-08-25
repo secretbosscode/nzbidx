@@ -18,6 +18,7 @@ from .config import (
 from . import config, cursors
 from .nntp_client import NNTPClient
 from .parsers import normalize_subject, detect_language, extract_segment_number
+from .segment_schema import validate_segment_schema
 from .main import (
     insert_release,
     _infer_category,
@@ -231,22 +232,26 @@ def _process_groups(
                             existing_segments = json.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
+                    validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
-                    deduped: list[tuple[int, str, str, int]] = []
+                    deduped: list[dict[str, int | str]] = []
                     seen_ids: set[str] = set()
                     for n, m, g, s in segs:
                         if m in seen_ids:
                             continue
                         seen_ids.add(m)
-                        deduped.append((n, m, g, s))
+                        deduped.append(
+                            {"number": n, "message_id": m, "group": g, "size": s}
+                        )
 
-                    existing_ids = {seg[1] for seg in existing_segments}
+                    existing_ids = {seg["message_id"] for seg in existing_segments}
                     new_segments = [
-                        (n, m, g, s) for n, m, g, s in deduped if m not in existing_ids
+                        seg for seg in deduped if seg["message_id"] not in existing_ids
                     ]
                     combined_segments = existing_segments + new_segments
-                    total_size = sum(s for _n, _m, _g, s in combined_segments)
+                    validate_segment_schema(combined_segments)
+                    total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
                     cur.execute(
