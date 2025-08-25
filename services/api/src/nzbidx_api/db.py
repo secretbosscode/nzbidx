@@ -226,8 +226,11 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                     except Exception:
                         pass
 
+        if not hasattr(conn, "run_sync") or not hasattr(conn, "execution_options"):
+            return
         try:
-            await conn.run_sync(_migrate)
+            autocommit_conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+            await autocommit_conn.run_sync(_migrate)
         except Exception as exc:
             logger.error("migration_failed", exc_info=True, extra={"error": str(exc)})
             raise
