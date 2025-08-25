@@ -70,14 +70,26 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             data = []
         segments: List[Tuple[int, str, str, int]] = []
         for seg in data or []:
-            segments.append(
-                (
-                    int(seg.get("number", 0)),
-                    str(seg.get("message_id", "")),
-                    str(seg.get("group", "")),
-                    int(seg.get("size", 0) or 0),
+            try:
+                if isinstance(seg, dict):
+                    number = int(seg.get("number", 0))
+                    message_id = str(seg.get("message_id", ""))
+                    group = str(seg.get("group", ""))
+                    size = int(seg.get("size", 0) or 0)
+                elif isinstance(seg, (list, tuple)) and len(seg) >= 4:
+                    number = int(seg[0])
+                    message_id = str(seg[1])
+                    group = str(seg[2])
+                    size = int(seg[3] or 0)
+                else:
+                    raise ValueError("invalid segment entry")
+            except Exception as exc:
+                log.warning(
+                    "invalid_segment_entry",
+                    extra={"release_id": rid, "segment": seg},
                 )
-            )
+                raise ValueError("invalid segment entry") from exc
+            segments.append((number, message_id, group, size))
         if not segments:
             log.warning("missing_segments", extra={"release_id": rid})
             raise LookupError("release has no segments")
@@ -197,6 +209,8 @@ def build_nzb_for_release(release_id: str) -> str:
                 "releases; verify that the release ID is numeric."
             )
         raise newznab.NzbFetchError(msg) from exc
+    except ValueError as exc:
+        raise newznab.NzbFetchError(str(exc)) from exc
     except newznab.NzbFetchError:
         raise
     except newznab.NzbDatabaseError:
