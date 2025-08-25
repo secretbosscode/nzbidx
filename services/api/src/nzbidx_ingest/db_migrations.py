@@ -208,7 +208,9 @@ def create_release_posted_at_index(conn: Any) -> None:
                 continue
             seen.add(table)
             index = (
-                "release_posted_at_idx" if table == "release" else f"{table}_posted_at_idx"
+                "release_posted_at_idx"
+                if table == "release"
+                else f"{table}_posted_at_idx"
             )
             cur.execute(f"CREATE INDEX IF NOT EXISTS {index} ON {table} (posted_at)")
             cur.execute(
