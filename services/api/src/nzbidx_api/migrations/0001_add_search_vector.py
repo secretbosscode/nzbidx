@@ -20,7 +20,7 @@ def migrate(conn: Any) -> None:
         )
         cur.execute(
             """
-            CREATE INDEX CONCURRENTLY IF NOT EXISTS release_search_idx
+            CREATE INDEX IF NOT EXISTS release_search_idx
             ON release USING GIN (search_vector)
             """
         )
