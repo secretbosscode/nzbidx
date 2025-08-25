@@ -93,7 +93,16 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                 100,
                 1,
                 1,
-                json.dumps([(1, "m1", "alt.test", 100)]),
+                json.dumps(
+                    [
+                        {
+                            "number": 1,
+                            "message_id": "m1",
+                            "group": "alt.test",
+                            "size": 100,
+                        }
+                    ]
+                ),
             ),
         )
         conn.commit()
@@ -109,8 +118,18 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
     assert row[0] == 250
     assert row[1] == 2
     assert json.loads(row[2]) == [
-        [1, "m1", "alt.test", 100],
-        [2, "m2", "alt.test", 150],
+        {
+            "number": 1,
+            "message_id": "m1",
+            "group": "alt.test",
+            "size": 100,
+        },
+        {
+            "number": 2,
+            "message_id": "m2",
+            "group": "alt.test",
+            "size": 150,
+        },
     ]
 
 
@@ -171,12 +190,21 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
 
     class _Existing(list):
         def __init__(self) -> None:
-            super().__init__([(1, "m1", "alt.test", 100)])
+            super().__init__(
+                [
+                    {
+                        "number": 1,
+                        "message_id": "m1",
+                        "group": "alt.test",
+                        "size": 100,
+                    }
+                ]
+            )
 
         def __add__(self, _other):
             return []
 
-    def fake_loads(_s: str) -> list[tuple[int, str, str, int]]:
+    def fake_loads(_s: str) -> list[dict[str, object]]:
         return _Existing()
 
     monkeypatch.setattr(loop.json, "loads", fake_loads)
