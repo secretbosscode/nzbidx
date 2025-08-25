@@ -31,9 +31,7 @@ def _basic_credentials(auth: str) -> Set[str]:
     except (binascii.Error, UnicodeDecodeError):
         return set()
     except Exception:  # pragma: no cover - unexpected errors
-        logger.debug(
-            "Unexpected error decoding Basic auth header", exc_info=True
-        )
+        logger.debug("Unexpected error decoding Basic auth header", exc_info=True)
         return set()
 
 
@@ -67,8 +65,6 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 match = creds & self.valid_keys
                 if match:
                     provided = match.pop()
-        if not any(
-            compare_digest(provided or "", valid) for valid in self.valid_keys
-        ):
+        if not any(compare_digest(provided or "", valid) for valid in self.valid_keys):
             return unauthorized()
         return await call_next(request)
