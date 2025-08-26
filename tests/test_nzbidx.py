@@ -15,6 +15,9 @@ import pytest
 
 from nzbidx_api import nzb_builder, newznab  # type: ignore
 from nzbidx_api import db as api_db  # type: ignore
+import nzbidx_api.config as api_config  # type: ignore
+api_config.reload_api_keys = lambda: None  # type: ignore
+api_config.reload_if_env_changed = lambda: None  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
 from nzbidx_ingest.main import (
@@ -110,7 +113,7 @@ def test_build_nzb_autoload_groups(monkeypatch) -> None:
     )
 
     nzb = nzb_builder.build_nzb_for_release("123")
-    assert "<nzb" in nzb
+    assert b"<nzb" in nzb
     assert called["value"]
     assert api_config.NNTP_GROUPS == ["alt.auto"]
 
@@ -344,7 +347,7 @@ def test_auto_backfill_success(monkeypatch) -> None:
     monkeypatch.setattr(nzb_builder, "backfill_release_parts", _backfill)
 
     xml = nzb_builder.build_nzb_for_release("123")
-    assert "m1" in xml
+    assert b"m1" in xml
     assert called == [123]
     assert calls["count"] == 2
 
@@ -521,8 +524,8 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
         ],
     )
     xml = nzb_builder.build_nzb_for_release("123")
-    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
-    assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
+    assert b'<segment bytes="123" number="1">msg1@example.com</segment>' in xml
+    assert b'<segment bytes="456" number="2">msg2@example.com</segment>' in xml
 
 
 def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
@@ -561,7 +564,7 @@ def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
     monkeypatch.setattr(nzb_builder, "get_connection", lambda: DummyConn())
 
     xml = nzb_builder.build_nzb_for_release("123")
-    assert '<segment bytes="123" number="1">m1</segment>' in xml
+    assert b'<segment bytes="123" number="1">m1</segment>' in xml
     assert (
         str(executed.get("sql", ""))
         .lower()
@@ -602,9 +605,9 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
 def test_getnzb_timeout(monkeypatch) -> None:
     """Slow NZB generation should return 504 after timeout."""
 
-    async def slow_get_nzb(_release_id, _cache):
+    async def slow_get_nzb(_release_id, _cache) -> bytes:
         await asyncio.sleep(0.1)
-        return "<nzb></nzb>"
+        return b"<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", slow_get_nzb)
     monkeypatch.setattr(api_main.settings, "nzb_timeout_seconds", 0.01)
@@ -617,7 +620,7 @@ def test_getnzb_timeout(monkeypatch) -> None:
 def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
     """Fetch failures should return 404 when NZB is unavailable."""
 
-    async def error_get_nzb(_release_id, _cache):
+    async def error_get_nzb(_release_id, _cache) -> bytes:
         raise newznab.NzbFetchError("boom")
 
     monkeypatch.setattr(api_main, "get_nzb", error_get_nzb)
@@ -636,7 +639,7 @@ def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
 def test_getnzb_database_error_returns_503(monkeypatch) -> None:
     """Database errors should return 503 and not be cached."""
 
-    def db_error_build(_release_id: str) -> str:
+    def db_error_build(_release_id: str) -> bytes:
         raise newznab.NzbDatabaseError("db down")
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error_build)
@@ -651,8 +654,8 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     """NZB downloads should include a content-disposition header."""
 
-    async def fake_get_nzb(_release_id, _cache):
-        return "<nzb></nzb>"
+    async def fake_get_nzb(_release_id, _cache) -> bytes:
+        return b"<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", fake_get_nzb)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
@@ -745,7 +748,7 @@ def test_failed_fetch_not_cached(monkeypatch, cache_cls) -> None:
     cache = cache_cls()
     calls: list[str] = []
 
-    def boom(release_id: str) -> str:
+    def boom(release_id: str) -> bytes:
         calls.append(release_id)
         raise RuntimeError("boom")
 
@@ -769,7 +772,7 @@ def test_failed_fetch_not_cached(monkeypatch, cache_cls) -> None:
 def test_database_error_not_cached(monkeypatch, cache_cls) -> None:
     cache = cache_cls()
 
-    def db_error(_release_id: str) -> str:
+    def db_error(_release_id: str) -> bytes:
         raise newznab.NzbDatabaseError("db down")
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error)
@@ -785,9 +788,9 @@ def test_getnzb_not_cached(monkeypatch) -> None:
 
     build_calls: list[str] = []
 
-    def fake_build(release_id: str) -> str:
+    def fake_build(release_id: str) -> bytes:
         build_calls.append(release_id)
-        return "<nzb></nzb>"
+        return b"<nzb></nzb>"
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", fake_build)
 
