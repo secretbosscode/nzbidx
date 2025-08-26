@@ -10,6 +10,7 @@ setuptools>=78.1.1
 apscheduler
 langdetect
 standard-nntplib
+cachetools
 
 [orjson]
 orjson
