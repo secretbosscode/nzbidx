@@ -24,6 +24,7 @@ src/nzbidx_api/rate_limit.py
 src/nzbidx_api/schema.sql
 src/nzbidx_api/search.py
 src/nzbidx_api/search_cache.py
+src/nzbidx_api/starlette_compat.py
 src/nzbidx_api/utils.py
 src/nzbidx_api.egg-info/PKG-INFO
 src/nzbidx_api.egg-info/SOURCES.txt
