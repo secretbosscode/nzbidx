@@ -5,46 +5,73 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict, Optional, Tuple
+from typing import Callable, Optional
+
+from cachetools import TTLCache
 
 from .config import settings
 
-# Simple in-memory cache mapping keys to (expiry, xml)
-_CACHE: Dict[str, Tuple[float, str]] = {}
+
+def _new_cache(timer: Callable[[], float] = time.monotonic) -> TTLCache[str, str]:
+    """Create a TTL cache with the configured limits."""
+
+    return TTLCache(
+        maxsize=settings.search_cache_max_entries,
+        ttl=settings.search_ttl_seconds,
+        timer=timer,
+    )
+
+
+# In-memory cache with automatic TTL and LRU eviction
+_CACHE: TTLCache[str, str] = _new_cache()
 
 # Guard access to ``_CACHE`` so readers/writers don't interfere with each other
 _CACHE_LOCK = asyncio.Lock()
 
+PURGE_INTERVAL = 30
+_LAST_PURGE = 0.0
+
 logger = logging.getLogger(__name__)
 
 
+def _ensure_cache_config() -> None:
+    """Reload the cache if configuration settings have changed."""
+
+    global _CACHE
+    if (
+        _CACHE.ttl != settings.search_ttl_seconds
+        or _CACHE.maxsize != settings.search_cache_max_entries
+    ):
+        _CACHE = _new_cache()
+
+
 def _purge_expired_locked(now: Optional[float] = None) -> None:
-    """Internal helper that removes expired entries while the cache lock is held."""
-    if now is None:
-        now = time.monotonic()
-    for key, (expires, _) in list(_CACHE.items()):
-        if expires < now:
-            del _CACHE[key]
+    """Internal helper that prunes expired entries while the cache lock is held."""
+
+    global _LAST_PURGE
+
+    current = now if now is not None else time.monotonic()
+    if current - _LAST_PURGE >= PURGE_INTERVAL:
+        _CACHE.expire(current)
+        _LAST_PURGE = current
 
 
 async def purge_expired() -> None:
     """Delete any expired cache entries."""
     async with _CACHE_LOCK:
+        _ensure_cache_config()
         _purge_expired_locked()
 
 
 async def get_cached_rss(key: str) -> Optional[str]:
     """Return cached RSS XML for ``key`` if present and not expired."""
     async with _CACHE_LOCK:
+        _ensure_cache_config()
         now = time.monotonic()
         _purge_expired_locked(now)
-        entry = _CACHE.get(key)
-        if not entry:
-            return None
-        expires, xml = entry
-        if expires < now:
-            # Drop stale entry
-            del _CACHE[key]
+        try:
+            xml = _CACHE[key]
+        except KeyError:
             return None
         logger.info("search_cache_hit", extra={"key": key})
         return xml
@@ -53,7 +80,8 @@ async def get_cached_rss(key: str) -> Optional[str]:
 async def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` using the configured TTL."""
     async with _CACHE_LOCK:
-        _purge_expired_locked()
+        _ensure_cache_config()
+        _purge_expired_locked(time.monotonic())
         if "<item>" not in xml:
             return
-        _CACHE[key] = (time.monotonic() + settings.search_ttl_seconds, xml)
+        _CACHE[key] = xml

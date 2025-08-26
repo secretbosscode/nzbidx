@@ -24,9 +24,15 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+@lru_cache()
 def api_keys() -> set[str]:
     keys = os.getenv("API_KEYS", "")
     return {k.strip() for k in keys.split(",") if k.strip()}
+
+
+def reload_api_keys() -> None:
+    """Clear cached API keys so changes in the environment take effect."""
+    api_keys.cache_clear()
 
 
 @dataclass
@@ -36,8 +42,14 @@ class Settings:
     search_ttl_seconds: int = field(
         default_factory=lambda: _int_env("SEARCH_TTL_SECONDS", 60)
     )
+    search_cache_max_entries: int = field(
+        default_factory=lambda: _int_env("SEARCH_CACHE_MAX_ENTRIES", 1024)
+    )
     rate_limit: int = field(default_factory=lambda: _int_env("RATE_LIMIT", 60))
     rate_window: int = field(default_factory=lambda: _int_env("RATE_WINDOW", 60))
+    rate_limit_max_ips: int = field(
+        default_factory=lambda: _int_env("RATE_LIMIT_MAX_IPS", 1024)
+    )
     key_rate_limit: int = field(default_factory=lambda: _int_env("KEY_RATE_LIMIT", 100))
     key_rate_window: int = field(
         default_factory=lambda: _int_env("KEY_RATE_WINDOW", 60)
@@ -94,6 +106,51 @@ class Settings:
 
 settings = Settings()
 
+# Track configuration-related environment variables so settings are only
+# reloaded when necessary.  This avoids the overhead of reloading on every
+# NZB build or request.
+_RELOAD_ENV_VARS = {
+    "SEARCH_TTL_SECONDS",
+    "RATE_LIMIT",
+    "RATE_WINDOW",
+    "KEY_RATE_LIMIT",
+    "KEY_RATE_WINDOW",
+    "MAX_REQUEST_BYTES",
+    "MAX_QUERY_BYTES",
+    "MAX_PARAM_BYTES",
+    "NNTP_TIMEOUT",
+    "NNTP_TOTAL_TIMEOUT",
+    "NZB_TIMEOUT_SECONDS",
+    "NZB_MAX_SEGMENTS",
+    "CB_FAILURE_THRESHOLD",
+    "CB_RESET_SECONDS",
+    "RETRY_MAX",
+    "RETRY_BASE_MS",
+    "RETRY_JITTER_MS",
+    "MAX_LIMIT",
+    "MAX_OFFSET",
+    "NNTP_HOST",
+    "NNTP_PORT",
+    "NNTP_USER",
+    "NNTP_PASS",
+    "NNTP_GROUPS",
+}
+_env_cache = {name: os.getenv(name) for name in _RELOAD_ENV_VARS}
+
+
+def reload_if_env_changed() -> None:
+    """Reload settings if tracked environment variables have changed."""
+    global _env_cache
+    current = {name: os.getenv(name) for name in _RELOAD_ENV_VARS}
+    if current != _env_cache:
+        settings.reload()
+        _env_cache = current
+
+
+def nntp_timeout_seconds() -> int:
+    """Backwards-compatible accessor for the NNTP timeout."""
+    return settings.nntp_timeout_seconds
+
 
 @lru_cache()
 def cors_origins() -> list[str]:
@@ -117,6 +174,7 @@ def request_id_header() -> str:
     return os.getenv("REQUEST_ID_HEADER", "X-Request-ID")
 
 
+@lru_cache()
 def validate_nntp_config() -> list[str]:
     """Check required NNTP configuration variables.
 
@@ -140,3 +198,9 @@ def validate_nntp_config() -> list[str]:
     if missing:
         logger.error("missing NNTP configuration: %s", ", ".join(missing))
     return missing
+
+
+def clear_validate_cache() -> None:
+    """Clear :func:`validate_nntp_config` cache."""
+
+    validate_nntp_config.cache_clear()

@@ -1,7 +1,6 @@
 """Helpers for the Newznab API."""
 
 import asyncio
-import json
 import os
 import html
 import logging
@@ -11,6 +10,8 @@ from datetime import datetime, timezone
 from email.utils import format_datetime
 
 from .metrics_log import inc_nzb_cache_hit, inc_nzb_cache_miss
+
+from .json_utils import orjson
 
 from . import nzb_builder
 from .utils import maybe_await
@@ -121,7 +122,7 @@ def _load_categories() -> list[dict[str, str]]:
     cfg_path = os.getenv("CATEGORY_CONFIG")
     if cfg_path:
         try:
-            data = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
+            data = orjson.loads(Path(cfg_path).read_text(encoding="utf-8"))
             return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
         except FileNotFoundError:
             log.warning("category config file not found")
@@ -133,6 +134,12 @@ def _load_categories() -> list[dict[str, str]]:
 CATEGORIES = _load_categories()
 _CATEGORY_MAP = {c["name"]: c["id"] for c in CATEGORIES}
 _ID_NAME_MAP = {c["id"]: c["name"] for c in CATEGORIES}
+
+CATEGORY_CHILDREN: dict[str, list[str]] = {}
+for c in CATEGORIES:
+    parent = c["name"].split("/", 1)[0]
+    CATEGORY_CHILDREN.setdefault(parent, []).append(c["id"])
+
 MOVIES_CATEGORY_ID = _CATEGORY_MAP.get("Movies", "2000")
 TV_CATEGORY_ID = _CATEGORY_MAP.get("TV", "5000")
 AUDIO_CATEGORY_ID = _CATEGORY_MAP.get("Audio", _CATEGORY_MAP.get("Audio/Music", "3000"))
@@ -141,12 +148,7 @@ BOOKS_CATEGORY_ID = _CATEGORY_MAP.get("EBook", "7020")
 
 def _collect_category_ids(parent: str) -> list[str]:
     """Return IDs for ``parent`` and any ``parent/*`` subcategories."""
-
-    return [
-        c["id"]
-        for c in CATEGORIES
-        if c["name"] == parent or c["name"].startswith(f"{parent}/")
-    ]
+    return CATEGORY_CHILDREN.get(parent, [])
 
 
 def expand_category_ids(ids: list[str]) -> list[str]:
@@ -178,7 +180,7 @@ BOOKS_CATEGORY_IDS = _collect_category_ids("EBook")
 ADULT_CATEGORY_IDS = _collect_category_ids("XXX")
 
 
-def caps_xml() -> str:
+def _generate_caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
     categories = [f'<category id="{c["id"]}" name="{c["name"]}"/>' for c in CATEGORIES]
     cats_xml = f"<categories>{''.join(categories)}</categories>"
@@ -192,6 +194,14 @@ def caps_xml() -> str:
         '<limits max="100" default="50"/>'
         f"{searching_xml}{cats_xml}</caps>"
     )
+
+
+_CACHED_CAPS_XML = _generate_caps_xml()
+
+
+def caps_xml() -> str:
+    """Return a minimal Newznab caps XML document."""
+    return _CACHED_CAPS_XML
 
 
 def rss_xml(

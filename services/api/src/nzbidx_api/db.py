@@ -14,6 +14,7 @@ import importlib
 import logging
 import os
 import pkgutil
+from functools import lru_cache
 from importlib import resources
 from urllib.parse import urlparse, urlunparse
 
@@ -125,6 +126,7 @@ def get_engine() -> Optional[AsyncEngine]:
     return engine
 
 
+@lru_cache()
 def load_schema_statements() -> list[str]:
     sql = (
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
