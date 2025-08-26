@@ -24,7 +24,7 @@ from .main import (
     _infer_category,
     connect_db,
     CATEGORY_MAP,
-    prune_group,
+    prune_groups,
 )
 from email.utils import parsedate_to_datetime
 from datetime import timezone
@@ -77,8 +77,7 @@ def _process_groups(
 ) -> float:
     aggregate = _AggregateMetrics()
 
-    for ig in ignored:
-        prune_group(db, ig)
+    prune_groups(db, ignored)
 
     for group in groups:
         last = cursors.get_cursor(group) or 0
