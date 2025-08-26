@@ -95,6 +95,11 @@ class Settings:
 settings = Settings()
 
 
+def nntp_timeout_seconds() -> int:
+    """Backwards-compatible accessor for the NNTP timeout."""
+    return settings.nntp_timeout_seconds
+
+
 @lru_cache()
 def cors_origins() -> list[str]:
     value = os.getenv("CORS_ORIGINS", "")
