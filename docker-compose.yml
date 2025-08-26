@@ -27,6 +27,7 @@ services:
       API_KEYS: dev
       RATE_LIMIT: 60
       RATE_WINDOW: 60
+      RATE_LIMIT_MAX_IPS: 1024
       NNTP_HOST: ""
       NNTP_PORT: 119
       NNTP_USER: ""

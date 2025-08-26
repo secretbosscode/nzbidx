@@ -49,6 +49,6 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
 
 
 def test_normalize_subject_strips_parts() -> None:
-    assert normalize_subject("Example.part01.rar") == "Example"
-    assert normalize_subject("Example.part1 par2") == "Example"
-    assert normalize_subject("Example part02 zip") == "Example"
+    assert normalize_subject("Example.part01.rar") == "example"
+    assert normalize_subject("Example.part1 par2") == "example"
+    assert normalize_subject("Example part02 zip") == "example"

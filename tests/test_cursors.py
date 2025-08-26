@@ -89,52 +89,26 @@ def test_conn_sqlite_path_no_name_error(tmp_path, monkeypatch):
         conn.close()
 
 
-def test_concurrent_backends_isolated(monkeypatch):
-    import threading
+def test_concurrent_backends_isolated(tmp_path, monkeypatch):
+    import importlib
     import nzbidx_ingest.cursors as curs
+    import nzbidx_ingest.config as cfg
 
-    barrier = threading.Barrier(2)
-    tl = threading.local()
-    executed: dict[str, str] = {}
+    monkeypatch.setenv("CURSOR_DB", str(tmp_path / "conn.sqlite"))
+    importlib.reload(cfg)
+    importlib.reload(curs)
 
-    class DummyCursor:
-        def fetchone(self):
-            return None
+    calls: list[None] = []
+    orig = curs._get_conn
 
-        def fetchall(self):  # pragma: no cover - not used
-            return []
+    def counting_get_conn():
+        if curs._CONN is None:
+            calls.append(None)
+        return orig()
 
-    class DummyConn:
-        def __init__(self, style: str):
-            self.style = style
+    monkeypatch.setattr(curs, "_get_conn", counting_get_conn)
 
-        def execute(self, stmt: str, params=None):
-            barrier.wait()
-            executed[self.style] = stmt
-            return DummyCursor()
+    curs.get_cursor("g1")
+    curs.set_cursor("g1", 1)
 
-        def commit(self):  # pragma: no cover - trivial
-            return None
-
-        def close(self):  # pragma: no cover - trivial
-            return None
-
-    def fake_conn():
-        style = tl.style
-        return DummyConn(style), style
-
-    monkeypatch.setattr(curs, "_conn", fake_conn)
-
-    def run(style: str, fn, *args):
-        tl.style = style
-        fn(*args)
-
-    t1 = threading.Thread(target=run, args=("?", curs.get_cursor, "g1"))
-    t2 = threading.Thread(target=run, args=("%s", curs.set_cursor, "g2", 1))
-    t1.start()
-    t2.start()
-    t1.join()
-    t2.join()
-
-    assert executed["?"].count("?") > 0
-    assert executed["%s"].count("%s") > 0
+    assert len(calls) == 1

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from threading import Event
+
+from nzbidx_api.json_utils import orjson as json
 
 from .config import (
     INGEST_BATCH_MIN,
@@ -86,7 +87,11 @@ def _process_groups(
     for group in groups:
         last = cursor_map.get(group, 0)
         start = last + 1
-        high = client.high_water_mark(group)
+        _resp, _count, _low, high_s, _name = client.group(group)
+        try:
+            high = int(high_s)
+        except Exception:
+            high = 0
         remaining = max(high - last, 0)
         if remaining <= 0:
             headers: list[dict[str, object]] = []
@@ -151,9 +156,8 @@ def _process_groups(
                 size = client.body_size(message_id)
             if size <= 0:
                 continue
-            subject = header.get("subject", "")
+            subject = str(header.get("subject", ""))
             norm_title, tags = normalize_subject(subject, with_tags=True)
-            norm_title = norm_title.lower()
             posted = header.get("date")
             day_bucket = ""
             posted_at = None
@@ -166,7 +170,7 @@ def _process_groups(
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
-            category = _infer_category(subject, group) or CATEGORY_MAP["other"]
+            category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
             tags = tags or []
             existing = releases.get(dedupe_key)
             if existing:
@@ -248,11 +252,11 @@ def _process_groups(
                             {"number": n, "message_id": m, "group": g, "size": s}
                         )
 
-                    existing_ids = {seg["message_id"] for seg in existing_segments}
-                    new_segments = [
-                        seg for seg in deduped if seg["message_id"] not in existing_ids
-                    ]
-                    combined_segments = existing_segments + new_segments
+                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
+                    for seg in deduped:
+                        message_id = seg["message_id"]
+                        existing_map.setdefault(message_id, seg)
+                    combined_segments = list(existing_map.values())
                     validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
@@ -260,7 +264,7 @@ def _process_groups(
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
-                            json.dumps(combined_segments),
+                            json.dumps(combined_segments).decode(),
                             has_parts,
                             part_counts[title],
                             total_size,

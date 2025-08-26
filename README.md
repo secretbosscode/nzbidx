@@ -88,6 +88,7 @@ faster serializer once compatible.
 | `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
+| `RATE_LIMIT_MAX_IPS` | Maximum unique IPs tracked for rate limiting | `1024` |
 | `NZBIDX_USE_STD_JSON` | `0` uses `orjson` if installed; `1` or unset uses the standard library `json` module | `1` |
 | `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing (≥ `NNTP_TOTAL_TIMEOUT`) | `NNTP_TOTAL_TIMEOUT` (`600`) |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
@@ -185,7 +186,8 @@ Protect the `/api` endpoints by supplying one or more keys:
     curl -H 'X-Api-Key: dev' 'http://localhost:8080/api?t=caps'
 
 Requests are limited per IP using `RATE_LIMIT` requests per `RATE_WINDOW`
-seconds. Exceeding the limit returns HTTP 429.
+seconds. The limiter tracks up to `RATE_LIMIT_MAX_IPS` addresses, evicting
+least-recently-used entries when full. Exceeding the limit returns HTTP 429.
 
 ## Pagination & Caching
 
@@ -335,7 +337,7 @@ log `psycopg_unavailable` and fall back to SQLite.
 
 Releases are addressed by a stable ID combining the normalized title and the
 date the post was seen.  The ID format is
-``normalize_subject(title).lower():<posted-date>`` where `<posted-date>` is in
+``normalize_subject(title):<posted-date>`` where `<posted-date>` is in
 `YYYY-MM-DD` form.
 
 Derive an ID from a raw subject:
@@ -345,7 +347,7 @@ from nzbidx_ingest.parsers import normalize_subject
 
 subject = "[01/15] - Some.Release.part01.rar"
 title = normalize_subject(subject)
-release_id = f"{title.lower()}:2025-08-17"
+release_id = f"{title}:2025-08-17"
 ```
 
 Use the resulting ID with the `t=getnzb` endpoint (URL-encoded if needed):
