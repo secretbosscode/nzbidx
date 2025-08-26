@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import sqlite3
 
@@ -16,20 +16,23 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
+        def connect(self) -> None:
+            pass
+
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{":bytes": "100", "subject": "Example"}]
 
-    client = DummyClient()
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
     monkeypatch.setattr(
         loop, "insert_release", lambda _db, releases: {r[0] for r in releases}
     )
 
     with caplog.at_level(logging.INFO):
-        loop.run_once(client)
+        loop.run_once()
 
     record = next(r for r in caplog.records if r.message.startswith("Processed"))
     assert "Processed 1 items (inserted 1, deduplicated 0)." in record.message
@@ -50,6 +53,9 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
+        def connect(self) -> None:
+            pass
+
         def high_water_mark(self, group: str) -> int:
             return 1
 
@@ -62,7 +68,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                 }
             ]
 
-    client = DummyClient()
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -87,7 +93,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                 100,
                 1,
                 1,
-                json.dumps(
+                orjson.dumps(
                     [
                         {
                             "number": 1,
@@ -96,14 +102,14 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                             "size": 100,
                         }
                     ]
-                ),
+                ).decode(),
             ),
         )
         conn.commit()
 
     monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
 
-    loop.run_once(client)
+    loop.run_once()
 
     with sqlite3.connect(db_path) as check:
         row = check.execute(
@@ -111,7 +117,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
         ).fetchone()
     assert row[0] == 250
     assert row[1] == 2
-    assert json.loads(row[2]) == [
+    assert orjson.loads(row[2]) == [
         {
             "number": 1,
             "message_id": "m1",
@@ -135,6 +141,9 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
+        def connect(self) -> None:
+            pass
+
         def high_water_mark(self, group: str) -> int:
             return 1
 
@@ -147,7 +156,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
                 }
             ]
 
-    client = DummyClient()
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -172,7 +181,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
                 100,
                 0,
                 0,
-                json.dumps([]),
+                orjson.dumps([]).decode(),
             ),
         )
         conn.commit()
@@ -198,9 +207,9 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     def fake_loads(_s: str) -> list[dict[str, object]]:
         return _Existing()
 
-    monkeypatch.setattr(loop.json, "loads", fake_loads)
+    monkeypatch.setattr(loop.orjson, "loads", fake_loads)
 
-    loop.run_once(client)
+    loop.run_once()
 
     with sqlite3.connect(db_path) as check:
         row = check.execute(
