@@ -13,6 +13,7 @@ Requires-Dist: python-dotenv
 Requires-Dist: setuptools>=78.1.1
 Requires-Dist: apscheduler
 Requires-Dist: langdetect
+Requires-Dist: cachetools
 Requires-Dist: standard-nntplib
 Provides-Extra: orjson
 Requires-Dist: orjson; extra == "orjson"
