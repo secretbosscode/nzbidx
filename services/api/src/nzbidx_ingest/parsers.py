@@ -15,6 +15,12 @@ LANGUAGE_TOKENS: dict[str, str] = {
     "[GERMAN]": "de",
 }
 
+LANGUAGE_TOKENS_RE = (
+    re.compile("|".join(map(re.escape, LANGUAGE_TOKENS.keys())), re.IGNORECASE)
+    if LANGUAGE_TOKENS
+    else None
+)
+
 _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
 
 # Regexes used to sanitize text before automatic language detection. We strip
@@ -232,9 +238,8 @@ def normalize_subject(
     cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
 
     # Remove language tokens based on LANGUAGE_TOKENS keys.
-    if LANGUAGE_TOKENS:
-        tokens_pattern = "|".join(map(re.escape, LANGUAGE_TOKENS.keys()))
-        cleaned = re.sub(tokens_pattern, "", cleaned, flags=re.IGNORECASE)
+    if LANGUAGE_TOKENS_RE:
+        cleaned = LANGUAGE_TOKENS_RE.sub("", cleaned)
 
     # Remove common filler words.
     fillers = ("repost", "sample")
