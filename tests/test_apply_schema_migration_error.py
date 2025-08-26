@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from nzbidx_api import db
 
 m_posted = importlib.import_module("nzbidx_api.migrations.0001_add_posted_at_index")
-m_search = importlib.import_module("nzbidx_api.migrations.0001_add_search_vector")
 
 
 def test_apply_schema_logs_migration_error(tmp_path, monkeypatch, caplog):
@@ -31,7 +30,6 @@ def test_apply_schema_logs_migration_error(tmp_path, monkeypatch, caplog):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(m_posted, "migrate", migrate_posted)
-    monkeypatch.setattr(m_search, "migrate", lambda _conn: None)
 
     with caplog.at_level(logging.ERROR):
         with pytest.raises(RuntimeError, match="boom"):
