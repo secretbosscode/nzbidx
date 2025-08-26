@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -14,6 +13,7 @@ sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.segment_schema import validate_segment_schema
+from nzbidx_api.json_utils import orjson
 
 
 def _convert(seg):
@@ -45,7 +45,7 @@ def normalize() -> int:
     for rid, seg_json in rows:
         try:
             data = (
-                json.loads(seg_json or "[]")
+                orjson.loads(seg_json or "[]")
                 if isinstance(seg_json, (str, bytes))
                 else seg_json or []
             )
@@ -64,7 +64,7 @@ def normalize() -> int:
             continue
         cur.execute(
             f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
-            (json.dumps(converted), rid),
+            (orjson.dumps(converted).decode(), rid),
         )
         updated += 1
     conn.commit()
