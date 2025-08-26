@@ -24,6 +24,7 @@ def test_apply_schema_runs_migrations(tmp_path, monkeypatch):
             return "CREATE TABLE release (id INTEGER PRIMARY KEY, posted_at TIMESTAMP);"
 
     monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
+    db.load_schema_statements.cache_clear()
 
     def migrate_posted(conn):
         cur = conn.cursor()
