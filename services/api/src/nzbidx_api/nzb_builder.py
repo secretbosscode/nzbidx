@@ -139,9 +139,6 @@ def build_nzb_for_release(release_id: str) -> str:
 
     from . import newznab
 
-    # Ensure environment changes to timeouts are honored across calls.
-    config.settings.reload()
-
     missing = config.validate_nntp_config()
     _groups = config.NNTP_GROUPS  # ensure groups are loaded
     if missing:

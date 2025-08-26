@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from cachetools import TTLCache
 from nzbidx_api import main as main_mod, search as search_mod, search_cache  # type: ignore
 from nzbidx_api.search import SearchVectorUnavailable  # type: ignore
 
@@ -57,7 +58,10 @@ def test_fallback_to_ilike(monkeypatch) -> None:
 
 
 def test_api_returns_503_on_introspection_error(monkeypatch) -> None:
-    search_cache._CACHE.clear()
+    search_cache._CACHE = TTLCache(
+        maxsize=search_cache.settings.search_cache_max_entries,
+        ttl=search_cache.settings.search_ttl_seconds,
+    )
     monkeypatch.setattr(main_mod, "get_engine", lambda: object())
 
     async def fake_search_releases_async(*args, **kwargs):

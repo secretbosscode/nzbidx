@@ -14,6 +14,8 @@ sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import _infer_category, connect_db  # noqa: E402
 
+BATCH_SIZE = 1000
+
 
 def main(
     argv: list[str] | None = None,
@@ -30,22 +32,27 @@ def main(
     conn = connect_db()
     cur = conn.cursor()
     cur.execute("SELECT norm_title, category_id, tags, source_group FROM release")
-    rows = cur.fetchall()
     mismatches: list[tuple[str, int | None, str]] = []
+    total = 0
 
-    for norm_title, category_id, tags, source_group in rows:
-        title = norm_title or ""
-        tag_items = " ".join(f"[{t}]" for t in (tags or "").split(",") if t)
-        pseudo_subject = f"{title} {tag_items}".strip()
-        expected = _infer_category(pseudo_subject, source_group)
-        if expected is None:
-            continue
-        expected_int = int(expected)
-        stored_int = int(category_id) if category_id is not None else None
-        if stored_int != expected_int:
-            mismatches.append((title, stored_int, expected))
+    while True:
+        batch = cur.fetchmany(BATCH_SIZE)
+        if not batch:
+            break
+        for norm_title, category_id, tags, source_group in batch:
+            total += 1
+            title = norm_title or ""
+            tag_items = " ".join(f"[{t}]" for t in (tags or "").split(",") if t)
+            pseudo_subject = f"{title} {tag_items}".strip()
+            expected = _infer_category(pseudo_subject, str(source_group))
+            if expected is None:
+                continue
+            expected_int = int(expected)
+            stored_int = int(category_id) if category_id is not None else None
+            if stored_int != expected_int:
+                mismatches.append((title, stored_int, expected))
 
-    logging.info("Checked %d releases, %d mismatches", len(rows), len(mismatches))
+    logging.info("Checked %d releases, %d mismatches", total, len(mismatches))
     for title, stored, expected in mismatches[:20]:
         logging.info("%r stored=%s expected=%s", title, stored, expected)
 

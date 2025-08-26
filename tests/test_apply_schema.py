@@ -153,6 +153,7 @@ def test_apply_schema_handles_function_with_semicolons_without_sqlparse(monkeypa
     monkeypatch.setattr(db, "text", lambda s: s)
     monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
     monkeypatch.setattr(db, "sqlparse", None)
+    db.load_schema_statements.cache_clear()
 
     asyncio.run(db.apply_schema())
     assert len(executed) == 2
@@ -208,6 +209,7 @@ def test_apply_schema_handles_tagged_dollar_quotes(monkeypatch):
     monkeypatch.setattr(db, "text", lambda s: s)
     monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
     monkeypatch.setattr(db, "sqlparse", None)
+    db.load_schema_statements.cache_clear()
 
     asyncio.run(db.apply_schema())
 
