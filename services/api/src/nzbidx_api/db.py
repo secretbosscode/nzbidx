@@ -393,9 +393,19 @@ def get_connection() -> Any:
     return _conn
 
 
+@lru_cache(maxsize=None)
+def _sql_placeholder_by_type(conn_cls: type[Any]) -> str:
+    """Return the DB-API parameter placeholder for the given connection class."""
+    return "?" if conn_cls.__module__.startswith("sqlite3") else "%s"
+
+
 def sql_placeholder(conn: Any) -> str:
-    """Return the DB-API parameter placeholder for ``conn``."""
-    return "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    """Return the DB-API parameter placeholder for ``conn``.
+
+    Results are cached per connection class so callers may continue to pass
+    connection instances without incurring repeat inspection overhead.
+    """
+    return _sql_placeholder_by_type(type(conn))
 
 
 def close_connection() -> None:
