@@ -14,5 +14,6 @@ Requires-Dist: setuptools>=78.1.1
 Requires-Dist: apscheduler
 Requires-Dist: langdetect
 Requires-Dist: standard-nntplib
+Requires-Dist: cachetools
 Provides-Extra: orjson
 Requires-Dist: orjson; extra == "orjson"
