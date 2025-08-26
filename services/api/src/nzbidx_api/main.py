@@ -32,6 +32,7 @@ except Exception:  # pragma: no cover - optional dependency
 
         def __init__(self, scope: dict) -> None:
             self.query_params = scope.get("query_params", {})
+            self.scope = scope
 
     class Route:  # type: ignore
         def __init__(
@@ -546,11 +547,7 @@ async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
     api_key = params.get("apikey")
-    raw_qs = getattr(request, "query_string", None)
-    if isinstance(raw_qs, (bytes, bytearray)):
-        qs_len = len(raw_qs)
-    else:
-        qs_len = sum(len(k) + len(v) + 1 for k, v in params.items())
+    qs_len = len(request.scope.get("query_string", b""))
     if qs_len > settings.max_query_bytes:
         return invalid_params("query string too long")
     for value in params.values():
