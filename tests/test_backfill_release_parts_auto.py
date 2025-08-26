@@ -36,7 +36,7 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
     monkeypatch.setattr(
-        backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)]
+        backfill_mod, "_fetch_segments", lambda _id, _group, _client: [(1, "m1", 5)]
     )
     monkeypatch.setattr(backfill_mod.config, "NNTP_GROUPS", ["g1"], raising=False)
 

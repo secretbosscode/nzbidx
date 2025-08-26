@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Optional, Tuple
@@ -11,38 +12,84 @@ logger = logging.getLogger(__name__)
 
 _CGROUP_ROOT = Path("/sys/fs/cgroup")
 
-_MEMORY_CURRENT_FILE = _CGROUP_ROOT / "memory.current"
-if _MEMORY_CURRENT_FILE.exists():
-    _USED_PATH = _MEMORY_CURRENT_FILE
-    _LIMIT_PATH = _CGROUP_ROOT / "memory.max"
-else:
-    _USED_PATH = _CGROUP_ROOT / "memory.usage_in_bytes"
-    _LIMIT_PATH = _CGROUP_ROOT / "memory.limit_in_bytes"
+
+_MEMORY_USED_FD: Optional[int] = None
+_MEMORY_LIMIT_FD: Optional[int] = None
+_MEMORY_ROOT: Optional[Path] = None
 
 
-def _read(path: Path) -> Optional[int]:
+def _open_memory_files(root: Path) -> None:
+    """Open cgroup memory usage and limit files and keep their descriptors."""
+    global _MEMORY_USED_FD, _MEMORY_LIMIT_FD, _MEMORY_ROOT
+
+    for fd in (_MEMORY_USED_FD, _MEMORY_LIMIT_FD):
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    _MEMORY_USED_FD = _MEMORY_LIMIT_FD = None
+
     try:
-        return int(path.read_text().strip())
-    except (FileNotFoundError, ValueError):
+        _MEMORY_USED_FD = os.open(root / "memory.current", os.O_RDONLY | os.O_CLOEXEC)
+    except FileNotFoundError:
+        try:
+            _MEMORY_USED_FD = os.open(
+                root / "memory.usage_in_bytes", os.O_RDONLY | os.O_CLOEXEC
+            )
+        except FileNotFoundError:
+            _MEMORY_USED_FD = None
+        try:
+            _MEMORY_LIMIT_FD = os.open(
+                root / "memory.limit_in_bytes", os.O_RDONLY | os.O_CLOEXEC
+            )
+        except FileNotFoundError:
+            _MEMORY_LIMIT_FD = None
+    else:
+        try:
+            _MEMORY_LIMIT_FD = os.open(root / "memory.max", os.O_RDONLY | os.O_CLOEXEC)
+        except FileNotFoundError:
+            _MEMORY_LIMIT_FD = None
+
+    _MEMORY_ROOT = root
+
+
+def _read_fd(fd: Optional[int], *, is_used: bool) -> Optional[int]:
+    global _MEMORY_USED_FD, _MEMORY_LIMIT_FD
+    if fd is None:
+        return None
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        data = os.read(fd, 32)
+        return int(data.strip())
+    except (OSError, ValueError):
+        try:
+            os.close(fd)
+        finally:
+            if is_used:
+                _MEMORY_USED_FD = None
+            else:
+                _MEMORY_LIMIT_FD = None
         return None
 
 
-def get_memory_stats(
-    root: Optional[Path] = None,
-) -> Tuple[Optional[int], Optional[int]]:
+def get_memory_stats(root: Path = _CGROUP_ROOT) -> Tuple[Optional[int], Optional[int]]:
     """Return memory usage and limit from cgroup files.
 
-    ``root`` optionally overrides the directory containing the cgroup files
-    determined at import time.  Returns ``(used, limit)`` in bytes. ``limit``
-    is ``None`` if unlimited or unavailable.
+    ``root`` is the cgroup directory.  The function detects both cgroup v2
+    (``memory.current``/``memory.max``) and v1
+    (``memory.usage_in_bytes``/``memory.limit_in_bytes``).  The relevant files
+    are opened once and reused between calls.  Returns ``(used, limit)`` in
+    bytes. ``limit`` is ``None`` if unlimited or unavailable.
     """
 
-    if root is None:
-        used_path, limit_path = _USED_PATH, _LIMIT_PATH
-    else:
-        used_path, limit_path = root / _USED_PATH.name, root / _LIMIT_PATH.name
-    used = _read(used_path)
-    limit = _read(limit_path)
+    global _MEMORY_ROOT
+    if root != _MEMORY_ROOT:
+        _open_memory_files(root)
+
+    used = _read_fd(_MEMORY_USED_FD, is_used=True)
+    limit = _read_fd(_MEMORY_LIMIT_FD, is_used=False)
     if limit is not None and limit > 1 << 60:  # treat very large values as unlimited
         limit = None
     return used, limit

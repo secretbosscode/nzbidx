@@ -29,12 +29,6 @@ logger = logging.getLogger(__name__)
 MAX_LIMIT = settings.max_limit
 MAX_OFFSET = settings.max_offset
 
-ORDER_MAP = {
-    "date": "posted_at",
-    "size": "size_bytes",
-    "title": "norm_title",
-}
-
 
 def _format_pubdate(dt: datetime | str | None) -> str:
     """Return ``dt`` converted to RFC 2822 format."""
@@ -125,8 +119,13 @@ async def search_releases_async(
         conditions.append("tags LIKE :tag")
         params["tag"] = f"{tag}%"
 
+    order_map = {
+        "date": "posted_at",
+        "size": "size_bytes",
+        "title": "norm_title",
+    }
     sort_key = sort or "date"
-    sort_field = ORDER_MAP.get(sort_key, "posted_at")
+    sort_field = order_map.get(sort_key, "posted_at")
 
     where_clause = " AND ".join(conditions)
     sql = text(
@@ -141,14 +140,33 @@ async def search_releases_async(
 
     items: List[Dict[str, str]] = []
 
-    rows = []
     max_attempts = 2
     for attempt in range(1, max_attempts + 1):
+        items = []
+        skip_count = 0
         start_time = time.monotonic()
         try:
             async with engine.connect() as conn:
                 result = await conn.execute(sql, params)
-                rows = result.fetchall()
+                async for row in result:
+                    size = row.size_bytes
+                    if size is None or size <= 0:
+                        skip_count += 1
+                        continue
+                    release_id = str(row.id)
+                    link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
+                    if api_key:
+                        link += f"&apikey={quote(api_key, safe='')}"
+                    items.append(
+                        {
+                            "title": row.norm_title or "",
+                            "guid": release_id,
+                            "pubDate": _format_pubdate(row.posted_at),
+                            "category": row.category or "",
+                            "link": link,
+                            "size": str(size),
+                        }
+                    )
             duration_ms = int((time.monotonic() - start_time) * 1000)
             inc("search_db_query_ms", value=duration_ms)
             logger.info(
@@ -178,26 +196,6 @@ async def search_releases_async(
             logger.warning("search_query_failed", extra=extra_info)
             raise
 
-    skip_count = 0
-    for row in rows:
-        size = row.size_bytes
-        if size is None or size <= 0:
-            skip_count += 1
-            continue
-        release_id = str(row.id)
-        link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
-        if api_key:
-            link += f"&apikey={quote(api_key, safe='')}"
-        items.append(
-            {
-                "title": row.norm_title or "",
-                "guid": release_id,
-                "pubDate": _format_pubdate(row.posted_at),
-                "category": row.category or "",
-                "link": link,
-                "size": str(size),
-            }
-        )
     if skip_count:
         logger.info("search_invalid_size", extra={"skip_count": skip_count})
     return items
