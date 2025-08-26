@@ -175,6 +175,11 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
 
 GROUP_CATEGORY_HINTS: list[tuple[str, str]] = _load_group_category_hints()
 
+# Precompiled regex to quickly identify hint tokens in group names
+hint_tokens = [token for token, _ in GROUP_CATEGORY_HINTS]
+GROUP_HINT_RE = re.compile("|".join(map(re.escape, hint_tokens)))
+HINT_TOKEN_MAP = dict(GROUP_CATEGORY_HINTS)
+
 
 DEFAULT_ADULT_KEYWORDS = (
     "brazzers",
@@ -681,19 +686,20 @@ def _infer_category(
 
     if group:
         g = group.lower()
-        for key, cat in GROUP_CATEGORY_HINTS:
-            if key in g:
-                if cat == "xxx":
-                    if "dvd" in s:
-                        return CATEGORY_MAP["xxx_dvd"]
-                    if "wmv" in s:
-                        return CATEGORY_MAP["xxx_wmv"]
-                    if "xvid" in s:
-                        return CATEGORY_MAP["xxx_xvid"]
-                    if "x264" in s or "h264" in s:
-                        return CATEGORY_MAP["xxx_x264"]
-                    return CATEGORY_MAP["xxx"]
-                return CATEGORY_MAP[cat]
+        match = GROUP_HINT_RE.search(g)
+        if match:
+            cat = HINT_TOKEN_MAP[match.group()]
+            if cat == "xxx":
+                if "dvd" in s:
+                    return CATEGORY_MAP["xxx_dvd"]
+                if "wmv" in s:
+                    return CATEGORY_MAP["xxx_wmv"]
+                if "xvid" in s:
+                    return CATEGORY_MAP["xxx_xvid"]
+                if "x264" in s or "h264" in s:
+                    return CATEGORY_MAP["xxx_x264"]
+                return CATEGORY_MAP["xxx"]
+            return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
     tag_list = extract_tags(subject)
