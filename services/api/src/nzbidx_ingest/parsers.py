@@ -140,7 +140,7 @@ def _clean_language_text(text: str) -> str:
     """
     text = _URL_RE.sub(" ", text)
     text = _NON_LETTER_RE.sub(" ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return WHITESPACE_RE.sub(" ", text).strip()
 
 
 def extract_music_tags(subject: str) -> dict[str, str]:
