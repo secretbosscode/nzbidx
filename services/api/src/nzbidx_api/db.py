@@ -391,6 +391,11 @@ def get_connection() -> Any:
     return _conn
 
 
+def sql_placeholder(conn: Any) -> str:
+    """Return the DB-API parameter placeholder for ``conn``."""
+    return "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+
+
 def close_connection() -> None:
     """Close the persistent synchronous connection if it exists."""
 

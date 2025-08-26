@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
 from . import config
-from .db import get_connection
+from .db import get_connection, sql_placeholder
 from .backfill_release_parts import backfill_release_parts
 
 # Collect database exception types that should be handled.  Optional
@@ -46,9 +46,7 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
     try:
         rid = int(release_id)
         with conn.cursor() as cur:
-            placeholder = (
-                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            )
+            placeholder = sql_placeholder(conn)
             cur.execute(
                 f"SELECT segments FROM release WHERE id = {placeholder}",
                 (rid,),

@@ -13,6 +13,7 @@ from nzbidx_ingest.nntp_client import NNTPClient
 from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
 from nzbidx_ingest.segment_schema import validate_segment_schema
 from . import config
+from .db import sql_placeholder
 
 log = logging.getLogger(__name__)
 
@@ -90,9 +91,7 @@ def backfill_release_parts(
         _cursor = conn.cursor()
         cursor_cm = _cursor if hasattr(_cursor, "__enter__") else closing(_cursor)
         with cursor_cm as cur:
-            placeholder = (
-                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            )
+            placeholder = sql_placeholder(conn)
             base_sql = "SELECT id, norm_title, source_group, segments FROM release"
             params: list[int] | tuple[int, ...] = []
             if auto and not release_ids:
