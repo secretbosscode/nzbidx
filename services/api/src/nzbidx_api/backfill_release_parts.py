@@ -38,6 +38,7 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
         segments: list[tuple[int, str, int]] = []
         target = release_id.lower()
         seen_numbers: set[int] = set()
+        max_seen = 0
         for header in headers:
             subject = str(header.get("subject", ""))
             if normalize_subject(subject).lower() != target:
@@ -55,11 +56,9 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
                 continue
             segments.append((number, msg_id, size))
             seen_numbers.add(number)
-            if (
-                1 in seen_numbers
-                and len(seen_numbers) == max(seen_numbers)
-                and max(seen_numbers) > 1
-            ):
+            if number > max_seen:
+                max_seen = number
+            if 1 in seen_numbers and len(seen_numbers) == max_seen and max_seen > 1:
                 break
         if segments:
             segments.sort(key=lambda s: s[0])
