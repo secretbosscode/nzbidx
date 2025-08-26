@@ -16,6 +16,7 @@ LANGUAGE_TOKENS: dict[str, str] = {
 }
 
 _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
+TAG_SPLIT_RE = re.compile(r"[\s,]+")
 
 # Regexes used to sanitize text before automatic language detection. We strip
 # URLs and anything that is not an ASCII letter so short subjects with a lot of
@@ -31,7 +32,7 @@ def extract_tags(subject: str) -> list[str]:
     tags: list[str] = []
     for match in _TAG_RE.finditer(subject):
         content = match.group(1)
-        for tag in re.split(r"[\s,]+", content):
+        for tag in TAG_SPLIT_RE.split(content):
             tag = tag.strip().lower()
             if tag:
                 tags.append(tag)
@@ -190,34 +191,16 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
     return {}
 
 
-def normalize_subject(
-    subject: str, *, with_tags: bool = False
-) -> tuple[str, list[str]] | str:
+@lru_cache(maxsize=4096)
+def _normalize_cached(subject: str) -> str:
     """Return a cleaned, human-readable version of a Usenet subject line.
 
-    Lightweight normalization:
-    - Convert separators ('.', '_') to spaces
-    - Remove explicit 'yEnc' markers
-    - Drop part counters like '(01/15)' or '[12345/12346]'
-    - Remove language tokens (e.g., '[FRENCH]', '[GERMAN]', '[ITA]')
-    - Remove common filler words (e.g., 'repost', 'sample')
-    - Collapse whitespace and trim separators
-
-    Also extracts hints via extract_* helpers and returns them as lowercase tags
-    (when ``with_tags=True``).
+    This helper performs the normalization steps only and is cached so repeated
+    calls for the same ``subject`` are inexpensive. Tag extraction happens
+    separately in :func:`normalize_subject`.
     """
     if not subject:
-        return ("", []) if with_tags else ""
-
-    # Extract bracketed tags and structured hints before cleaning. The specific
-    # ``extract_*`` helpers operate on the raw subject, so run them before we
-    # strip punctuation.
-    generic_tags = extract_tags(subject)
-    tag_dict: dict[str, str] = {}
-    for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
-        tag_dict.update(extractor(subject))
-    for t in generic_tags:
-        tag_dict[t] = t
+        return ""
 
     # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")
@@ -243,7 +226,7 @@ def normalize_subject(
     )
 
     # Strip trailing segment markers and archive extensions commonly found in
-    # multipart releases.  Subjects like ``Name.part01.rar`` or ``Name.part1``
+    # multipart releases. Subjects like ``Name.part01.rar`` or ``Name.part1``
     # should normalize to ``Name`` so all segments dedupe to a single entry.
     cleaned = re.sub(r"(?i)\bpart\s*\d+\b", "", cleaned)
     cleaned = re.sub(r"(?i)\b(rar|par2|zip)\b", "", cleaned)
@@ -252,12 +235,43 @@ def normalize_subject(
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
 
-    tags = sorted(
-        {
-            *generic_tags,
-            *[value.lower() for value in tag_dict.values() if value],
-        }
-    )
+    return cleaned
+
+
+def normalize_subject(
+    subject: str, *, with_tags: bool = False
+) -> tuple[str, list[str]] | str:
+    """Return a cleaned, human-readable version of a Usenet subject line.
+
+    Lightweight normalization:
+    - Convert separators ('.', '_') to spaces
+    - Remove explicit 'yEnc' markers
+    - Drop part counters like '(01/15)' or '[12345/12346]'
+    - Remove language tokens (e.g., '[FRENCH]', '[GERMAN]', '[ITA]')
+    - Remove common filler words (e.g., 'repost', 'sample')
+    - Collapse whitespace and trim separators
+
+    Also extracts hints via extract_* helpers and returns them as lowercase tags
+    (when ``with_tags=True``).
+    """
+    if not subject:
+        return ("", []) if with_tags else ""
+
+    cleaned = _normalize_cached(subject)
+
     if with_tags:
+        generic_tags = extract_tags(subject)
+        tag_dict: dict[str, str] = {}
+        for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
+            tag_dict.update(extractor(subject))
+        for t in generic_tags:
+            tag_dict[t] = t
+        tags = sorted(
+            {
+                *generic_tags,
+                *[value.lower() for value in tag_dict.values() if value],
+            }
+        )
         return cleaned, tags
+
     return cleaned
