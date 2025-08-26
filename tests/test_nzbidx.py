@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import asyncio
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import sqlite3
 import threading
@@ -472,9 +472,9 @@ def test_repeated_nzb_fetch_reuses_db_connection(monkeypatch) -> None:
     """Subsequent NZB builds should reuse the same DB connection."""
 
     calls = 0
-    seg_data = json.dumps(
+    seg_data = orjson.dumps(
         [{"number": 1, "message_id": "m1", "group": "g", "size": 123}]
-    )
+    ).decode()
 
     class DummyCursor:
         def __enter__(self):  # type: ignore[override]
@@ -528,11 +528,11 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
 def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
     """Segments should be fetched using the numeric release id."""
 
-    seg_data = json.dumps(
+    seg_data = orjson.dumps(
         [
             {"number": 1, "message_id": "m1", "group": "g", "size": 123},
         ]
-    )
+    ).decode()
     executed: dict[str, object] = {}
 
     class DummyCursor:
@@ -625,7 +625,7 @@ def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 404
     assert "Retry-After" not in resp.headers
-    assert json.loads(resp.body) == {
+    assert orjson.loads(resp.body) == {
         "error": {
             "code": "nzb_not_found",
             "message": "No segments found for release 1",
@@ -643,7 +643,7 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 503
-    assert json.loads(resp.body) == {
+    assert orjson.loads(resp.body) == {
         "error": {"code": "nzb_unavailable", "message": "database query failed"}
     }
 
@@ -688,7 +688,7 @@ def test_infer_category_from_group() -> None:
 def test_group_category_hints_file(tmp_path, monkeypatch) -> None:
     """Hints should be extendable via an external config file."""
     cfg = tmp_path / "hints.json"
-    cfg.write_text(json.dumps([["foo", "xxx"]]))
+    cfg.write_text(orjson.dumps([["foo", "xxx"]]).decode())
     monkeypatch.setenv("GROUP_CATEGORY_HINTS_FILE", str(cfg))
     reloaded = importlib.reload(main)
     try:
@@ -706,12 +706,12 @@ def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
     """caps.xml should reflect configured categories."""
     cfg = tmp_path / "cats.json"
     cfg.write_text(
-        json.dumps(
+        orjson.dumps(
             [
                 {"id": 123, "name": "Foo"},
                 {"id": 6000, "name": "Adult"},
             ]
-        ),
+        ).decode(),
         encoding="utf-8",
     )
     monkeypatch.setenv("CATEGORY_CONFIG", str(cfg))
