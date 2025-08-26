@@ -1,12 +1,12 @@
 """Helpers for the Newznab API."""
 
 import asyncio
-import json
 import os
 import html
 import logging
 from pathlib import Path
 from typing import Any, Optional
+from nzbidx_api.json_utils import orjson
 from datetime import datetime, timezone
 from email.utils import format_datetime
 
@@ -121,7 +121,7 @@ def _load_categories() -> list[dict[str, str]]:
     cfg_path = os.getenv("CATEGORY_CONFIG")
     if cfg_path:
         try:
-            data = json.loads(Path(cfg_path).read_text(encoding="utf-8"))
+            data = orjson.loads(Path(cfg_path).read_bytes())
             return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
         except FileNotFoundError:
             log.warning("category config file not found")
