@@ -35,6 +35,13 @@ ORDER_MAP = {
     "title": "norm_title",
 }
 
+if text:
+    CHECK_SEARCH_VECTOR = text(
+        """SELECT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'release'::regclass AND attname = 'search_vector')"""
+    )
+else:  # pragma: no cover - optional dependency
+    CHECK_SEARCH_VECTOR = None  # type: ignore[assignment]
+
 
 def _format_pubdate(dt: datetime | str | None) -> str:
     """Return ``dt`` converted to RFC 2822 format."""
@@ -84,17 +91,7 @@ async def search_releases_async(
     if q:
         try:
             async with engine.connect() as conn:
-                result = await conn.execute(
-                    text(
-                        """
-                        SELECT EXISTS (
-                            SELECT 1 FROM pg_attribute
-                            WHERE attrelid = 'release'::regclass
-                            AND attname = 'search_vector'
-                        )
-                        """
-                    )
-                )
+                result = await conn.execute(CHECK_SEARCH_VECTOR)
                 has_vector = bool(result.scalar())
         except Exception as exc:
             logger.warning("search_vector_check_failed", extra={"error": str(exc)})

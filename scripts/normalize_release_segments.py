@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+from nzbidx_api.json_utils import orjson
 import sys
 from pathlib import Path
 
@@ -13,7 +14,6 @@ sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.segment_schema import validate_segment_schema
-from nzbidx_api.json_utils import orjson
 
 BATCH_SIZE = 1000
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import sqlite3
 from nzbidx_api import backfill_release_parts as backfill_mod
 
@@ -36,7 +36,7 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
     monkeypatch.setattr(
-        backfill_mod, "_fetch_segments", lambda _id, _group: [(1, "m1", 5)]
+        backfill_mod, "_fetch_segments", lambda _id, _group, _client: [(1, "m1", 5)]
     )
     monkeypatch.setattr(backfill_mod.config, "NNTP_GROUPS", ["g1"], raising=False)
 
@@ -46,9 +46,9 @@ def test_backfill_specific_ids(tmp_path, monkeypatch) -> None:
     conn2 = sqlite3.connect(dbfile)
     cur2 = conn2.cursor()
     cur2.execute("SELECT segments FROM release WHERE id = 1")
-    seg1 = json.loads(cur2.fetchone()[0])
+    seg1 = orjson.loads(cur2.fetchone()[0])
     assert seg1[0]["message_id"] == "m1"
     cur2.execute("SELECT segments FROM release WHERE id = 2")
-    seg2 = json.loads(cur2.fetchone()[0])
+    seg2 = orjson.loads(cur2.fetchone()[0])
     assert seg2[0]["message_id"] == "m2"
     conn2.close()

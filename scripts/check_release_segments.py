@@ -10,6 +10,7 @@ message-ids.
 from __future__ import annotations
 
 import argparse
+from nzbidx_api.json_utils import orjson
 import sys
 from pathlib import Path
 
@@ -18,7 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_api.db import get_connection
-from nzbidx_api.json_utils import orjson
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helper

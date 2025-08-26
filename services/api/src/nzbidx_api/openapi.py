@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from .orjson_response import ORJSONResponse
+from .orjson_response import ORJSONResponse, Response  # noqa: F401
+from .json_utils import orjson
 
 OPENAPI = {
     "openapi": "3.0.0",
@@ -44,6 +45,8 @@ OPENAPI = {
     },
 }
 
+OPENAPI_BYTES = orjson.dumps(OPENAPI)
+
 
 def openapi_json(request):
-    return ORJSONResponse(OPENAPI)
+    return Response(OPENAPI_BYTES, media_type="application/json")

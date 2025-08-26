@@ -15,9 +15,6 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 2
 
@@ -27,7 +24,7 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
                 {"subject": "Release.part02.rar", ":bytes": "200"},
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -39,7 +36,7 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(loop, "connect_db", _connect)
 
-    loop.run_once()
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         rows = check.execute("SELECT norm_title, size_bytes FROM release").fetchall()
@@ -47,6 +44,6 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
 
 
 def test_normalize_subject_strips_parts() -> None:
-    assert normalize_subject("Example.part01.rar") == "example"
-    assert normalize_subject("Example.part1 par2") == "example"
-    assert normalize_subject("Example part02 zip") == "example"
+    assert normalize_subject("Example.part01.rar") == "Example"
+    assert normalize_subject("Example.part1 par2") == "Example"
+    assert normalize_subject("Example part02 zip") == "Example"

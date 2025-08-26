@@ -11,14 +11,16 @@ except Exception:  # pragma: no cover - minimal fallback
 
         def __init__(
             self,
-            content: str,
+            content: bytes | str,
             *,
             status_code: int = 200,
             media_type: str = "text/plain",
             headers: dict[str, str] | None = None,
         ) -> None:
             self.status_code = status_code
-            self.body = content.encode("utf-8")
+            self.body = (
+                content if isinstance(content, bytes) else content.encode("utf-8")
+            )
             self.headers = {"content-type": media_type}
             if headers:
                 self.headers.update(headers)
@@ -31,7 +33,7 @@ class ORJSONResponse(StarletteResponse):  # pragma: no cover - simple wrapper
 
     def __init__(self, content: dict, *, status_code: int = 200) -> None:
         super().__init__(
-            orjson.dumps(content).decode(),
+            orjson.dumps(content),
             status_code=status_code,
             media_type=self.media_type,
         )

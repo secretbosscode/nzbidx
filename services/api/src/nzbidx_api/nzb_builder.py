@@ -7,7 +7,7 @@ exist the function raises :class:`newznab.NzbFetchError`.
 
 from __future__ import annotations
 
-from .json_utils import orjson
+from nzbidx_api.json_utils import orjson
 import logging
 import sqlite3
 import xml.etree.ElementTree as ET
@@ -63,9 +63,7 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             raise LookupError("release has no segments")
         try:
             data = (
-                orjson.loads(seg_data)
-                if isinstance(seg_data, (str, bytes))
-                else seg_data
+                orjson.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
         except Exception:
             log.warning("invalid_segments_json", extra={"release_id": rid})
@@ -144,8 +142,8 @@ def build_nzb_for_release(release_id: str) -> str:
     # Ensure environment changes to timeouts are honored across calls.
     config.settings.reload()
 
-    # ``validate_nntp_config`` is cached so repeated calls are inexpensive.
     missing = config.validate_nntp_config()
+    _groups = config.NNTP_GROUPS  # ensure groups are loaded
     if missing:
         raise newznab.NntpConfigError(
             f"missing NNTP configuration: {', '.join(missing)}"

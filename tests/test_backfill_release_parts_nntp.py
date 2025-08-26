@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import sqlite3
 
 import pytest
@@ -9,6 +9,12 @@ from nzbidx_api import backfill_release_parts as backfill_mod
 
 
 class DummyClient:
+    def connect(self) -> None:  # pragma: no cover - trivial
+        pass
+
+    def quit(self) -> None:  # pragma: no cover - trivial
+        pass
+
     def high_water_mark(self, group: str) -> int:
         assert group == "alt.test"
         return 2
@@ -57,7 +63,7 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
     cur2 = conn2.cursor()
     cur2.execute("SELECT segments, part_count, size_bytes FROM release WHERE id = 1")
     seg_json, part_count, size_bytes = cur2.fetchone()
-    segments = json.loads(seg_json)
+    segments = orjson.loads(seg_json)
     assert segments[0]["message_id"] == "m1"
     assert segments[1]["message_id"] == "m2"
     assert part_count == 2
@@ -67,12 +73,20 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
 
 def test_fetch_segments_connection_error(monkeypatch) -> None:
     class BoomClient:
+        def connect(self) -> None:  # pragma: no cover - trivial
+            pass
+
+        def quit(self) -> None:  # pragma: no cover - trivial
+            pass
+
         def high_water_mark(self, group: str) -> int:
             raise RuntimeError("boom")
 
-    monkeypatch.setattr(backfill_mod, "NNTPClient", lambda: BoomClient())
+        def xover(self, group: str, start: int, end: int):  # pragma: no cover - unused
+            return []
+
     with pytest.raises(ConnectionError, match="boom"):
-        backfill_mod._fetch_segments("rel", "alt.test")
+        backfill_mod._fetch_segments("rel", "alt.test", BoomClient())
 
 
 def test_backfill_propagates_connection_error(tmp_path, monkeypatch) -> None:
@@ -100,7 +114,7 @@ def test_backfill_propagates_connection_error(tmp_path, monkeypatch) -> None:
 
     monkeypatch.setattr(backfill_mod, "connect_db", lambda: sqlite3.connect(dbfile))
 
-    def _fail(_id: str, _group: str):
+    def _fail(_id: str, _group: str, _client):
         raise ConnectionError("nntp fail")
 
     monkeypatch.setattr(backfill_mod, "_fetch_segments", _fail)

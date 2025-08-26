@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import os
 import re
@@ -147,7 +147,7 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
     cfg = os.getenv("GROUP_CATEGORY_HINTS_FILE")
     if cfg:
         try:
-            data = json.loads(Path(cfg).read_text())
+            data = orjson.loads(Path(cfg).read_text())
             if isinstance(data, dict):
                 extra = [(k, v) for k, v in data.items()]
             else:

@@ -6,9 +6,9 @@ import logging
 import random
 import time
 import asyncio
-import inspect
 import threading
-from typing import Callable, Generic, TypeVar, Awaitable
+from collections.abc import Awaitable
+from typing import Callable, Generic, TypeVar
 
 from .config import settings
 from .metrics_log import inc_breaker_open
@@ -163,7 +163,7 @@ async def call_with_retry_async(
                 if breaker.is_open():
                     raise CircuitOpenError("circuit open")
                 result = func(*args, **kwargs)
-                if inspect.isawaitable(result):
+                if isinstance(result, Awaitable):
                     result = await result
                 breaker.record_success()
                 state = "open" if breaker.is_open() else "closed"
