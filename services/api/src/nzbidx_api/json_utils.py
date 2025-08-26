@@ -18,6 +18,19 @@ from typing import Any
 __all__ = ["orjson", "get_json_module"]
 
 
+# Wrapper to emulate the :mod:`orjson` interface using the standard library.
+def _stdlib_wrapper() -> SimpleNamespace:
+    return SimpleNamespace(
+        dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
+        loads=lambda s, **kw: json.loads(
+            s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw
+        ),
+    )
+
+
+_STDLIB_JSON = _stdlib_wrapper()
+
+
 def get_json_module() -> Any:
     """Return the JSON implementation to use.
 
@@ -27,21 +40,13 @@ def get_json_module() -> Any:
     back to the same wrapper if the import fails.
     """
 
-    def _stdlib_wrapper() -> SimpleNamespace:
-        return SimpleNamespace(
-            dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
-            loads=lambda s, **kw: json.loads(
-                s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw
-            ),
-        )
-
     if os.getenv("NZBIDX_USE_STD_JSON", "1") != "0":
-        return _stdlib_wrapper()
+        return _STDLIB_JSON
 
     try:  # pragma: no cover - optional dependency
         import orjson  # type: ignore
     except Exception:  # pragma: no cover - fallback when orjson is absent
-        return _stdlib_wrapper()
+        return _STDLIB_JSON
     else:
         return orjson
 
