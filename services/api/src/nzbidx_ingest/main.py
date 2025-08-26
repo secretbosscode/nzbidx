@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 import sqlite3
 from collections import defaultdict
-from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime, timezone
+from nzbidx_api.json_utils import orjson
 
 try:  # pragma: no cover - optional dependency
     from dateutil import parser as dateutil_parser
@@ -35,6 +34,7 @@ from .db_migrations import (
     ensure_release_adult_year_partition,
     migrate_release_adult_partitions,
 )
+from nzbidx_api.db import sql_placeholder
 from nzbidx_migrations import apply_sync
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,7 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
     cfg = os.getenv("GROUP_CATEGORY_HINTS_FILE")
     if cfg:
         try:
-            data = json.loads(Path(cfg).read_text())
+            data = orjson.loads(Path(cfg).read_bytes())
             if isinstance(data, dict):
                 extra = [(k, v) for k, v in data.items()]
             else:
@@ -175,11 +175,6 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
 
 GROUP_CATEGORY_HINTS: list[tuple[str, str]] = _load_group_category_hints()
 
-# Precompiled regex to quickly identify hint tokens in group names
-hint_tokens = [token for token, _ in GROUP_CATEGORY_HINTS]
-GROUP_HINT_RE = re.compile("|".join(map(re.escape, hint_tokens)))
-HINT_TOKEN_MAP = dict(GROUP_CATEGORY_HINTS)
-
 
 DEFAULT_ADULT_KEYWORDS = (
     "brazzers",
@@ -197,19 +192,34 @@ ADULT_KEYWORDS = tuple(
     for k in os.getenv("ADULT_KEYWORDS", ",".join(DEFAULT_ADULT_KEYWORDS)).split(",")
     if k.strip()
 )
-ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
 
-# Precompiled regular expression for matching TV episode identifiers like "S01E01".
-TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
+# Precompiled regex patterns for category detection
+MOVIES_HD_RE = re.compile(
+    "|".join(
+        map(
+            re.escape,
+            ("1080p", "720p", "x264", "x265", "hdrip", "webrip", "hd"),
+        )
+    )
+)
+MOVIES_SD_RE = re.compile(
+    "|".join(map(re.escape, ("dvdrip", "xvid", "cam", "ts", "sd")))
+)
+TV_HD_RE = re.compile(
+    "|".join(map(re.escape, ("1080p", "720p", "x264", "x265", "hd")))
+)
+TV_SD_RE = re.compile("|".join(map(re.escape, ("xvid", "dvdrip", "sd"))))
+BLURAY_RE = re.compile("|".join(map(re.escape, ("bluray", "blu-ray"))))
+AUDIO_LOSSLESS_RE = re.compile("|".join(map(re.escape, ("flac", "lossless"))))
+AUDIO_MP3_RE = re.compile("|".join(map(re.escape, ("mp3", "aac", "m4a"))))
+COMIC_RE = re.compile("|".join(map(re.escape, ("cbz", "cbr", "comic"))))
+EBOOK_RE = re.compile("|".join(map(re.escape, ("epub", "mobi", "pdf", "ebook", "isbn"))))
 
 try:  # pragma: no cover - optional dependency
     from sqlalchemy import create_engine, text
 except Exception:  # pragma: no cover - optional dependency
     create_engine = None  # type: ignore
     text = None  # type: ignore
-
-
-_SCHEMA_CHECKED: set[str] = set()
 
 
 def connect_db() -> Any:
@@ -239,11 +249,8 @@ def connect_db() -> Any:
             raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
         parsed = urlparse(url)
 
-        def _connect(u: str, verify: bool = True) -> Any:
+        def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
-
-            if not verify:
-                return engine.raw_connection()
 
             # Ensure the ``release`` table is partitioned before attempting any
             # migrations.  If the table exists but is not partitioned, attempt to
@@ -399,13 +406,8 @@ def connect_db() -> Any:
                     apply_sync(conn, text)
             return engine.raw_connection()
 
-        cache_key = url
-        verify = cache_key not in _SCHEMA_CHECKED
         try:
-            conn = _connect(url, verify=verify)
-            if verify:
-                _SCHEMA_CHECKED.add(cache_key)
-            return conn
+            return _connect(url)
         except ModuleNotFoundError as exc:  # pragma: no cover - missing driver
             logger.warning("psycopg_unavailable", extra={"error": str(exc)})
             raise RuntimeError(
@@ -423,10 +425,7 @@ def connect_db() -> Any:
             with engine.connect() as conn:  # type: ignore[call-arg]
                 conn.execute(text(f'CREATE DATABASE "{dbname}"'))
             engine.dispose()
-            conn = _connect(url, verify=verify)
-            if verify:
-                _SCHEMA_CHECKED.add(cache_key)
-            return conn
+            return _connect(url)
 
     # Treat remaining URLs as SQLite database files.  Only attempt to create
     # directories for plain file paths; URLs with a scheme (``foo://``) should
@@ -434,51 +433,47 @@ def connect_db() -> Any:
     if url == ":memory":
         raise RuntimeError("DATABASE_URL must point to a persistent database")
 
-    cache_key = url
-    verify = cache_key not in _SCHEMA_CHECKED
     if url != ":memory:" and "://" not in url:
         path = Path(url)
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(url)
-    if verify:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS release (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                norm_title TEXT,
-                category TEXT,
-                category_id INT,
-                language TEXT NOT NULL DEFAULT 'und',
-                tags TEXT NOT NULL DEFAULT '',
-                source_group TEXT,
-                size_bytes BIGINT,
-                posted_at TIMESTAMPTZ,
-                segments TEXT,
-                has_parts BOOLEAN NOT NULL DEFAULT 0,
-                part_count INT NOT NULL DEFAULT 0
-            )
-            """,
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS release (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            norm_title TEXT,
+            category TEXT,
+            category_id INT,
+            language TEXT NOT NULL DEFAULT 'und',
+            tags TEXT NOT NULL DEFAULT '',
+            source_group TEXT,
+            size_bytes BIGINT,
+            posted_at TIMESTAMPTZ,
+            segments TEXT,
+            has_parts BOOLEAN NOT NULL DEFAULT 0,
+            part_count INT NOT NULL DEFAULT 0
         )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)")
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
-        )
-        _SCHEMA_CHECKED.add(cache_key)
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
+    )
     return conn
 
 
@@ -508,15 +503,13 @@ def insert_release(
 ) -> set[str]:
     """Insert one or more releases and return the inserted titles."""
 
-    is_sqlite = conn.__class__.__module__.startswith("sqlite3")
-    placeholder = "?" if is_sqlite else "%s"
-
     def _clean(text: Optional[str]) -> Optional[str]:
         if text is None:
             return None
         return text.encode("utf-8", "surrogateescape").decode("utf-8", "ignore")
 
     cur = conn.cursor()
+    placeholder = sql_placeholder(conn)
 
     items: list[
         tuple[
@@ -621,7 +614,7 @@ def insert_release(
             updates.append((row[7], row[0], row[2]))
     inserted = {row[0] for row in to_insert}
     if to_insert:
-        if is_sqlite:
+        if placeholder == "?":
             sqlite_rows = [
                 (
                     row[0],
@@ -666,7 +659,7 @@ def insert_release(
                 )
     # Ensure posted_at is updated for existing rows
     if updates:
-        if is_sqlite:
+        if placeholder == "?":
             sqlite_updates = [
                 (u[0].isoformat() if u[0] else None, u[1], u[2]) for u in updates
             ]
@@ -685,57 +678,34 @@ def insert_release(
 
 def prune_group(conn: Any, group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
-    prune_groups(conn, [group])
-
-
-def prune_groups(conn: Any, groups: Iterable[str]) -> None:
-    """Remove all releases associated with ``groups`` from storage."""
     cur = conn.cursor()
-    group_list = list(groups)
-    if not group_list:
-        return
-    if conn.__class__.__module__.startswith("sqlite3"):
-        placeholders = ",".join(["?"] * len(group_list))
-        cur.execute(
-            f"DELETE FROM release WHERE source_group IN ({placeholders})",
-            group_list,
-        )
-    else:
-        cur.execute(
-            "DELETE FROM release WHERE source_group = ANY(%s)",
-            (group_list,),
-        )
+    placeholder = sql_placeholder(conn)
+    cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
 
 
-@lru_cache(maxsize=4096)
-def _infer_category(
-    subject: str,
-    group: Optional[str] = None,
-) -> Optional[str]:
+def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
 
     if group:
         g = group.lower()
-        match = GROUP_HINT_RE.search(g)
-        if match:
-            cat = HINT_TOKEN_MAP[match.group()]
-            if cat == "xxx":
-                if "dvd" in s:
-                    return CATEGORY_MAP["xxx_dvd"]
-                if "wmv" in s:
-                    return CATEGORY_MAP["xxx_wmv"]
-                if "xvid" in s:
-                    return CATEGORY_MAP["xxx_xvid"]
-                if "x264" in s or "h264" in s:
-                    return CATEGORY_MAP["xxx_x264"]
-                return CATEGORY_MAP["xxx"]
-            return CATEGORY_MAP[cat]
+        for key, cat in GROUP_CATEGORY_HINTS:
+            if key in g:
+                if cat == "xxx":
+                    if "dvd" in s:
+                        return CATEGORY_MAP["xxx_dvd"]
+                    if "wmv" in s:
+                        return CATEGORY_MAP["xxx_wmv"]
+                    if "xvid" in s:
+                        return CATEGORY_MAP["xxx_xvid"]
+                    if "x264" in s or "h264" in s:
+                        return CATEGORY_MAP["xxx_x264"]
+                    return CATEGORY_MAP["xxx"]
+                return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
-    tag_list = extract_tags(subject)
-    for tag in tag_list:
+    for tag in extract_tags(subject):
         if tag in CATEGORY_MAP:
             return CATEGORY_MAP[tag]
 
@@ -750,7 +720,7 @@ def _infer_category(
         return CATEGORY_MAP["ebook"]
     if "[xxx]" in s:
         return CATEGORY_MAP["xxx"]
-    if ADULT_KEYWORDS_RE.search(s):
+    if any(k in s for k in ADULT_KEYWORDS):
         if "dvd" in s:
             return CATEGORY_MAP["xxx_dvd"]
         if "wmv" in s:
@@ -762,31 +732,31 @@ def _infer_category(
         return CATEGORY_MAP["xxx"]
 
     # TV
-    if TV_EPISODE_RE.search(s) or "season" in s or "episode" in s:
+    if re.search(r"s\d{1,2}e\d{1,2}", s) or "season" in s or "episode" in s:
         if "sport" in s or "sports" in s:
             return CATEGORY_MAP["tv_sport"]
-        if any(k in s for k in ("1080p", "720p", "x264", "x265", "hd")):
+        if TV_HD_RE.search(s):
             return CATEGORY_MAP["tv_hd"]
-        if any(k in s for k in ("xvid", "dvdrip", "sd")):
+        if TV_SD_RE.search(s):
             return CATEGORY_MAP["tv_sd"]
         return CATEGORY_MAP["tv"]
 
     # Movies
-    if any(k in s for k in ("bluray", "blu-ray")):
+    if BLURAY_RE.search(s):
         return CATEGORY_MAP["movies_bluray"]
     if "3d" in s:
         return CATEGORY_MAP["movies_3d"]
-    if any(k in s for k in ("1080p", "720p", "x264", "x265", "hdrip", "webrip", "hd")):
+    if MOVIES_HD_RE.search(s):
         return CATEGORY_MAP["movies_hd"]
-    if any(k in s for k in ("dvdrip", "xvid", "cam", "ts", "sd")):
+    if MOVIES_SD_RE.search(s):
         return CATEGORY_MAP["movies_sd"]
 
     # Audio
     if "audiobook" in s or "audio book" in s:
         return CATEGORY_MAP["audio_audiobook"]
-    if any(k in s for k in ("flac", "lossless")):
+    if AUDIO_LOSSLESS_RE.search(s):
         return CATEGORY_MAP["audio_lossless"]
-    if any(k in s for k in ("mp3", "aac", "m4a")):
+    if AUDIO_MP3_RE.search(s):
         return CATEGORY_MAP["audio_mp3"]
     if "video" in s and "music" in s:
         return CATEGORY_MAP["audio_video"]
@@ -794,9 +764,9 @@ def _infer_category(
         return CATEGORY_MAP["audio"]
 
     # Books
-    if any(k in s for k in ("cbz", "cbr", "comic")):
+    if COMIC_RE.search(s):
         return CATEGORY_MAP["comics"]
-    if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
+    if EBOOK_RE.search(s):
         return CATEGORY_MAP["ebook"]
 
     return None
