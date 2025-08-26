@@ -23,7 +23,7 @@ _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
 _URL_RE = re.compile(r"http\S+|www\.\S+", re.IGNORECASE)
 _NON_LETTER_RE = re.compile(r"[^A-Za-z\s]+")
 
-SEPARATOR_TRANS = str.maketrans({'.': ' ', '_': ' '})
+SEPARATOR_TRANS = str.maketrans({".": " ", "_": " "})
 
 
 def extract_tags(subject: str) -> list[str]:
