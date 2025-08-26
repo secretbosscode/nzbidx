@@ -12,6 +12,8 @@ from nzbidx_ingest.main import (
 )
 from nzbidx_ingest.parsers import normalize_subject
 
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
 
 def normalize_releases(
     conn: Any | None = None,
@@ -27,7 +29,6 @@ def normalize_releases(
     rows = cur.fetchall()
 
     aggregated: dict[str, dict[str, Any]] = {}
-    date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
     for (
         norm_title,
@@ -42,7 +43,7 @@ def normalize_releases(
         date: str | None = None
         if ":" in title:
             maybe_title, maybe_date = title.rsplit(":", 1)
-            if date_re.fullmatch(maybe_date):
+            if DATE_RE.fullmatch(maybe_date):
                 title = maybe_title
                 date = maybe_date
         normalized = normalize_subject(title)
