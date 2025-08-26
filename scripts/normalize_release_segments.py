@@ -12,17 +12,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
-from nzbidx_api.db import sql_placeholder
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.segment_schema import validate_segment_schema
-from nzbidx_ingest.sql import sql_placeholder
+
+try:  # Prefer ingest helper but fall back to API helper if unavailable.
+    from nzbidx_ingest.sql import sql_placeholder
+except Exception:  # pragma: no cover - fallback
+    from nzbidx_api.db import sql_placeholder  # type: ignore
 
 
 def _convert(seg):
     if isinstance(seg, dict):
         return {
             "number": int(seg.get("number", 0)),
-            "message_id": str(seg.get("message_id", "")),
+            "message_id": str(seg.get("message_id", "")).strip("<>"),
             "group": str(seg.get("group", "")),
             "size": int(seg.get("size", 0) or 0),
         }
@@ -30,7 +33,7 @@ def _convert(seg):
         n, m, g, s = seg[:4]
         return {
             "number": int(n),
-            "message_id": str(m),
+            "message_id": str(m).strip("<>"),
             "group": str(g),
             "size": int(s),
         }

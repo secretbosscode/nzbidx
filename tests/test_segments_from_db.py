@@ -6,6 +6,7 @@ import logging
 import pytest
 
 from nzbidx_api import nzb_builder
+from nzbidx_ingest.segment_schema import validate_segment_schema
 
 
 class _FakeCursor:
@@ -42,14 +43,14 @@ def _patch_conn(monkeypatch, seg_data):
 
 
 def test_segments_from_db_dict(monkeypatch):
-    data = [{"number": 1, "message_id": "<m1>", "group": "g", "size": 123}]
+    data = [{"number": 1, "message_id": "m1", "group": "g", "size": 123}]
     seg_data = json.dumps(data)
     _patch_conn(monkeypatch, seg_data)
     assert nzb_builder._segments_from_db(1) == [(1, "m1", "g", 123)]
 
 
 def test_segments_from_db_list(monkeypatch):
-    data = [[1, "<m1>", "g", 123], [2, "<m2>", "g", 456]]
+    data = [[1, "m1", "g", 123], [2, "m2", "g", 456]]
     seg_data = json.dumps(data)
     _patch_conn(monkeypatch, seg_data)
     assert nzb_builder._segments_from_db(1) == [
@@ -59,10 +60,17 @@ def test_segments_from_db_list(monkeypatch):
 
 
 def test_segments_from_db_malformed_sequence(monkeypatch, caplog):
-    data = [[1, "<m1>"], [2, "<m2>", "g", 456]]
+    data = [[1, "m1"], [2, "m2", "g", 456]]
     seg_data = json.dumps(data)
     _patch_conn(monkeypatch, seg_data)
     with caplog.at_level(logging.WARNING, logger="nzbidx_api.nzb_builder"):
         with pytest.raises(ValueError):
             nzb_builder._segments_from_db(1)
     assert "invalid_segment_entry" in caplog.messages
+
+
+def test_validate_segment_schema_rejects_brackets():
+    with pytest.raises(AssertionError):
+        validate_segment_schema(
+            [{"number": 1, "message_id": "<m1>", "group": "g", "size": 1}]
+        )

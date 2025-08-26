@@ -25,8 +25,8 @@ class RateLimiter:
 
     async def increment(self, key: str) -> int:
         """Increment and return current count for ``key``."""
-        now = int(time.time())
-        bucket = now // self.window
+        now = time.monotonic()
+        bucket = int(now // self.window)
         async with self._lock:
             bucket_counts = self.counts.setdefault(bucket, {})
             bucket_counts[key] = bucket_counts.get(key, 0) + 1
@@ -39,6 +39,8 @@ class RateLimiter:
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Apply simple IP based rate limiting."""
+
+    __slots__ = ("limiter", "limit")
 
     def __init__(
         self, app, limit: int | None = None, window: int | None = None

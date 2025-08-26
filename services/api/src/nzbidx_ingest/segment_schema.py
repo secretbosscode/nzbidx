@@ -16,8 +16,13 @@ def validate_segment_schema(segments: Iterable[dict[str, Any]]) -> None:
             raise AssertionError(f"segment keys mismatch: {seg!r}")
         if not isinstance(seg.get("number"), int):
             raise AssertionError(f"segment number must be int: {seg!r}")
-        if not isinstance(seg.get("message_id"), str):
+        msg_id = seg.get("message_id")
+        if not isinstance(msg_id, str):
             raise AssertionError(f"segment message_id must be str: {seg!r}")
+        if "<" in msg_id or ">" in msg_id:
+            raise AssertionError(
+                f"segment message_id must not contain angle brackets: {seg!r}"
+            )
         if not isinstance(seg.get("group"), str):
             raise AssertionError(f"segment group must be str: {seg!r}")
         if not isinstance(seg.get("size"), int):

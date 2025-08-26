@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
+from nzbidx_api.json_utils import orjson
 import os
 import time
 from types import SimpleNamespace
@@ -73,22 +73,24 @@ def test_health_ingest_warning() -> None:
     """Health endpoint warns when ingest is stale."""
     with TestClient(app) as client:
         # Simulate stale ingest
-        main.ingest_loop.last_run = time.time() - 10
+        main.ingest_loop.last_run = time.monotonic() - 10
+        main.ingest_loop.last_run_wall = time.time() - 10
         response = client.get("/api/health", params={"apikey": "secret"})
         if hasattr(response, "json"):
             data = response.json()
         else:
-            data = json.loads(response.body)
+            data = orjson.loads(response.body)
         assert data["status"] == "warn"
         assert data["ingest"] == "stale"
 
         # Now simulate recent ingest
-        main.ingest_loop.last_run = time.time()
+        main.ingest_loop.last_run = time.monotonic()
+        main.ingest_loop.last_run_wall = time.time()
         response = client.get("/api/health", params={"apikey": "secret"})
         if hasattr(response, "json"):
             data = response.json()
         else:
-            data = json.loads(response.body)
+            data = orjson.loads(response.body)
         assert data["ingest"] == "ok"
 
 
@@ -100,7 +102,7 @@ def test_status_endpoint() -> None:
         if hasattr(response, "json"):
             data = response.json()
         else:
-            data = json.loads(response.body)
+            data = orjson.loads(response.body)
         assert data["breaker"]["os"] == "closed"
 
 
@@ -117,7 +119,7 @@ def test_config_endpoint(monkeypatch) -> None:
         if hasattr(response, "json"):
             data = response.json()
         else:
-            data = json.loads(response.body)
+            data = orjson.loads(response.body)
         assert data["nzb_timeout_seconds"] == 80
         assert data["nntp_total_timeout_seconds"] == 77
     cfg.settings.reload()
