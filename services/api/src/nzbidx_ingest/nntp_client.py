@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-import os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from nzbidx_api import config
 
@@ -13,32 +12,21 @@ from nzbidx_api import config
 # standard library module is absent.
 from .nntp_compat import nntplib
 
+if TYPE_CHECKING:  # pragma: no cover - type hint only
+    from .config import NNTPSettings
+
 logger = logging.getLogger(__name__)
 
 
 class NNTPClient:
     """Very small NNTP client with a persistent connection."""
 
-    __slots__ = (
-        "host",
-        "port",
-        "ssl",
-        "user",
-        "password",
-        "timeout",
-        "_current_group",
-        "_server",
-        "__dict__",
-    )
-
-    def __init__(self) -> None:
-        host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
-        self.host: Optional[str] = host
-        self.port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
-        ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
-        self.ssl = (ssl_env == "1") if ssl_env is not None else self.port == 563
-        self.user = os.getenv("NNTP_USER")
-        self.password = os.getenv("NNTP_PASS")
+    def __init__(self, settings: "NNTPSettings") -> None:
+        self.host: Optional[str] = settings.host
+        self.port = settings.port
+        self.use_ssl = settings.use_ssl
+        self.user = settings.user
+        self.password = settings.password
         # Default to a generous timeout to handle slow or flaky providers
         self.timeout = float(config.nntp_timeout_seconds())
         self._server: Optional[nntplib.NNTP] = None
@@ -49,7 +37,7 @@ class NNTPClient:
     def _create_server(self) -> nntplib.NNTP:
         if nntplib is None:  # pragma: no cover - no compatible library
             raise RuntimeError("No NNTP library available")
-        cls = nntplib.NNTP_SSL if self.ssl else nntplib.NNTP
+        cls = nntplib.NNTP_SSL if self.use_ssl else nntplib.NNTP
         return cls(
             self.host,
             port=self.port,

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from nzbidx_ingest import nntp_client  # type: ignore
+from nzbidx_ingest import config as ingest_config, nntp_client  # type: ignore
 
 
 def test_list_groups_sends_auth(monkeypatch) -> None:
@@ -36,7 +36,7 @@ def test_list_groups_sends_auth(monkeypatch) -> None:
         SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
     )
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     groups = client.list_groups()
 
     assert groups == ["alt.binaries.example"]
@@ -72,7 +72,7 @@ def test_list_groups_accepts_pattern(monkeypatch) -> None:
         SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
     )
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     groups = client.list_groups("alt.custom.*")
 
     assert groups == ["alt.binaries.example"]
@@ -107,7 +107,7 @@ def test_high_water_mark_auth(monkeypatch) -> None:
         SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
     )
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     high = client.high_water_mark("alt.binaries.example")
 
     assert high == 2
@@ -143,7 +143,7 @@ def test_high_water_mark_reconnect(monkeypatch) -> None:
         SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
     )
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     high = client.high_water_mark("alt.binaries.example")
 
     assert high == 2
@@ -171,7 +171,7 @@ def test_quit_closes_connection(monkeypatch) -> None:
         SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
     )
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     client.connect()
     client.quit()
 
@@ -196,7 +196,7 @@ def test_missing_nntplib_raises(monkeypatch) -> None:
 
     monkeypatch.setenv("NNTP_HOST", "example.com")
 
-    client = nntp_client_reload.NNTPClient()
+    client = nntp_client_reload.NNTPClient(ingest_config.nntp_settings())
     with pytest.raises(RuntimeError):
         client._create_server()
 
@@ -218,7 +218,7 @@ def test_body_size_from_head(monkeypatch) -> None:
         def body(self, message_id, decode=False):  # pragma: no cover - ensure not used
             raise AssertionError("body should not be called")
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     monkeypatch.setattr(client, "_ensure_connection", lambda: DummyServer())
 
     assert client.body_size("m1") == 123
@@ -237,7 +237,7 @@ def test_body_size_from_stat(monkeypatch) -> None:
         def body(self, message_id, decode=False):  # pragma: no cover - ensure not used
             raise AssertionError("body should not be called")
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     monkeypatch.setattr(client, "_ensure_connection", lambda: DummyServer())
 
     assert client.body_size("m1") == 456

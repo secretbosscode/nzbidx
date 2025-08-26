@@ -5,12 +5,44 @@ from __future__ import annotations
 import logging
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from .nntp_client import NNTPClient
-
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class NNTPSettings:
+    """Connection parameters for an NNTP server."""
+
+    host: str | None
+    port: int
+    use_ssl: bool
+    user: str | None
+    password: str | None
+
+
+def nntp_settings() -> NNTPSettings:
+    """Return NNTP connection settings loaded from the environment."""
+
+    host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
+    port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
+    ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
+    use_ssl = (ssl_env == "1") if ssl_env is not None else port == 563
+    return NNTPSettings(
+        host=host,
+        port=port,
+        use_ssl=use_ssl,
+        user=os.getenv("NNTP_USER"),
+        password=os.getenv("NNTP_PASS"),
+    )
+
+
+NNTP_SETTINGS: NNTPSettings = nntp_settings()
+
+
+from .nntp_client import NNTPClient  # noqa: E402
 
 
 NNTP_GROUP_WILDCARD: str = os.getenv("NNTP_GROUP_WILDCARD", "alt.binaries.*")
@@ -35,7 +67,7 @@ def _load_groups() -> List[str]:
         )
         return groups
 
-    client = NNTPClient()
+    client = NNTPClient(NNTP_SETTINGS)
     groups = client.list_groups(NNTP_GROUP_WILDCARD)
     if groups:
         logger.info(

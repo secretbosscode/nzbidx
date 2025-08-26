@@ -25,7 +25,7 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
         def xover(self, group: str, start: int, end: int):
             return [{":bytes": "100", "subject": "Example"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(loop, "NNTPClient", lambda _settings: DummyClient())
     monkeypatch.setattr(loop, "connect_db", lambda: None)
     monkeypatch.setattr(
         loop, "insert_release", lambda _db, releases: {r[0] for r in releases}
@@ -68,7 +68,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                 }
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(loop, "NNTPClient", lambda _settings: DummyClient())
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -156,7 +156,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
                 }
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(loop, "NNTPClient", lambda _settings: DummyClient())
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
