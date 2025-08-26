@@ -81,8 +81,11 @@ def _process_groups(
     for ig in ignored:
         prune_group(db, ig)
 
+    cursor_map = cursors.get_cursors(groups)
+    updates: dict[str, int] = {}
+
     for group in groups:
-        last = cursors.get_cursor(group) or 0
+        last = cursor_map.get(group, 0)
         start = last + 1
         _resp, _count, _low, high_s, _name = client.group(group)
         try:
@@ -275,7 +278,7 @@ def _process_groups(
                 pass
 
         changed |= inserted
-        cursors.set_cursor(group, current)
+        updates[group] = current
         metrics["deduplicated"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
         metrics["duration_ms"] = int(duration_s * 1000)
@@ -328,6 +331,8 @@ def _process_groups(
             sleep_ms = max(sleep_ms, int(INGEST_SLEEP_MS * ratio))
         if sleep_ms > 0:
             time.sleep(sleep_ms / 1000)
+    if updates:
+        cursors.set_cursors(updates)
 
     summary = aggregate.summary()
     logger.info("ingest_summary", extra={"event": "ingest_summary", **summary})

@@ -11,7 +11,9 @@ from nzbidx_ingest import config, cursors  # type: ignore
 def test_ingest_batch_log(monkeypatch, caplog) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
@@ -48,7 +50,9 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
 def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
@@ -136,7 +140,9 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
 def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 

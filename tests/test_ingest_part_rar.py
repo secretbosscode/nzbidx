@@ -10,7 +10,9 @@ from nzbidx_ingest.parsers import normalize_subject  # type: ignore
 def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
