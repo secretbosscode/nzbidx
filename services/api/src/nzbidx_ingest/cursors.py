@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os  # used to ensure path exists for SQLite databases
 import sqlite3
-import logging
 from typing import Any, Iterable, Tuple
 from urllib.parse import urlparse
 
