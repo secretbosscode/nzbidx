@@ -59,6 +59,8 @@ def extract_tags(subject: str) -> list[str]:
     """Extract lowercased tags from bracketed segments in ``subject``."""
     if not subject:
         return []
+    if "[" not in subject or "]" not in subject:
+        return []
     tags: list[str] = []
     for match in _TAG_RE.finditer(subject):
         content = match.group(1)
@@ -140,7 +142,7 @@ def _clean_language_text(text: str) -> str:
     """
     text = _URL_RE.sub(" ", text)
     text = _NON_LETTER_RE.sub(" ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return WHITESPACE_RE.sub(" ", text).strip()
 
 
 def extract_music_tags(subject: str) -> dict[str, str]:
@@ -203,7 +205,7 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
 
 
 def normalize_subject(
-    subject: str, *, with_tags: bool = False
+    subject: str, *, with_tags: bool = False, lowercase: bool = True
 ) -> tuple[str, list[str]] | str:
     """Return a cleaned, human-readable version of a Usenet subject line.
 
@@ -216,7 +218,8 @@ def normalize_subject(
     - Collapse whitespace and trim separators
 
     Also extracts hints via extract_* helpers and returns them as lowercase tags
-    (when ``with_tags=True``).
+    (when ``with_tags=True``). By default the cleaned title is lowercased; pass
+    ``lowercase=False`` to preserve the original casing.
     """
     if not subject:
         return ("", []) if with_tags else ""
@@ -267,6 +270,10 @@ def normalize_subject(
             *[value.lower() for value in tag_dict.values() if value],
         }
     )
+
+    if lowercase:
+        cleaned = cleaned.lower()
+
     if with_tags:
         return cleaned, tags
     return cleaned

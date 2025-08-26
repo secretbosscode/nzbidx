@@ -41,6 +41,9 @@ class Settings:
     )
     rate_limit: int = field(default_factory=lambda: _int_env("RATE_LIMIT", 60))
     rate_window: int = field(default_factory=lambda: _int_env("RATE_WINDOW", 60))
+    rate_limit_max_ips: int = field(
+        default_factory=lambda: _int_env("RATE_LIMIT_MAX_IPS", 1024)
+    )
     key_rate_limit: int = field(default_factory=lambda: _int_env("KEY_RATE_LIMIT", 100))
     key_rate_window: int = field(
         default_factory=lambda: _int_env("KEY_RATE_WINDOW", 60)
@@ -125,6 +128,7 @@ def request_id_header() -> str:
     return os.getenv("REQUEST_ID_HEADER", "X-Request-ID")
 
 
+@lru_cache()
 def validate_nntp_config() -> list[str]:
     """Check required NNTP configuration variables.
 
@@ -148,3 +152,9 @@ def validate_nntp_config() -> list[str]:
     if missing:
         logger.error("missing NNTP configuration: %s", ", ".join(missing))
     return missing
+
+
+def clear_validate_cache() -> None:
+    """Clear :func:`validate_nntp_config` cache."""
+
+    validate_nntp_config.cache_clear()

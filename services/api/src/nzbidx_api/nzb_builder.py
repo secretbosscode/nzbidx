@@ -144,8 +144,8 @@ def build_nzb_for_release(release_id: str) -> str:
     # Ensure environment changes to timeouts are honored across calls.
     config.settings.reload()
 
+    # ``validate_nntp_config`` is cached so repeated calls are inexpensive.
     missing = config.validate_nntp_config()
-    _groups = config.NNTP_GROUPS  # ensure groups are loaded
     if missing:
         raise newznab.NntpConfigError(
             f"missing NNTP configuration: {', '.join(missing)}"

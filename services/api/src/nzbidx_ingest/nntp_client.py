@@ -30,6 +30,7 @@ class NNTPClient:
         # Default to a generous timeout to handle slow or flaky providers
         self.timeout = float(config.nntp_timeout_seconds())
         self._server: Optional[nntplib.NNTP] = None
+        self._current_group: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Connection helpers
@@ -63,6 +64,7 @@ class NNTPClient:
             except Exception:  # pragma: no cover - network failures
                 pass
             self._server = None
+            self._current_group = None
 
     def connect(self) -> None:
         """Establish the persistent NNTP connection."""
@@ -90,12 +92,15 @@ class NNTPClient:
     def group(self, name: str):
         """Select ``name`` and return the server response."""
         last_exc: Exception | None = None
+        self._current_group = None
         for _ in range(2):
             try:
                 server = self._ensure_connection()
                 if server is None:
                     return "", 0, "0", "0", name
-                return server.group(name)
+                resp = server.group(name)
+                self._current_group = name
+                return resp
             except Exception as exc:  # pragma: no cover - network failure
                 last_exc = exc
                 try:
@@ -131,7 +136,9 @@ class NNTPClient:
                 server = self._ensure_connection()
                 if server is None:
                     return []
-                server.group(group)
+                if self._current_group != group:
+                    server.group(group)
+                    self._current_group = group
                 _resp, overviews = server.xover(start, end)
                 result = []
                 for ov in overviews:
