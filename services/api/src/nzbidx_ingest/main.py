@@ -191,6 +191,7 @@ ADULT_KEYWORDS = tuple(
     for k in os.getenv("ADULT_KEYWORDS", ",".join(DEFAULT_ADULT_KEYWORDS)).split(",")
     if k.strip()
 )
+ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
 
 try:  # pragma: no cover - optional dependency
     from sqlalchemy import create_engine, text
@@ -702,7 +703,7 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["ebook"]
     if "[xxx]" in s:
         return CATEGORY_MAP["xxx"]
-    if any(k in s for k in ADULT_KEYWORDS):
+    if ADULT_KEYWORDS_RE.search(s):
         if "dvd" in s:
             return CATEGORY_MAP["xxx_dvd"]
         if "wmv" in s:
