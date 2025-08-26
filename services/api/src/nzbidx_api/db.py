@@ -14,6 +14,7 @@ import importlib
 import logging
 import os
 import pkgutil
+from functools import lru_cache
 from importlib import resources
 from urllib.parse import urlparse, urlunparse
 
@@ -125,6 +126,7 @@ def get_engine() -> Optional[AsyncEngine]:
     return engine
 
 
+@lru_cache()
 def load_schema_statements() -> list[str]:
     sql = (
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
@@ -389,6 +391,11 @@ def get_connection() -> Any:
                 pass
         _conn = connect_db()
     return _conn
+
+
+def sql_placeholder(conn: Any) -> str:
+    """Return the DB-API parameter placeholder for ``conn``."""
+    return "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
 
 
 def close_connection() -> None:

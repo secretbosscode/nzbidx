@@ -25,6 +25,7 @@ def test_apply_schema_logs_migration_error(tmp_path, monkeypatch, caplog):
             return "CREATE TABLE release (id INTEGER PRIMARY KEY, posted_at TIMESTAMP);"
 
     monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
+    db.load_schema_statements.cache_clear()
 
     def migrate_posted(_conn):
         raise RuntimeError("boom")

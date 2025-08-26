@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def api_keys() -> set[str]:
     return {k.strip() for k in keys.split(",") if k.strip()}
 
 
-@dataclass
+@dataclass(slots=True)
 class Settings:
     """Integer-based configuration settings loaded from the environment."""
 
@@ -41,6 +41,9 @@ class Settings:
     )
     rate_limit: int = field(default_factory=lambda: _int_env("RATE_LIMIT", 60))
     rate_window: int = field(default_factory=lambda: _int_env("RATE_WINDOW", 60))
+    rate_limit_max_ips: int = field(
+        default_factory=lambda: _int_env("RATE_LIMIT_MAX_IPS", 1024)
+    )
     key_rate_limit: int = field(default_factory=lambda: _int_env("KEY_RATE_LIMIT", 100))
     key_rate_window: int = field(
         default_factory=lambda: _int_env("KEY_RATE_WINDOW", 60)
@@ -92,7 +95,8 @@ class Settings:
     def reload(self) -> None:
         """Reload settings from the current environment."""
         new = type(self)()
-        self.__dict__.update(vars(new))
+        for f in fields(self):
+            setattr(self, f.name, getattr(new, f.name))
 
 
 settings = Settings()
@@ -125,6 +129,7 @@ def request_id_header() -> str:
     return os.getenv("REQUEST_ID_HEADER", "X-Request-ID")
 
 
+@lru_cache()
 def validate_nntp_config() -> list[str]:
     """Check required NNTP configuration variables.
 
@@ -148,3 +153,9 @@ def validate_nntp_config() -> list[str]:
     if missing:
         logger.error("missing NNTP configuration: %s", ", ".join(missing))
     return missing
+
+
+def clear_validate_cache() -> None:
+    """Clear :func:`validate_nntp_config` cache."""
+
+    validate_nntp_config.cache_clear()
