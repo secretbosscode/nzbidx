@@ -29,6 +29,21 @@ def api_keys() -> set[str]:
     return {k.strip() for k in keys.split(",") if k.strip()}
 
 
+def reload_api_keys() -> None:
+    """Backward-compatible no-op for reloading API keys."""
+
+    return None
+
+
+def reload_if_env_changed() -> None:
+    """Reload settings and cached configuration when environment changes."""
+
+    settings.reload()
+    cors_origins.cache_clear()
+    strict_transport_security.cache_clear()
+    request_id_header.cache_clear()
+
+
 @dataclass(slots=True)
 class Settings:
     """Integer-based configuration settings loaded from the environment."""
