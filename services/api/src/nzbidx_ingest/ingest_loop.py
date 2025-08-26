@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import time
 from threading import Event
@@ -229,7 +229,7 @@ def _process_groups(
                     existing_segments = []
                     if row:
                         try:
-                            existing_segments = json.loads(row[0] or "[]")
+                            existing_segments = orjson.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
                     validate_segment_schema(existing_segments)
@@ -257,7 +257,7 @@ def _process_groups(
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
-                            json.dumps(combined_segments),
+                            orjson.dumps(combined_segments).decode(),
                             has_parts,
                             part_counts[title],
                             total_size,
@@ -340,12 +340,10 @@ def _process_groups(
     return delay
 
 
-def run_once(client: NNTPClient) -> float:
+def run_once() -> float:
     """Process a single batch for each configured NNTP group.
 
-    ``client`` should be a connected :class:`NNTPClient` instance that will be
-    reused across invocations.  The function returns the suggested delay before
-    the next poll.
+    Returns the suggested delay before the next poll.
     """
     global last_run
     groups = config.NNTP_GROUPS or config._load_groups()
@@ -367,13 +365,19 @@ def run_once(client: NNTPClient) -> float:
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
+    client = NNTPClient()
     db = None
     try:
+        client.connect()
         db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
         last_run = time.time()
         return delay
     finally:
+        try:
+            client.quit()
+        except Exception:
+            pass
         if db is not None:
             try:
                 db.close()
@@ -384,36 +388,24 @@ def run_once(client: NNTPClient) -> float:
 def run_forever(stop_event: Event | None = None) -> None:
     """Continuously poll groups until ``stop_event`` is set."""
     failure_delay = INGEST_POLL_MIN_SECONDS
-    client = NNTPClient()
-    try:
-        client.connect()
-        while not (stop_event and stop_event.is_set()):
-            try:
-                delay = run_once(client)
-                failure_delay = INGEST_POLL_MIN_SECONDS
-            except BaseException as exc:  # pragma: no cover
-                if isinstance(exc, KeyboardInterrupt):
-                    logger.info("ingest_loop_interrupted")
-                    raise
-                logger.exception("ingest_loop_failure")
-                delay = failure_delay
-                failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
-                try:
-                    client.connect()
-                except Exception:  # pragma: no cover - network failure
-                    logger.exception("ingest_reconnect_failure")
-            delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
-            if stop_event:
-                if stop_event.wait(delay):
-                    break
-            else:
-                try:
-                    time.sleep(delay)
-                except ValueError:
-                    logger.exception("ingest_sleep_failure", extra={"delay": delay})
-                    time.sleep(INGEST_POLL_MIN_SECONDS)
-    finally:
+    while not (stop_event and stop_event.is_set()):
         try:
-            client.quit()
-        except Exception:
-            pass
+            delay = run_once()
+            failure_delay = INGEST_POLL_MIN_SECONDS
+        except BaseException as exc:  # pragma: no cover
+            if isinstance(exc, KeyboardInterrupt):
+                logger.info("ingest_loop_interrupted")
+                raise
+            logger.exception("ingest_loop_failure")
+            delay = failure_delay
+            failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
+        delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
+        if stop_event:
+            if stop_event.wait(delay):
+                break
+        else:
+            try:
+                time.sleep(delay)
+            except ValueError:
+                logger.exception("ingest_sleep_failure", extra={"delay": delay})
+                time.sleep(INGEST_POLL_MIN_SECONDS)

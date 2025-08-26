@@ -10,7 +10,7 @@ message-ids.
 from __future__ import annotations
 
 import argparse
-import json
+from nzbidx_api.json_utils import orjson
 import sys
 from pathlib import Path
 
@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
-from nzbidx_api.db import get_connection, sql_placeholder
+from nzbidx_api.db import get_connection
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helper
@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helpe
 
     conn = get_connection()
     with conn.cursor() as cur:
-        placeholder = sql_placeholder(conn)
+        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
         cur.execute(
             f"SELECT segments FROM release WHERE id = {placeholder}",
             (args.release_id,),
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helpe
 
     seg_data = row[0]
     segments = (
-        json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
+        orjson.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
     ) or []
 
     if not segments:
