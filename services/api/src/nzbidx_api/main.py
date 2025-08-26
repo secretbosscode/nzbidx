@@ -514,22 +514,22 @@ async def _search(
         raise
 
 
-def _xml_response(body: str) -> Response:
+def _xml_response(body: bytes) -> Response:
     """Return ``body`` as an XML response."""
     return Response(body, media_type="application/xml")
 
 
 def _cached_xml_response(
-    request: Request, body: str, *, allow_304: bool = True
+    request: Request, body: bytes, *, allow_304: bool = True
 ) -> Response:
     """Return ``body`` with caching headers and optional 304 support."""
-    etag = hashlib.sha1(body.encode("utf-8")).hexdigest()
+    etag = hashlib.sha1(body).hexdigest()
     headers = {
         "Cache-Control": f"public, max-age={settings.search_ttl_seconds}",
         "ETag": etag,
     }
     if allow_304 and request.headers.get("If-None-Match") == etag:
-        return Response("", status_code=304, headers=headers)
+        return Response(b"", status_code=304, headers=headers)
     return Response(body, media_type="application/xml", headers=headers)
 
 

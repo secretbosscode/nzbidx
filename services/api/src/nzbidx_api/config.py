@@ -30,18 +30,9 @@ def api_keys() -> set[str]:
 
 
 def reload_api_keys() -> None:
-    """Backward-compatible no-op for reloading API keys."""
-
+    """Reload API key configuration from the environment."""
+    # ``api_keys`` reads directly from the environment so no action is needed.
     return None
-
-
-def reload_if_env_changed() -> None:
-    """Reload settings and cached configuration when environment changes."""
-
-    settings.reload()
-    cors_origins.cache_clear()
-    strict_transport_security.cache_clear()
-    request_id_header.cache_clear()
 
 
 @dataclass(slots=True)
@@ -176,16 +167,12 @@ def clear_validate_cache() -> None:
     validate_nntp_config.cache_clear()
 
 
-def reload_api_keys() -> None:
-    """Backwards-compatible no-op for reloading API keys."""
-    # ``api_keys`` reads from the environment on each call so there is
-    # nothing to refresh. This function is kept for compatibility with
-    # callers that expect it to exist.
-    return None
+_LAST_ENV = os.environ.copy()
 
 
 def reload_if_env_changed() -> None:
-    """Backwards-compatible no-op for reloading settings when the environment changes."""
-    # Settings are resolved on access; this helper exists for legacy callers
-    # that previously relied on a reload hook.
-    return None
+    """Reload settings if environment variables have changed."""
+    global _LAST_ENV
+    if os.environ != _LAST_ENV:
+        settings.reload()
+        _LAST_ENV = os.environ.copy()
