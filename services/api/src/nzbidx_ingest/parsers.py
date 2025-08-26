@@ -51,7 +51,6 @@ PART_SIZE_RE = re.compile(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]")
 FILLER_RE = re.compile(r"\b(?:repost|sample)\b", re.IGNORECASE)
 PART_RE = re.compile(r"\bpart\s*\d+\b", re.IGNORECASE)
 ARCHIVE_RE = re.compile(r"\b(rar|par2|zip)\b", re.IGNORECASE)
-WHITESPACE_RE = re.compile(r"\s+")
 
 
 def extract_tags(subject: str) -> list[str]:
@@ -141,7 +140,7 @@ def _clean_language_text(text: str) -> str:
     """
     text = _URL_RE.sub(" ", text)
     text = _NON_LETTER_RE.sub(" ", text)
-    return WHITESPACE_RE.sub(" ", text).strip()
+    return " ".join(text.split())
 
 
 def extract_music_tags(subject: str) -> dict[str, str]:
@@ -203,6 +202,26 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
     return {}
 
 
+@lru_cache(maxsize=8192)
+def _normalize_cached(subject: str, lowercase: bool) -> str:
+    """Return the normalized ``subject`` string."""
+    cleaned = subject.replace(".", " ").replace("_", " ")
+    cleaned = _TAG_RE.sub("", cleaned)
+    cleaned = YENC_RE.sub("", cleaned)
+    cleaned = PART_SIZE_RE.sub("", cleaned)
+    if LANGUAGE_TOKENS:
+        tokens_pattern = "|".join(map(re.escape, LANGUAGE_TOKENS.keys()))
+        cleaned = re.sub(tokens_pattern, "", cleaned, flags=re.IGNORECASE)
+    cleaned = FILLER_RE.sub("", cleaned)
+    cleaned = PART_RE.sub("", cleaned)
+    cleaned = ARCHIVE_RE.sub("", cleaned)
+    cleaned = " ".join(cleaned.split())
+    cleaned = cleaned.strip("- ")
+    if lowercase:
+        cleaned = cleaned.lower()
+    return cleaned
+
+
 def normalize_subject(
     subject: str, *, with_tags: bool = False, lowercase: bool = True
 ) -> tuple[str, list[str]] | str:
@@ -223,9 +242,6 @@ def normalize_subject(
     if not subject:
         return ("", []) if with_tags else ""
 
-    # Extract bracketed tags and structured hints before cleaning. The specific
-    # ``extract_*`` helpers operate on the raw subject, so run them before we
-    # strip punctuation.
     generic_tags = extract_tags(subject)
     tag_dict: dict[str, str] = {}
     for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
@@ -233,35 +249,7 @@ def normalize_subject(
     for t in generic_tags:
         tag_dict[t] = t
 
-    # Convert common separators to spaces.
-    cleaned = subject.replace(".", " ").replace("_", " ")
-
-    # Remove bracketed tags.
-    cleaned = _TAG_RE.sub("", cleaned)
-
-    # Remove explicit yEnc markers.
-    cleaned = YENC_RE.sub("", cleaned)
-
-    # Drop part/size information such as "(01/15)" or "[12345/12346]".
-    cleaned = PART_SIZE_RE.sub("", cleaned)
-
-    # Remove language tokens based on LANGUAGE_TOKENS keys.
-    if LANGUAGE_TOKENS:
-        tokens_pattern = "|".join(map(re.escape, LANGUAGE_TOKENS.keys()))
-        cleaned = re.sub(tokens_pattern, "", cleaned, flags=re.IGNORECASE)
-
-    # Remove common filler words.
-    cleaned = FILLER_RE.sub("", cleaned)
-
-    # Strip trailing segment markers and archive extensions commonly found in
-    # multipart releases.  Subjects like ``Name.part01.rar`` or ``Name.part1``
-    # should normalize to ``Name`` so all segments dedupe to a single entry.
-    cleaned = PART_RE.sub("", cleaned)
-    cleaned = ARCHIVE_RE.sub("", cleaned)
-
-    # Collapse whitespace and trim leading/trailing separators or dashes.
-    cleaned = WHITESPACE_RE.sub(" ", cleaned).strip()
-    cleaned = cleaned.strip("- ")
+    cleaned = _normalize_cached(subject, lowercase)
 
     tags = sorted(
         {
@@ -269,9 +257,6 @@ def normalize_subject(
             *[value.lower() for value in tag_dict.values() if value],
         }
     )
-
-    if lowercase:
-        cleaned = cleaned.lower()
 
     if with_tags:
         return cleaned, tags
