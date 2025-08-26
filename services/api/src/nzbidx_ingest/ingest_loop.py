@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 from threading import Event
 
-from nzbidx_api.json_utils import orjson as json
+from nzbidx_api.json_utils import orjson
 
 from .config import (
     INGEST_BATCH_MIN,
@@ -49,6 +49,8 @@ last_run_wall: float = 0.0
 class _AggregateMetrics:
     """Helper to accumulate metrics across groups during a poll cycle."""
 
+    __slots__ = ("_processed", "_remaining", "_duration_s")
+
     def __init__(self) -> None:
         self._processed = 0
         self._remaining = 0
@@ -87,11 +89,7 @@ def _process_groups(
     for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
-        _resp, _count, _low, high_s, _name = client.group(group)
-        try:
-            high = int(high_s)
-        except Exception:
-            high = 0
+        high = client.high_water_mark(group)
         remaining = max(high - last, 0)
         if remaining <= 0:
             headers: list[dict[str, object]] = []
@@ -234,7 +232,7 @@ def _process_groups(
                     existing_segments = []
                     if row:
                         try:
-                            existing_segments = json.loads(row[0] or "[]")
+                            existing_segments = orjson.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
                     validate_segment_schema(existing_segments)
@@ -250,10 +248,9 @@ def _process_groups(
                             {"number": n, "message_id": m, "group": g, "size": s}
                         )
 
-                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
-                    for seg in deduped:
-                        message_id = seg["message_id"]
-                        existing_map.setdefault(message_id, seg)
+                    combined_segments = existing_segments + deduped
+                    validate_segment_schema(combined_segments)
+                    existing_map = {seg["message_id"]: seg for seg in combined_segments}
                     combined_segments = list(existing_map.values())
                     validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
@@ -262,7 +259,7 @@ def _process_groups(
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
-                            json.dumps(combined_segments).decode(),
+                            orjson.dumps(combined_segments).decode(),
                             has_parts,
                             part_counts[title],
                             total_size,
@@ -345,7 +342,7 @@ def _process_groups(
     return delay
 
 
-def run_once() -> float:
+def run_once(client: NNTPClient | None = None) -> float:
     """Process a single batch for each configured NNTP group.
 
     Returns the suggested delay before the next poll.
@@ -372,20 +369,23 @@ def run_once() -> float:
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
-    client = NNTPClient()
+    own_client = client is None
+    client = client or NNTPClient()
     db = None
     try:
-        client.connect()
+        if own_client:
+            client.connect()
         db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
         last_run = time.monotonic()
         last_run_wall = time.time()
         return delay
     finally:
-        try:
-            client.quit()
-        except Exception:
-            pass
+        if own_client:
+            try:
+                client.quit()
+            except Exception:
+                pass
         if db is not None:
             try:
                 db.close()
