@@ -17,6 +17,8 @@ _LOG_RECORD_DEFAULTS = logging.LogRecord(
 class JsonFormatter(logging.Formatter):
     """A minimal JSON formatter for structured logs."""
 
+    __slots__ = ()
+
     def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
         payload: Dict[str, Any] = {
             "time": self.formatTime(record, "%Y-%m-%dT%H:%M:%SZ"),
