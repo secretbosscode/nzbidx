@@ -334,7 +334,7 @@ def test_auto_backfill_success(monkeypatch) -> None:
         calls["count"] += 1
         if calls["count"] == 1:
             raise LookupError("release has no segments")
-        return [(1, "<m1>", "alt.test", 10)]
+        return [(1, "m1", "alt.test", 10)]
 
     called: list[int] = []
 
@@ -518,7 +518,7 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
         "_segments_from_db",
         lambda _rid: [
             (1, "msg1@example.com", "g", 123),
-            (2, "<msg2@example.com>", "g", 456),
+            (2, "msg2@example.com", "g", 456),
         ],
     )
     xml = nzb_builder.build_nzb_for_release("123")
