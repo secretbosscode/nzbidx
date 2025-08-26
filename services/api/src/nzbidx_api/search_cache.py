@@ -79,9 +79,8 @@ async def get_cached_rss(key: str) -> Optional[str]:
 
 async def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` using the configured TTL."""
+    if "<item>" not in xml:
+        return
     async with _CACHE_LOCK:
         _ensure_cache_config()
-        _purge_expired_locked(time.monotonic())
-        if "<item>" not in xml:
-            return
         _CACHE[key] = xml
