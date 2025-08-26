@@ -219,7 +219,9 @@ def _process_groups(
                     "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
                 )
                 titles = [t for t, segs in parts.items() if segs]
-                existing: dict[str, list[dict[str, int | str]]] = {t: [] for t in titles}
+                existing: dict[str, list[dict[str, int | str]]] = {
+                    t: [] for t in titles
+                }
                 if titles:
                     if placeholder == "?":
                         qs = ",".join(["?"] * len(titles))
