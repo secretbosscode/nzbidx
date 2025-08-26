@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os  # used to ensure path exists for SQLite databases
 import sqlite3
+import logging
 from typing import Any, Iterable, Tuple
 from urllib.parse import urlparse
 
@@ -14,6 +15,9 @@ try:  # pragma: no cover - optional dependency
     import psycopg
 except Exception:  # pragma: no cover - optional dependency
     psycopg = None  # type: ignore
+
+
+logger = logging.getLogger(__name__)
 
 
 def _conn() -> Tuple[Any, str]:
@@ -84,9 +88,20 @@ def set_cursors(updates: dict[str, int]) -> None:
         f"VALUES ({paramstyle}, {paramstyle}, 0) "
         'ON CONFLICT("group") DO UPDATE SET last_article=excluded.last_article, irrelevant=0'
     )
-    conn.executemany(stmt, [(g, c) for g, c in updates.items()])
-    conn.commit()
-    conn.close()
+    errors: tuple[type[Exception], ...]
+    if psycopg:
+        errors = (sqlite3.OperationalError, psycopg.Error)
+    else:  # pragma: no cover - optional dependency
+        errors = (sqlite3.OperationalError,)
+    try:
+        conn.executemany(stmt, [(g, c) for g, c in updates.items()])
+        conn.commit()
+    except errors as exc:
+        logger.exception("cursor_update_failed")
+        conn.rollback()
+        raise RuntimeError("Failed to set cursors") from exc
+    finally:
+        conn.close()
 
 
 def set_cursor(group: str, last_article: int) -> None:
