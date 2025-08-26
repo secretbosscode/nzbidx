@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import time
 from threading import Event
@@ -229,7 +229,7 @@ def _process_groups(
                     existing_segments = []
                     if row:
                         try:
-                            existing_segments = json.loads(row[0] or "[]")
+                            existing_segments = orjson.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
                     validate_segment_schema(existing_segments)
@@ -257,7 +257,7 @@ def _process_groups(
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
-                            json.dumps(combined_segments),
+                            orjson.dumps(combined_segments).decode(),
                             has_parts,
                             part_counts[title],
                             total_size,
