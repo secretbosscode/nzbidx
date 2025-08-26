@@ -1,5 +1,7 @@
 """API service entrypoint using Starlette."""
 
+# ruff: noqa: E402
+
 import hashlib
 import logging
 import os
