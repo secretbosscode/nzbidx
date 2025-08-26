@@ -12,23 +12,26 @@ from __future__ import annotations
 
 import json
 import os
-from types import SimpleNamespace
 from typing import Any
 
 __all__ = ["orjson", "get_json_module"]
 
 
-# Wrapper to emulate the :mod:`orjson` interface using the standard library.
-def _stdlib_wrapper() -> SimpleNamespace:
-    return SimpleNamespace(
-        dumps=lambda obj, *, option=None, **kw: json.dumps(obj, **kw).encode(),
-        loads=lambda s, **kw: json.loads(
-            s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw
-        ),
-    )
+class _StdJson:
+    """Emulate :mod:`orjson` using the standard library."""
+
+    __slots__ = ()
+
+    @staticmethod
+    def dumps(obj: Any, *, option: Any = None, **kw: Any) -> bytes:
+        return json.dumps(obj, **kw).encode()
+
+    @staticmethod
+    def loads(s: Any, **kw: Any) -> Any:
+        return json.loads(s.decode() if isinstance(s, (bytes, bytearray)) else s, **kw)
 
 
-_STDLIB_JSON = _stdlib_wrapper()
+_STDLIB_JSON = _StdJson()
 
 
 def get_json_module() -> Any:
