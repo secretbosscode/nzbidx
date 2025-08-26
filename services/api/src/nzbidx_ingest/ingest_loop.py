@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from threading import Event
+
+from nzbidx_api.json_utils import orjson as json
 
 from .config import (
     INGEST_BATCH_MIN,
@@ -257,7 +258,7 @@ def _process_groups(
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
-                            json.dumps(combined_segments),
+                            json.dumps(combined_segments).decode(),
                             has_parts,
                             part_counts[title],
                             total_size,
