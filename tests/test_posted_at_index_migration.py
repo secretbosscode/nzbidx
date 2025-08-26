@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from nzbidx_api import db
 
 m_posted = importlib.import_module("nzbidx_api.migrations.0001_add_posted_at_index")
-m_search = importlib.import_module("nzbidx_api.migrations.0001_add_search_vector")
 
 
 class FeatureNotSupportedError(Exception):
@@ -119,7 +118,6 @@ def test_apply_schema_runs_migration_without_feature_not_supported(
         orig_migrate(fake_conn)
 
     monkeypatch.setattr(m_posted, "migrate", wrapper)
-    monkeypatch.setattr(m_search, "migrate", lambda _conn: None)
 
     asyncio.run(db.apply_schema())
     asyncio.run(engine.dispose())

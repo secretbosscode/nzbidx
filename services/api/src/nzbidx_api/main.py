@@ -469,8 +469,7 @@ async def ensure_search_vector() -> None:
         )
     if not exists:
         msg = (
-            "search_vector column missing; run "
-            "`python -m nzbidx_api.migrations.0001_add_search_vector`"
+            "search_vector column missing; apply schema.sql to initialize the database"
         )
         logger.error(msg)
         raise RuntimeError(msg)
