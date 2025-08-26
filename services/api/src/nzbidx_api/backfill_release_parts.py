@@ -12,6 +12,7 @@ from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.nntp_client import NNTPClient
 from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
 from nzbidx_ingest.segment_schema import validate_segment_schema
+from nzbidx_ingest import config as ingest_config
 from . import config
 
 log = logging.getLogger(__name__)
@@ -149,7 +150,8 @@ def backfill_release_parts(
                         }
                         for num, msg_id, size in segments
                     ]
-                    validate_segment_schema(seg_data)
+                    if ingest_config.VALIDATE_SEGMENTS:
+                        validate_segment_schema(seg_data)
                     total_size = sum(size for _, _, size in segments)
                     conn.execute(
                         (

@@ -232,7 +232,8 @@ def _process_groups(
                             existing_segments = json.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
-                    validate_segment_schema(existing_segments)
+                    if config.VALIDATE_SEGMENTS:
+                        validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
                     deduped: list[dict[str, int | str]] = []
@@ -250,7 +251,8 @@ def _process_groups(
                         seg for seg in deduped if seg["message_id"] not in existing_ids
                     ]
                     combined_segments = existing_segments + new_segments
-                    validate_segment_schema(combined_segments)
+                    if config.VALIDATE_SEGMENTS:
+                        validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
