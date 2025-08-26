@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import defaultdict
 from threading import Event
 
 from nzbidx_api.json_utils import orjson as json
@@ -143,7 +144,7 @@ def _process_groups(
                 str | None,
             ],
         ] = {}
-        parts: dict[str, list[tuple[int, str, str, int]]] = {}
+        parts: defaultdict[str, list[tuple[int, str, str, int]]] = defaultdict(list)
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
             size = int(header.get("bytes") or header.get(":bytes") or 0)
@@ -198,9 +199,7 @@ def _process_groups(
                 )
             if message_id:
                 seg_num = extract_segment_number(subject)
-                parts.setdefault(dedupe_key, []).append(
-                    (seg_num, message_id.strip("<>"), group, size)
-                )
+                parts[dedupe_key].append((seg_num, message_id.strip("<>"), group, size))
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
