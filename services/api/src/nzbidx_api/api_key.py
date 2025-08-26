@@ -42,6 +42,8 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     allowed.
     """
 
+    __slots__ = ("reload_keys", "valid_keys")
+
     def __init__(self, app, reload_keys: bool = False) -> None:
         super().__init__(app)
         self.reload_keys = reload_keys
