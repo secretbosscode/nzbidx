@@ -1,5 +1,4 @@
 import importlib
-import json
 import sys
 
 import pytest
@@ -17,7 +16,7 @@ def test_fallback_to_stdlib_when_orjson_missing(monkeypatch, env_val):
     ju = _reload_json_utils(monkeypatch)
     data = {"a": 1}
     dumped = ju.orjson.dumps(data)
-    assert dumped == json.dumps(data).encode()
+    assert dumped == b'{"a": 1}'
     assert ju.orjson.loads(dumped) == data
 
 

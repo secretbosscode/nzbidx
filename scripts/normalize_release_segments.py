@@ -5,17 +5,17 @@
 from __future__ import annotations
 
 import argparse
-import json
+from nzbidx_api.json_utils import orjson
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
-from nzbidx_api.db import sql_placeholder
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.segment_schema import validate_segment_schema
-from nzbidx_ingest.sql import sql_placeholder
+
+BATCH_SIZE = 1000
 
 
 def _convert(seg):
@@ -40,39 +40,41 @@ def _convert(seg):
 def normalize() -> int:
     conn = connect_db()
     cur = conn.cursor()
-    placeholder = sql_placeholder(conn)
+    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute("SELECT id, segments FROM release WHERE segments IS NOT NULL")
-    rows = cur.fetchall()
-    batch = []
-    for rid, seg_json in rows:
-        try:
-            data = (
-                json.loads(seg_json or "[]")
-                if isinstance(seg_json, (str, bytes))
-                else seg_json or []
+    updated = 0
+    while True:
+        rows = cur.fetchmany(BATCH_SIZE)
+        if not rows:
+            break
+        for rid, seg_json in rows:
+            try:
+                data = (
+                    orjson.loads(seg_json or "[]")
+                    if isinstance(seg_json, (str, bytes))
+                    else seg_json or []
+                )
+            except Exception:
+                continue
+            try:
+                validate_segment_schema(data)
+                continue
+            except AssertionError:
+                pass
+            converted = []
+            try:
+                for seg in data:
+                    converted.append(_convert(seg))
+            except Exception:
+                continue
+            cur.execute(
+                f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
+                (orjson.dumps(converted).decode(), rid),
             )
-        except Exception:
-            continue
-        try:
-            validate_segment_schema(data)
-            continue
-        except AssertionError:
-            pass
-        converted = []
-        try:
-            for seg in data:
-                converted.append(_convert(seg))
-        except Exception:
-            continue
-        batch.append((json.dumps(converted), rid))
-    if batch:
-        cur.executemany(
-            f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
-            batch,
-        )
-    conn.commit()
+            updated += 1
+        conn.commit()
     conn.close()
-    return len(batch)
+    return updated
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helper
