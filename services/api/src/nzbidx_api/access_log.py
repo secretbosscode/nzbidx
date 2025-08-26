@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 class AccessLogMiddleware(BaseHTTPMiddleware):
     """Log basic request/response details in JSON."""
 
+    __slots__ = ()
+
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         if request.url.path in ("/health", "/api/health"):
             return await call_next(request)

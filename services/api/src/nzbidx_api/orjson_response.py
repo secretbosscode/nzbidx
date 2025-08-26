@@ -13,14 +13,17 @@ except Exception:  # pragma: no cover - minimal fallback
 
         def __init__(
             self,
-            content: str,
+            content: str | bytes,
             *,
             status_code: int = 200,
             media_type: str = "text/plain",
             headers: dict[str, str] | None = None,
         ) -> None:
             self.status_code = status_code
-            self.body = content.encode("utf-8")
+            if isinstance(content, bytes):
+                self.body = content
+            else:
+                self.body = content.encode("utf-8")
             self.headers = {"content-type": media_type}
             if headers:
                 self.headers.update(headers)
