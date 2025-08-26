@@ -16,6 +16,7 @@ LANGUAGE_TOKENS: dict[str, str] = {
 }
 
 _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
+TAG_SPLIT_RE = re.compile(r"[\s,]+")
 
 # Regexes used to sanitize text before automatic language detection. We strip
 # URLs and anything that is not an ASCII letter so short subjects with a lot of
@@ -31,7 +32,7 @@ def extract_tags(subject: str) -> list[str]:
     tags: list[str] = []
     for match in _TAG_RE.finditer(subject):
         content = match.group(1)
-        for tag in re.split(r"[\s,]+", content):
+        for tag in TAG_SPLIT_RE.split(content):
             tag = tag.strip().lower()
             if tag:
                 tags.append(tag)
