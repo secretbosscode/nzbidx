@@ -40,9 +40,23 @@ def test_cursor_postgres_dsn(monkeypatch):
                 )
             return types.SimpleNamespace(fetchone=lambda: None, fetchall=lambda: [])
 
-        def executemany(self, stmt: str, param_list):  # type: ignore[override]
-            for params in param_list:
-                self.execute(stmt, params)
+        def cursor(self):  # pragma: no cover - trivial
+            conn = self
+
+            class DummyCursor:
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(
+                    self_inner, exc_type, exc, tb
+                ):  # pragma: no cover - trivial
+                    return False
+
+                def executemany(self_inner, stmt: str, param_list):
+                    for params in param_list:
+                        conn.execute(stmt, params)
+
+            return DummyCursor()
 
         def commit(self) -> None:  # pragma: no cover - trivial
             return None
@@ -54,7 +68,11 @@ def test_cursor_postgres_dsn(monkeypatch):
         executed.append(("url", url))
         return DummyConn()
 
-    fake_psycopg = types.SimpleNamespace(connect=fake_connect, Error=Exception)
+    fake_psycopg = types.SimpleNamespace(
+        connect=fake_connect,
+        Error=Exception,
+        errors=types.SimpleNamespace(DuplicateColumn=Exception),
+    )
     monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
     monkeypatch.setenv("CURSOR_DB", "postgres://user@host/db")
     importlib.reload(config)
@@ -96,8 +114,18 @@ def test_set_cursors_logs_error_on_failure(monkeypatch, caplog):
     calls: dict[str, bool] = {"closed": False, "rollback": False}
 
     class DummyConn:
-        def executemany(self, stmt, data):
-            raise sqlite3.OperationalError("locked")
+        class DummyCursor:
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, exc_type, exc, tb):  # pragma: no cover - trivial
+                return False
+
+            def executemany(self_inner, stmt, data):
+                raise sqlite3.OperationalError("locked")
+
+        def cursor(self):
+            return self.DummyCursor()
 
         def commit(self) -> None:  # pragma: no cover - not reached
             pass

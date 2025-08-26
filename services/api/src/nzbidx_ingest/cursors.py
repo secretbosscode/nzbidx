@@ -93,7 +93,15 @@ def set_cursors(updates: dict[str, int]) -> None:
     else:  # pragma: no cover - optional dependency
         errors = (sqlite3.OperationalError,)
     try:
-        conn.executemany(stmt, [(g, c) for g, c in updates.items()])
+        try:
+            with conn.cursor() as cur:
+                cur.executemany(stmt, [(g, c) for g, c in updates.items()])
+        except (AttributeError, TypeError):
+            cur = conn.cursor()
+            try:
+                cur.executemany(stmt, [(g, c) for g, c in updates.items()])
+            finally:
+                cur.close()
         conn.commit()
     except errors as exc:
         logger.exception("cursor_update_failed")
