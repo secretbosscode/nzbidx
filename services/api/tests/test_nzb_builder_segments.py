@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 
 import pytest
 
@@ -40,8 +40,8 @@ DummyConn.__module__ = "sqlite3"
 @pytest.mark.parametrize(
     "seg_data",
     [
-        json.dumps([{"number": 1, "message_id": "m1", "group": "g", "size": 123}]),
-        json.dumps([[1, "m1", "g", 123]]),
+        orjson.dumps([{"number": 1, "message_id": "m1", "group": "g", "size": 123}]).decode(),
+        orjson.dumps([[1, "m1", "g", 123]]).decode(),
     ],
 )
 def test_build_nzb_for_release_accepts_segment_formats(monkeypatch, seg_data):
@@ -55,9 +55,9 @@ def test_build_nzb_for_release_accepts_segment_formats(monkeypatch, seg_data):
 @pytest.mark.parametrize(
     "seg_data",
     [
-        json.dumps([[1, "m1", "g"]]),
-        json.dumps([{"number": "x", "message_id": "m1", "group": "g", "size": 1}]),
-        json.dumps([123]),
+        orjson.dumps([[1, "m1", "g"]]).decode(),
+        orjson.dumps([{ "number": "x", "message_id": "m1", "group": "g", "size": 1}]).decode(),
+        orjson.dumps([123]).decode(),
     ],
 )
 def test_build_nzb_for_release_invalid_segments(monkeypatch, seg_data):
