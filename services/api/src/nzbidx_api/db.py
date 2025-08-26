@@ -14,7 +14,7 @@ import importlib
 import logging
 import os
 import pkgutil
-import time
+from functools import lru_cache
 from importlib import resources
 from urllib.parse import urlparse, urlunparse
 
@@ -126,6 +126,7 @@ def get_engine() -> Optional[AsyncEngine]:
     return engine
 
 
+@lru_cache()
 def load_schema_statements() -> list[str]:
     sql = (
         resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
@@ -352,14 +353,12 @@ async def analyze(table: str | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 _conn: Optional[Any] = None
-_LAST_PING: float = 0.0
-PING_INTERVAL = 60.0
 
 
 def get_connection() -> Any:
     """Return a persistent database connection for synchronous callers."""
 
-    global _conn, _LAST_PING
+    global _conn
     from nzbidx_ingest.main import connect_db  # type: ignore
 
     reconnect: Optional[str] = None
@@ -369,22 +368,19 @@ def get_connection() -> Any:
         if getattr(_conn, "closed", False):
             reconnect = "closed"
         else:
-            now = time.monotonic()
-            if now - _LAST_PING > PING_INTERVAL:
-                cur = None
-                try:
-                    cur = _conn.cursor()
-                    cur.execute("SELECT 1")
-                    cur.fetchone()
-                    _LAST_PING = now
-                except Exception:
-                    reconnect = "error"
-                finally:
-                    if cur is not None:
-                        try:
-                            cur.close()
-                        except Exception:
-                            pass
+            cur = None
+            try:
+                cur = _conn.cursor()
+                cur.execute("SELECT 1")
+                cur.fetchone()
+            except Exception:
+                reconnect = "error"
+            finally:
+                if cur is not None:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
 
     if reconnect:
         if reconnect != "init":
@@ -394,7 +390,6 @@ def get_connection() -> Any:
             except Exception:
                 pass
         _conn = connect_db()
-        _LAST_PING = time.monotonic()
     return _conn
 
 
