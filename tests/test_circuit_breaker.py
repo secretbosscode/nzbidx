@@ -1,10 +1,5 @@
 from __future__ import annotations
-
-import threading
-from concurrent.futures import ThreadPoolExecutor
 import asyncio
-import time
-
 import pytest
 
 from nzbidx_api.middleware_circuit import (
@@ -14,43 +9,40 @@ from nzbidx_api.middleware_circuit import (
 )
 
 
-def test_circuit_breaker_thread_safety() -> None:
+def test_circuit_breaker_async_locking() -> None:
     breaker = CircuitBreaker(max_failures=1, reset_seconds=60)
-    barrier = threading.Barrier(5)
-    count_lock = threading.Lock()
+    count_lock = asyncio.Lock()
     call_count = 0
 
-    def fail() -> None:
+    async def fail() -> None:
         nonlocal call_count
-        with count_lock:
+        async with count_lock:
             call_count += 1
-        time.sleep(0.05)
+        await asyncio.sleep(0.05)
         raise ValueError("boom")
 
-    def worker() -> None:
-        barrier.wait()
+    async def worker() -> None:
         with pytest.raises((ValueError, CircuitOpenError)):
-            breaker.call(fail)
+            await breaker.call(fail)
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(worker) for _ in range(5)]
-        for future in futures:
-            future.result()
+    async def run() -> None:
+        await asyncio.gather(*(worker() for _ in range(5)))
+        assert call_count == 1
+        assert await breaker.is_open()
 
-    assert call_count == 1
-    assert breaker.is_open()
+    asyncio.run(run())
 
 
 def test_circuit_breaker_async_concurrency(monkeypatch) -> None:
     monkeypatch.setattr("nzbidx_api.middleware_circuit.settings.retry_max", 0)
 
     breaker = CircuitBreaker(max_failures=1, reset_seconds=60)
-    count_lock = threading.Lock()
+    count_lock = asyncio.Lock()
     call_count = 0
 
     async def fail_async() -> None:
         nonlocal call_count
-        with count_lock:
+        async with count_lock:
             call_count += 1
         raise ValueError("boom")
 
@@ -60,8 +52,7 @@ def test_circuit_breaker_async_concurrency(monkeypatch) -> None:
 
     async def run() -> None:
         await asyncio.gather(*(worker() for _ in range(10)))
+        assert call_count == 1
+        assert await breaker.is_open()
 
     asyncio.run(run())
-
-    assert call_count == 1
-    assert breaker.is_open()

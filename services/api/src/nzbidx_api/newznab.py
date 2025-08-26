@@ -7,6 +7,7 @@ import html
 import logging
 from pathlib import Path
 from typing import Any, Optional
+from nzbidx_api.json_utils import orjson
 from datetime import datetime, timezone
 from email.utils import format_datetime
 
@@ -121,7 +122,7 @@ def _load_categories() -> list[dict[str, str]]:
     cfg_path = os.getenv("CATEGORY_CONFIG")
     if cfg_path:
         try:
-            data = orjson.loads(Path(cfg_path).read_text(encoding="utf-8"))
+            data = orjson.loads(Path(cfg_path).read_bytes())
             return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
         except FileNotFoundError:
             log.warning("category config file not found")
@@ -133,6 +134,12 @@ def _load_categories() -> list[dict[str, str]]:
 CATEGORIES = _load_categories()
 _CATEGORY_MAP = {c["name"]: c["id"] for c in CATEGORIES}
 _ID_NAME_MAP = {c["id"]: c["name"] for c in CATEGORIES}
+
+CATEGORY_CHILDREN: dict[str, list[str]] = {}
+for c in CATEGORIES:
+    parent = c["name"].split("/", 1)[0]
+    CATEGORY_CHILDREN.setdefault(parent, []).append(c["id"])
+
 MOVIES_CATEGORY_ID = _CATEGORY_MAP.get("Movies", "2000")
 TV_CATEGORY_ID = _CATEGORY_MAP.get("TV", "5000")
 AUDIO_CATEGORY_ID = _CATEGORY_MAP.get("Audio", _CATEGORY_MAP.get("Audio/Music", "3000"))
@@ -141,12 +148,7 @@ BOOKS_CATEGORY_ID = _CATEGORY_MAP.get("EBook", "7020")
 
 def _collect_category_ids(parent: str) -> list[str]:
     """Return IDs for ``parent`` and any ``parent/*`` subcategories."""
-
-    return [
-        c["id"]
-        for c in CATEGORIES
-        if c["name"] == parent or c["name"].startswith(f"{parent}/")
-    ]
+    return CATEGORY_CHILDREN.get(parent, [])
 
 
 def expand_category_ids(ids: list[str]) -> list[str]:
