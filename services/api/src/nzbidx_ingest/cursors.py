@@ -81,7 +81,7 @@ def set_cursors(updates: dict[str, int]) -> None:
     conn, paramstyle = _conn()
     stmt = (
         f'INSERT INTO cursor("group", last_article, irrelevant) '
-        f'VALUES ({paramstyle}, {paramstyle}, 0) '
+        f"VALUES ({paramstyle}, {paramstyle}, 0) "
         'ON CONFLICT("group") DO UPDATE SET last_article=excluded.last_article, irrelevant=0'
     )
     conn.executemany(stmt, [(g, c) for g, c in updates.items()])

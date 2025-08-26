@@ -47,4 +47,6 @@ src/nzbidx_ingest/nntp_compat.py
 src/nzbidx_ingest/parsers.py
 src/nzbidx_ingest/resource_monitor.py
 src/nzbidx_ingest/segment_schema.py
+src/nzbidx_ingest/sql.py
 tests/test_nzb_builder_segments.py
+tests/test_search_cache_service.py
