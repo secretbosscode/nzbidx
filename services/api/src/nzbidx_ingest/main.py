@@ -34,6 +34,7 @@ from .db_migrations import (
     ensure_release_adult_year_partition,
     migrate_release_adult_partitions,
 )
+from nzbidx_api.db import sql_placeholder
 from nzbidx_migrations import apply_sync
 
 logger = logging.getLogger(__name__)
@@ -508,6 +509,7 @@ def insert_release(
         return text.encode("utf-8", "surrogateescape").decode("utf-8", "ignore")
 
     cur = conn.cursor()
+    placeholder = sql_placeholder(conn)
 
     items: list[
         tuple[
@@ -590,12 +592,7 @@ def insert_release(
             )
         )
 
-    placeholders = ",".join(
-        [
-            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            for _ in titles
-        ]
-    )
+    placeholders = ",".join([placeholder] * len(titles))
     existing: set[tuple[str, int]] = set()
     updates: list[tuple[Optional[datetime], str, int]] = []
     if titles:
@@ -617,7 +614,7 @@ def insert_release(
             updates.append((row[7], row[0], row[2]))
     inserted = {row[0] for row in to_insert}
     if to_insert:
-        if conn.__class__.__module__.startswith("sqlite3"):
+        if placeholder == "?":
             sqlite_rows = [
                 (
                     row[0],
@@ -662,8 +659,7 @@ def insert_release(
                 )
     # Ensure posted_at is updated for existing rows
     if updates:
-        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-        if conn.__class__.__module__.startswith("sqlite3"):
+        if placeholder == "?":
             sqlite_updates = [
                 (u[0].isoformat() if u[0] else None, u[1], u[2]) for u in updates
             ]
@@ -683,7 +679,7 @@ def insert_release(
 def prune_group(conn: Any, group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
     cur = conn.cursor()
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    placeholder = sql_placeholder(conn)
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
 

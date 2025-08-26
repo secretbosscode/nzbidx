@@ -27,6 +27,7 @@ from .main import (
     CATEGORY_MAP,
     prune_group,
 )
+from nzbidx_api.db import sql_placeholder
 from email.utils import parsedate_to_datetime
 from datetime import timezone
 
@@ -231,9 +232,7 @@ def _process_groups(
         if db is not None:
             try:
                 cur = db.cursor()
-                placeholder = (
-                    "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
-                )
+                placeholder = sql_placeholder(db)
                 for title, segs in parts.items():
                     if not segs:
                         continue
