@@ -669,7 +669,11 @@ def prune_group(conn: Any, group: str) -> None:
     conn.commit()
 
 
-def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
+def _infer_category(
+    subject: str,
+    group: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
 
@@ -690,7 +694,8 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
                 return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
-    for tag in extract_tags(subject):
+    tag_list = tags if tags is not None else extract_tags(subject)
+    for tag in tag_list:
         if tag in CATEGORY_MAP:
             return CATEGORY_MAP[tag]
 
