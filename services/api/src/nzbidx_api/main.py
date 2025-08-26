@@ -143,6 +143,10 @@ _backfill_scheduler_task: asyncio.Task | None = None
 
 logger = logging.getLogger(__name__)
 
+# Cache the standard LogRecord fields once so that formatters can
+# efficiently filter out extra attributes on each log call.
+_DEFAULT_LOG_FIELDS = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__)
+
 NNTP_ERROR_MESSAGES = {
     NntpConfigError: (
         "NNTP configuration missing; set NNTP_HOST, NNTP_PORT, NNTP_USER "
@@ -179,7 +183,7 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         for k, v in record.__dict__.items():
-            if k not in logging.LogRecord("", 0, "", 0, "", (), None).__dict__:
+            if k not in _DEFAULT_LOG_FIELDS:
                 payload[k] = v
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
@@ -194,7 +198,7 @@ class PlainFormatter(logging.Formatter):
         extras = [
             f"{k}={v}"
             for k, v in record.__dict__.items()
-            if k not in logging.LogRecord("", 0, "", 0, "", (), None).__dict__
+            if k not in _DEFAULT_LOG_FIELDS
         ]
         if extras:
             if record.exc_info:
