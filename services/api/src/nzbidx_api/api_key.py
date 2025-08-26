@@ -5,8 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
-from typing import Set
-from hmac import compare_digest
+from typing import FrozenSet, Set
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -46,26 +45,30 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, reload_keys: bool = False) -> None:
         super().__init__(app)
         self.reload_keys = reload_keys
-        self.valid_keys: Set[str] = api_keys()
+        self.valid_keys: FrozenSet[str] = frozenset(api_keys())
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if self.reload_keys:
             reload_api_keys()
-            self.valid_keys = api_keys()
-        if not request.url.path.startswith("/api"):
+            self.valid_keys = frozenset(api_keys())
+        path = ""
+        if hasattr(request, "url"):
+            path = getattr(request.url, "path", "")
+        if not path.startswith("/api"):
             return await call_next(request)
         if not self.valid_keys:
             return await call_next(request)
         provided = request.headers.get("X-Api-Key")
-        if not provided:
+        if not provided and hasattr(request, "query_params"):
             provided = request.query_params.get("apikey")
         if not provided:
             auth = request.headers.get("Authorization")
             if auth and auth.lower().startswith("basic "):
                 creds = _basic_credentials(auth)
-                match = creds & self.valid_keys
-                if match:
-                    provided = match.pop()
-        if not any(compare_digest(provided or "", valid) for valid in self.valid_keys):
+                for cred in creds:
+                    if cred in self.valid_keys:
+                        provided = cred
+                        break
+        if provided not in self.valid_keys:
             return unauthorized()
         return await call_next(request)
