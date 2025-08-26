@@ -15,7 +15,14 @@ LANGUAGE_TOKENS: dict[str, str] = {
     "[GERMAN]": "de",
 }
 
+LANGUAGE_TOKENS_RE = (
+    re.compile("|".join(map(re.escape, LANGUAGE_TOKENS.keys())), re.IGNORECASE)
+    if LANGUAGE_TOKENS
+    else None
+)
+
 _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
+TAG_SPLIT_RE = re.compile(r"[\s,]+")
 
 # Regexes used to sanitize text before automatic language detection. We strip
 # URLs and anything that is not an ASCII letter so short subjects with a lot of
@@ -31,7 +38,7 @@ def extract_tags(subject: str) -> list[str]:
     tags: list[str] = []
     for match in _TAG_RE.finditer(subject):
         content = match.group(1)
-        for tag in re.split(r"[\s,]+", content):
+        for tag in TAG_SPLIT_RE.split(content):
             tag = tag.strip().lower()
             if tag:
                 tags.append(tag)
@@ -190,6 +197,52 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
     return {}
 
 
+@lru_cache(maxsize=4096)
+def _normalize_cached(subject: str) -> str:
+    """Return a cleaned, human-readable version of a Usenet subject line.
+
+    This helper performs the normalization steps only and is cached so repeated
+    calls for the same ``subject`` are inexpensive. Tag extraction happens
+    separately in :func:`normalize_subject`.
+    """
+    if not subject:
+        return ""
+
+    # Convert common separators to spaces.
+    cleaned = subject.replace(".", " ").replace("_", " ")
+
+    # Remove bracketed tags.
+    cleaned = _TAG_RE.sub("", cleaned)
+
+    # Remove explicit yEnc markers.
+    cleaned = re.sub(r"(?i)\byenc\b", "", cleaned)
+
+    # Drop part/size information such as "(01/15)" or "[12345/12346]".
+    cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
+
+    # Remove language tokens based on LANGUAGE_TOKENS keys.
+    if LANGUAGE_TOKENS_RE:
+        cleaned = LANGUAGE_TOKENS_RE.sub("", cleaned)
+
+    # Remove common filler words.
+    fillers = ("repost", "sample")
+    cleaned = re.sub(
+        rf"\b({'|'.join(map(re.escape, fillers))})\b", "", cleaned, flags=re.IGNORECASE
+    )
+
+    # Strip trailing segment markers and archive extensions commonly found in
+    # multipart releases. Subjects like ``Name.part01.rar`` or ``Name.part1``
+    # should normalize to ``Name`` so all segments dedupe to a single entry.
+    cleaned = re.sub(r"(?i)\bpart\s*\d+\b", "", cleaned)
+    cleaned = re.sub(r"(?i)\b(rar|par2|zip)\b", "", cleaned)
+
+    # Collapse whitespace and trim leading/trailing separators or dashes.
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
+
+    return cleaned
+
+
 def normalize_subject(
     subject: str, *, with_tags: bool = False
 ) -> tuple[str, list[str]] | str:
@@ -209,55 +262,21 @@ def normalize_subject(
     if not subject:
         return ("", []) if with_tags else ""
 
-    # Extract bracketed tags and structured hints before cleaning. The specific
-    # ``extract_*`` helpers operate on the raw subject, so run them before we
-    # strip punctuation.
-    generic_tags = extract_tags(subject)
-    tag_dict: dict[str, str] = {}
-    for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
-        tag_dict.update(extractor(subject))
-    for t in generic_tags:
-        tag_dict[t] = t
+    cleaned = _normalize_cached(subject)
 
-    # Convert common separators to spaces.
-    cleaned = subject.replace(".", " ").replace("_", " ")
-
-    # Remove bracketed tags.
-    cleaned = _TAG_RE.sub("", cleaned)
-
-    # Remove explicit yEnc markers.
-    cleaned = re.sub(r"(?i)\byenc\b", "", cleaned)
-
-    # Drop part/size information such as "(01/15)" or "[12345/12346]".
-    cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
-
-    # Remove language tokens based on LANGUAGE_TOKENS keys.
-    if LANGUAGE_TOKENS:
-        tokens_pattern = "|".join(map(re.escape, LANGUAGE_TOKENS.keys()))
-        cleaned = re.sub(tokens_pattern, "", cleaned, flags=re.IGNORECASE)
-
-    # Remove common filler words.
-    fillers = ("repost", "sample")
-    cleaned = re.sub(
-        rf"\b({'|'.join(map(re.escape, fillers))})\b", "", cleaned, flags=re.IGNORECASE
-    )
-
-    # Strip trailing segment markers and archive extensions commonly found in
-    # multipart releases.  Subjects like ``Name.part01.rar`` or ``Name.part1``
-    # should normalize to ``Name`` so all segments dedupe to a single entry.
-    cleaned = re.sub(r"(?i)\bpart\s*\d+\b", "", cleaned)
-    cleaned = re.sub(r"(?i)\b(rar|par2|zip)\b", "", cleaned)
-
-    # Collapse whitespace and trim leading/trailing separators or dashes.
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
-
-    tags = sorted(
-        {
-            *generic_tags,
-            *[value.lower() for value in tag_dict.values() if value],
-        }
-    )
     if with_tags:
+        generic_tags = extract_tags(subject)
+        tag_dict: dict[str, str] = {}
+        for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
+            tag_dict.update(extractor(subject))
+        for t in generic_tags:
+            tag_dict[t] = t
+        tags = sorted(
+            {
+                *generic_tags,
+                *[value.lower() for value in tag_dict.values() if value],
+            }
+        )
         return cleaned, tags
+
     return cleaned

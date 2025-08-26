@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os  # used to ensure path exists for SQLite databases
 import sqlite3
-from typing import Any, Tuple
+from typing import Any, Iterable, Tuple
 from urllib.parse import urlparse
 
 from .config import CURSOR_DB
@@ -45,28 +45,45 @@ def _conn() -> Tuple[Any, str]:
     return conn, paramstyle
 
 
+def get_cursors(groups: Iterable[str]) -> dict[str, int]:
+    """Return the last processed article number for each ``group``."""
+    group_list = list(groups)
+    if not group_list:
+        return {}
+    conn, paramstyle = _conn()
+    placeholders = ",".join([paramstyle] * len(group_list))
+    cur = conn.execute(
+        f'SELECT "group", last_article FROM cursor WHERE "group" IN ({placeholders}) AND irrelevant = 0',
+        tuple(group_list),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return {row[0]: int(row[1]) for row in rows}
+
+
 def get_cursor(group: str) -> int | None:
     """Return the last processed article number for ``group``."""
+    return get_cursors([group]).get(group)
+
+
+def set_cursors(updates: dict[str, int]) -> None:
+    """Persist ``last_article`` cursors for multiple groups."""
+    if not updates:
+        return
     conn, paramstyle = _conn()
-    cur = conn.execute(
-        f'SELECT last_article FROM cursor WHERE "group" = {paramstyle} AND irrelevant = 0',
-        (group,),
+    stmt = (
+        f'INSERT INTO cursor("group", last_article, irrelevant) '
+        f'VALUES ({paramstyle}, {paramstyle}, 0) '
+        'ON CONFLICT("group") DO UPDATE SET last_article=excluded.last_article, irrelevant=0'
     )
-    row = cur.fetchone()
+    conn.executemany(stmt, [(g, c) for g, c in updates.items()])
+    conn.commit()
     conn.close()
-    return int(row[0]) if row else None
 
 
 def set_cursor(group: str, last_article: int) -> None:
     """Persist the ``last_article`` cursor for ``group``."""
-    conn, paramstyle = _conn()
-    conn.execute(
-        f'INSERT INTO cursor("group", last_article, irrelevant) VALUES ({paramstyle}, {paramstyle}, 0) '
-        'ON CONFLICT("group") DO UPDATE SET last_article=excluded.last_article, irrelevant=0',
-        (group, last_article),
-    )
-    conn.commit()
-    conn.close()
+    set_cursors({group: last_article})
 
 
 def mark_irrelevant(group: str) -> None:

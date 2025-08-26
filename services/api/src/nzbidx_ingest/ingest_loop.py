@@ -142,13 +142,15 @@ def _process_groups(
         parts: dict[str, list[tuple[int, str, str, int]]] = {}
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
-            size = int(header.get("bytes") or header.get(":bytes") or 0)
             current = idx
             message_id = str(header.get("message-id") or "").strip()
-            if size <= 0 and message_id:
-                size = client.body_size(message_id)
-            if size <= 0:
+            size = int(header.get("bytes") or header.get(":bytes") or 0)
+            if not message_id:
                 continue
+            if size <= 0:
+                size = client.body_size(message_id)
+                if size <= 0:
+                    continue
             subject = header.get("subject", "")
             norm_title, tags = normalize_subject(subject, with_tags=True)
             norm_title = norm_title.lower()
@@ -193,11 +195,10 @@ def _process_groups(
                     size,
                     posted_at,
                 )
-            if message_id:
-                seg_num = extract_segment_number(subject)
-                parts.setdefault(dedupe_key, []).append(
-                    (seg_num, message_id.strip("<>"), group, size)
-                )
+            seg_num = extract_segment_number(subject)
+            parts.setdefault(dedupe_key, []).append(
+                (seg_num, message_id.strip("<>"), group, size)
+            )
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
@@ -231,7 +232,8 @@ def _process_groups(
                             existing_segments = json.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
-                    validate_segment_schema(existing_segments)
+                    if config.VALIDATE_SEGMENTS:
+                        validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
                     deduped: list[dict[str, int | str]] = []
@@ -249,7 +251,8 @@ def _process_groups(
                         seg for seg in deduped if seg["message_id"] not in existing_ids
                     ]
                     combined_segments = existing_segments + new_segments
-                    validate_segment_schema(combined_segments)
+                    if config.VALIDATE_SEGMENTS:
+                        validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
