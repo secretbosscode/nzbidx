@@ -14,7 +14,7 @@ _CGROUP_ROOT = Path("/sys/fs/cgroup")
 
 def _read(path: Path) -> Optional[int]:
     try:
-        return int(path.read_text().strip())
+        return int(path.read_bytes())
     except (FileNotFoundError, ValueError):
         return None
 
