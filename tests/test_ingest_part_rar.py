@@ -37,9 +37,8 @@ def test_part_rar_segments_collapsed(monkeypatch, tmp_path) -> None:
         )
         return conn
 
-    monkeypatch.setattr(loop, "connect_db", _connect)
-
-    loop.run_once()
+    with _connect() as conn:
+        loop.run_once(conn)
 
     with sqlite3.connect(db_path) as check:
         rows = check.execute("SELECT norm_title, size_bytes FROM release").fetchall()

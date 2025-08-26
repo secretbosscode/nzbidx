@@ -199,6 +199,9 @@ except Exception:  # pragma: no cover - optional dependency
     text = None  # type: ignore
 
 
+_SCHEMA_CHECKED: set[str] = set()
+
+
 def connect_db() -> Any:
     """Connect to the database and ensure the release table exists.
 
@@ -226,8 +229,11 @@ def connect_db() -> Any:
             raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
         parsed = urlparse(url)
 
-        def _connect(u: str) -> Any:
+        def _connect(u: str, verify: bool = True) -> Any:
             engine = create_engine(u, echo=False, future=True)
+
+            if not verify:
+                return engine.raw_connection()
 
             # Ensure the ``release`` table is partitioned before attempting any
             # migrations.  If the table exists but is not partitioned, attempt to
@@ -383,8 +389,13 @@ def connect_db() -> Any:
                     apply_sync(conn, text)
             return engine.raw_connection()
 
+        cache_key = url
+        verify = cache_key not in _SCHEMA_CHECKED
         try:
-            return _connect(url)
+            conn = _connect(url, verify=verify)
+            if verify:
+                _SCHEMA_CHECKED.add(cache_key)
+            return conn
         except ModuleNotFoundError as exc:  # pragma: no cover - missing driver
             logger.warning("psycopg_unavailable", extra={"error": str(exc)})
             raise RuntimeError(
@@ -402,7 +413,10 @@ def connect_db() -> Any:
             with engine.connect() as conn:  # type: ignore[call-arg]
                 conn.execute(text(f'CREATE DATABASE "{dbname}"'))
             engine.dispose()
-            return _connect(url)
+            conn = _connect(url, verify=verify)
+            if verify:
+                _SCHEMA_CHECKED.add(cache_key)
+            return conn
 
     # Treat remaining URLs as SQLite database files.  Only attempt to create
     # directories for plain file paths; URLs with a scheme (``foo://``) should
@@ -410,47 +424,51 @@ def connect_db() -> Any:
     if url == ":memory":
         raise RuntimeError("DATABASE_URL must point to a persistent database")
 
+    cache_key = url
+    verify = cache_key not in _SCHEMA_CHECKED
     if url != ":memory:" and "://" not in url:
         path = Path(url)
         path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(url)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS release (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            norm_title TEXT,
-            category TEXT,
-            category_id INT,
-            language TEXT NOT NULL DEFAULT 'und',
-            tags TEXT NOT NULL DEFAULT '',
-            source_group TEXT,
-            size_bytes BIGINT,
-            posted_at TIMESTAMPTZ,
-            segments TEXT,
-            has_parts BOOLEAN NOT NULL DEFAULT 0,
-            part_count INT NOT NULL DEFAULT 0
+    if verify:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS release (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                norm_title TEXT,
+                category TEXT,
+                category_id INT,
+                language TEXT NOT NULL DEFAULT 'und',
+                tags TEXT NOT NULL DEFAULT '',
+                source_group TEXT,
+                size_bytes BIGINT,
+                posted_at TIMESTAMPTZ,
+                segments TEXT,
+                has_parts BOOLEAN NOT NULL DEFAULT 0,
+                part_count INT NOT NULL DEFAULT 0
+            )
+            """,
         )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
-    )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
+        )
+        _SCHEMA_CHECKED.add(cache_key)
     return conn
 
 
