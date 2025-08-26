@@ -373,6 +373,8 @@ BUILD = os.getenv("GIT_SHA", _git_sha())
 class TimingMiddleware(BaseHTTPMiddleware):
     """Log timing for ``/api`` responses."""
 
+    __slots__ = ()
+
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
         start = time.monotonic()
         response = await call_next(request)
