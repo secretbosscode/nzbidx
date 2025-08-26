@@ -12,6 +12,7 @@
 - Include `langdetect` dependency for automatic language detection.
 - Ignore empty search queries to avoid returning entire categories.
 - Handle search vector migration automatically at startup; manual SQL script removed.
+- Add `release_posted_at_idx` index on `posted_at DESC`.
 
 ## [0.0.0] - 2024-01-01
 - Initial release.

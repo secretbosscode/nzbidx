@@ -203,3 +203,41 @@ def test_missing_nntplib_raises(monkeypatch) -> None:
     # Restore original modules for other tests
     importlib.reload(nntp_compat)
     importlib.reload(nntp_client)
+
+
+def test_body_size_from_head(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+
+    class DummyServer:
+        def head(self, message_id):
+            return ("", 0, message_id, ["Bytes: 123"])
+
+        def stat(self, message_id):  # pragma: no cover - ensure not used
+            raise AssertionError("stat should not be called")
+
+        def body(self, message_id, decode=False):  # pragma: no cover - ensure not used
+            raise AssertionError("body should not be called")
+
+    client = nntp_client.NNTPClient()
+    monkeypatch.setattr(client, "_ensure_connection", lambda: DummyServer())
+
+    assert client.body_size("m1") == 123
+
+
+def test_body_size_from_stat(monkeypatch) -> None:
+    monkeypatch.setenv("NNTP_HOST", "example.com")
+
+    class DummyServer:
+        def head(self, message_id):
+            return ("", 0, message_id, [])
+
+        def stat(self, message_id):
+            return ("223 0 <m1> 456", 0, "<m1>")
+
+        def body(self, message_id, decode=False):  # pragma: no cover - ensure not used
+            raise AssertionError("body should not be called")
+
+    client = nntp_client.NNTPClient()
+    monkeypatch.setattr(client, "_ensure_connection", lambda: DummyServer())
+
+    assert client.body_size("m1") == 456
