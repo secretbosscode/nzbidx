@@ -36,6 +36,9 @@ class Settings:
     search_ttl_seconds: int = field(
         default_factory=lambda: _int_env("SEARCH_TTL_SECONDS", 60)
     )
+    search_cache_max_entries: int = field(
+        default_factory=lambda: _int_env("SEARCH_CACHE_MAX_ENTRIES", 1024)
+    )
     rate_limit: int = field(default_factory=lambda: _int_env("RATE_LIMIT", 60))
     rate_window: int = field(default_factory=lambda: _int_env("RATE_WINDOW", 60))
     key_rate_limit: int = field(default_factory=lambda: _int_env("KEY_RATE_LIMIT", 100))
