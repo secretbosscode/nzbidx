@@ -7,7 +7,7 @@ exist the function raises :class:`newznab.NzbFetchError`.
 
 from __future__ import annotations
 
-import json
+from .json_utils import orjson
 import logging
 import sqlite3
 import xml.etree.ElementTree as ET
@@ -63,7 +63,9 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             raise LookupError("release has no segments")
         try:
             data = (
-                json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
+                orjson.loads(seg_data)
+                if isinstance(seg_data, (str, bytes))
+                else seg_data
             )
         except Exception:
             log.warning("invalid_segments_json", extra={"release_id": rid})
