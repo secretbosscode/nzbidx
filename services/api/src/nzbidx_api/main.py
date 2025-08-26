@@ -8,6 +8,7 @@ import time
 import asyncio
 from pathlib import Path
 from typing import Optional, Callable
+from urllib.parse import urlencode
 
 import threading
 from nzbidx_ingest import ingest_loop
@@ -529,9 +530,14 @@ def _cached_xml_response(
     return Response(body, media_type="application/xml", headers=headers)
 
 
-def _params_key(params) -> str:
-    """Return a stable cache key for ``params``."""
-    return "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+def encode_params(params) -> str:
+    """URL encode query parameters.
+
+    ``params`` may be a mapping or an iterable of key/value pairs. If a
+    deterministic ordering is required, callers should pre-sort the parameters
+    before invoking this function.
+    """
+    return urlencode(params)
 
 
 async def api(request: Request) -> Response:
@@ -576,7 +582,7 @@ async def api(request: Request) -> Response:
         return _xml_response(caps_xml())
 
     if t == "search":
-        cache_key = f"search:{_params_key(params)}"
+        cache_key = f"search:{encode_params(sorted(params.items()))}"
         cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
@@ -604,7 +610,7 @@ async def api(request: Request) -> Response:
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "tvsearch":
-        cache_key = f"tvsearch:{_params_key(params)}"
+        cache_key = f"tvsearch:{encode_params(sorted(params.items()))}"
         cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
@@ -636,7 +642,7 @@ async def api(request: Request) -> Response:
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "movie":
-        cache_key = f"movie:{_params_key(params)}"
+        cache_key = f"movie:{encode_params(sorted(params.items()))}"
         cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
@@ -682,7 +688,7 @@ async def api(request: Request) -> Response:
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "music":
-        cache_key = f"music:{_params_key(params)}"
+        cache_key = f"music:{encode_params(sorted(params.items()))}"
         cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
@@ -717,7 +723,7 @@ async def api(request: Request) -> Response:
         return _cached_xml_response(request, xml, allow_304=not no_cache)
 
     if t == "book":
-        cache_key = f"book:{_params_key(params)}"
+        cache_key = f"book:{encode_params(sorted(params.items()))}"
         cached = await get_cached_rss(cache_key) if not no_cache else None
         if cached:
             return _cached_xml_response(request, cached)
