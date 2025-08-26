@@ -15,6 +15,8 @@ sys.path.append(str(ROOT / "services" / "api" / "src"))
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.segment_schema import validate_segment_schema
 
+BATCH_SIZE = 1000
+
 
 def _convert(seg):
     if isinstance(seg, dict):
@@ -40,34 +42,37 @@ def normalize() -> int:
     cur = conn.cursor()
     placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute("SELECT id, segments FROM release WHERE segments IS NOT NULL")
-    rows = cur.fetchall()
     updated = 0
-    for rid, seg_json in rows:
-        try:
-            data = (
-                orjson.loads(seg_json or "[]")
-                if isinstance(seg_json, (str, bytes))
-                else seg_json or []
+    while True:
+        rows = cur.fetchmany(BATCH_SIZE)
+        if not rows:
+            break
+        for rid, seg_json in rows:
+            try:
+                data = (
+                    orjson.loads(seg_json or "[]")
+                    if isinstance(seg_json, (str, bytes))
+                    else seg_json or []
+                )
+            except Exception:
+                continue
+            try:
+                validate_segment_schema(data)
+                continue
+            except AssertionError:
+                pass
+            converted = []
+            try:
+                for seg in data:
+                    converted.append(_convert(seg))
+            except Exception:
+                continue
+            cur.execute(
+                f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
+                (orjson.dumps(converted).decode(), rid),
             )
-        except Exception:
-            continue
-        try:
-            validate_segment_schema(data)
-            continue
-        except AssertionError:
-            pass
-        converted = []
-        try:
-            for seg in data:
-                converted.append(_convert(seg))
-        except Exception:
-            continue
-        cur.execute(
-            f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
-            (orjson.dumps(converted).decode(), rid),
-        )
-        updated += 1
-    conn.commit()
+            updated += 1
+        conn.commit()
     conn.close()
     return updated
 

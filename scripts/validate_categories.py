@@ -37,7 +37,7 @@ def main(
         title = norm_title or ""
         tag_items = " ".join(f"[{t}]" for t in (tags or "").split(",") if t)
         pseudo_subject = f"{title} {tag_items}".strip()
-        expected = _infer_category(pseudo_subject, source_group)
+        expected = _infer_category(pseudo_subject, str(source_group))
         if expected is None:
             continue
         expected_int = int(expected)
