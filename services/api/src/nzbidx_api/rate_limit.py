@@ -40,6 +40,8 @@ class RateLimiter:
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Apply simple IP based rate limiting."""
 
+    __slots__ = ("limiter", "limit")
+
     def __init__(
         self, app, limit: int | None = None, window: int | None = None
     ) -> None:
