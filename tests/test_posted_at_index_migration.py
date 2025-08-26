@@ -108,6 +108,7 @@ def test_apply_schema_runs_migration_without_feature_not_supported(
             return "CREATE TABLE release (id INTEGER PRIMARY KEY, posted_at TIMESTAMP);"
 
     monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
+    db.load_schema_statements.cache_clear()
 
     orig_migrate = m_posted.migrate
 
