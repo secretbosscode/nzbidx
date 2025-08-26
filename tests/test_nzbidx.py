@@ -148,7 +148,7 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "10")
     monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "10")
-    api_config.settings.reload()
+    api_config.reload_if_env_changed()
     assert api_config.settings.nzb_timeout_seconds == 10
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "20")
@@ -158,6 +158,7 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
         nzb_builder, "_segments_from_db", lambda _rid: [(1, "m1", "g", 123)]
     )
 
+    api_config.reload_if_env_changed()
     nzb_builder.build_nzb_for_release("123")
 
     assert api_config.settings.nzb_timeout_seconds == 20
