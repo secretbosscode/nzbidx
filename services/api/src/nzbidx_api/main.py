@@ -176,6 +176,8 @@ def _run_backfill() -> None:
 class JsonFormatter(logging.Formatter):
     """Minimal JSON formatter for structured logs."""
 
+    __slots__ = ()
+
     def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
         payload = {
             "time": self.formatTime(record, "%Y-%m-%dT%H:%M:%SZ"),
@@ -192,6 +194,8 @@ class JsonFormatter(logging.Formatter):
 
 class PlainFormatter(logging.Formatter):
     """Plain formatter that appends extra fields."""
+
+    __slots__ = ()
 
     def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
         base = super().format(record)
