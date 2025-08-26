@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 from collections import Counter
+from functools import lru_cache
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -18,15 +19,17 @@ def get_counters() -> dict[str, int]:
     return dict(_counters)
 
 
-def _label_key(name: str, labels: Optional[dict[str, str]]) -> str:
+@lru_cache(maxsize=256)
+def _label_key(name: str, labels: Optional[tuple[tuple[str, str], ...]]) -> str:
     if not labels:
         return name
-    parts = ",".join(f"{k}={v}" for k, v in sorted(labels.items()))
+    parts = ",".join(f"{k}={v}" for k, v in labels)
     return f"{name}{{{parts}}}"
 
 
 def inc(name: str, *, labels: Optional[dict[str, str]] = None, value: int = 1) -> None:
-    key = _label_key(name, labels)
+    label_items = tuple(sorted(labels.items())) if labels else None
+    key = _label_key(name, label_items)
     _counters[key] += value
 
 
