@@ -27,6 +27,7 @@ def test_cache_purges_expired_entries(monkeypatch):
     assert "old" in search_cache._CACHE
 
     t[0] += 2
+    asyncio.run(search_cache.purge_expired())
     asyncio.run(search_cache.cache_rss("new", "<rss><item>new</item></rss>"))
 
     assert "old" not in search_cache._CACHE
