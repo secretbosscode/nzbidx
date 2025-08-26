@@ -148,7 +148,7 @@ def _process_groups(
             metrics["processed"] += 1
             size = int(header.get("bytes") or header.get(":bytes") or 0)
             current = idx
-            message_id = str(header.get("message-id") or "").strip()
+            message_id = str(header.get("message-id") or "").strip("<> ").strip()
             if size <= 0 and message_id:
                 size = client.body_size(message_id)
             if size <= 0:
@@ -198,9 +198,7 @@ def _process_groups(
                 )
             if message_id:
                 seg_num = extract_segment_number(subject)
-                parts.setdefault(dedupe_key, []).append(
-                    (seg_num, message_id.strip("<>"), group, size)
-                )
+                parts.setdefault(dedupe_key, []).append((seg_num, message_id, group, size))
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
