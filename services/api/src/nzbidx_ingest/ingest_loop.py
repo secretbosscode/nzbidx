@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from threading import Event
+
+from nzbidx_api.json_utils import orjson as json
 
 from .config import (
     INGEST_BATCH_MIN,
@@ -26,6 +27,7 @@ from .main import (
     CATEGORY_MAP,
     prune_group,
 )
+from nzbidx_api.db import sql_placeholder
 from email.utils import parsedate_to_datetime
 from datetime import timezone
 
@@ -83,7 +85,11 @@ def _process_groups(
     for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
-        high = client.high_water_mark(group)
+        _resp, _count, _low, high_s, _name = client.group(group)
+        try:
+            high = int(high_s)
+        except Exception:
+            high = 0
         remaining = max(high - last, 0)
         if remaining <= 0:
             headers: list[dict[str, object]] = []
@@ -132,7 +138,7 @@ def _process_groups(
                 str,
                 str | None,
                 str | None,
-                list[str] | None,
+                set[str],
                 str | None,
                 int | None,
                 str | None,
@@ -143,14 +149,13 @@ def _process_groups(
             metrics["processed"] += 1
             size = int(header.get("bytes") or header.get(":bytes") or 0)
             current = idx
-            message_id = str(header.get("message-id") or "").strip()
+            message_id = str(header.get("message-id") or "").strip().strip("<>")
             if size <= 0 and message_id:
                 size = client.body_size(message_id)
             if size <= 0:
                 continue
-            subject = header.get("subject", "")
+            subject = str(header.get("subject", ""))
             norm_title, tags = normalize_subject(subject, with_tags=True)
-            norm_title = norm_title.lower()
             posted = header.get("date")
             day_bucket = ""
             posted_at = None
@@ -163,13 +168,13 @@ def _process_groups(
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
-            category = _infer_category(subject, group) or CATEGORY_MAP["other"]
-            tags = tags or []
+            category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
+            tags = set(tags or [])
             existing = releases.get(dedupe_key)
             if existing:
                 _, ex_cat, ex_lang, ex_tags, ex_group, ex_size, ex_posted = existing
+                ex_tags.update(tags)
                 combined_size = (ex_size or 0) + size
-                combined_tags = sorted(set(ex_tags or []).union(tags))
                 combined_posted = ex_posted
                 if posted_at and (not ex_posted or posted_at < ex_posted):
                     combined_posted = posted_at
@@ -177,7 +182,7 @@ def _process_groups(
                     dedupe_key,
                     ex_cat,
                     ex_lang,
-                    combined_tags,
+                    ex_tags,
                     ex_group,
                     combined_size,
                     combined_posted,
@@ -195,13 +200,25 @@ def _process_groups(
             if message_id:
                 seg_num = extract_segment_number(subject)
                 parts.setdefault(dedupe_key, []).append(
-                    (seg_num, message_id.strip("<>"), group, size)
+                    (seg_num, message_id, group, size)
                 )
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
             db_start = time.monotonic()
-            result = insert_release(db, releases=releases.values())
+            prepared = [
+                (
+                    title,
+                    cat,
+                    lang,
+                    sorted(tags),
+                    grp,
+                    sz,
+                    posted,
+                )
+                for title, cat, lang, tags, grp, sz, posted in releases.values()
+            ]
+            result = insert_release(db, releases=prepared)
             db_latency = time.monotonic() - db_start
             if isinstance(result, set):
                 inserted = result
@@ -215,36 +232,21 @@ def _process_groups(
         if db is not None:
             try:
                 cur = db.cursor()
-                placeholder = (
-                    "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
-                )
-                titles = [t for t, segs in parts.items() if segs]
-                existing: dict[str, list[dict[str, int | str]]] = {
-                    t: [] for t in titles
-                }
-                if titles:
-                    if placeholder == "?":
-                        qs = ",".join(["?"] * len(titles))
-                        cur.execute(
-                            f"SELECT norm_title, segments FROM release WHERE norm_title IN ({qs})",
-                            titles,
-                        )
-                    else:
-                        cur.execute(
-                            "SELECT norm_title, segments FROM release WHERE norm_title = ANY(%s)",
-                            (titles,),
-                        )
-                    for row in cur.fetchall():
-                        title, seg_json = row
+                placeholder = sql_placeholder(db)
+                for title, segs in parts.items():
+                    if not segs:
+                        continue
+                    cur.execute(
+                        f"SELECT segments FROM release WHERE norm_title = {placeholder}",
+                        (title,),
+                    )
+                    row = cur.fetchone()
+                    existing_segments = []
+                    if row:
                         try:
-                            existing[title] = json.loads(seg_json or "[]")
+                            existing_segments = json.loads(row[0] or "[]")
                         except Exception:
-                            existing[title] = []
-
-                updates: list[tuple[str, bool, int, int, str]] = []
-                for title in titles:
-                    segs = parts.get(title, [])
-                    existing_segments = existing.get(title, [])
+                            existing_segments = []
                     validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
@@ -255,36 +257,31 @@ def _process_groups(
                             continue
                         seen_ids.add(m)
                         deduped.append(
-                            {"number": n, "message_id": m, "group": g, "size": s},
+                            {"number": n, "message_id": m, "group": g, "size": s}
                         )
 
-                    existing_ids = {seg["message_id"] for seg in existing_segments}
-                    new_segments = [
-                        seg for seg in deduped if seg["message_id"] not in existing_ids
-                    ]
-                    combined_segments = existing_segments + new_segments
+                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
+                    for seg in deduped:
+                        message_id = seg["message_id"]
+                        existing_map.setdefault(message_id, seg)
+                    combined_segments = list(existing_map.values())
                     validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
-                    updates.append(
+                    cur.execute(
+                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
-                            json.dumps(combined_segments),
+                            json.dumps(combined_segments).decode(),
                             has_parts,
                             part_counts[title],
                             total_size,
                             title,
-                        )
+                        ),
                     )
                     has_parts_flags[title] = has_parts
                     changed.add(title)
-
-                if updates:
-                    cur.executemany(
-                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
-                        updates,
-                    )
-                    db.commit()
+                db.commit()
             except Exception:
                 pass
 
@@ -327,8 +324,14 @@ def _process_groups(
         percent_complete = metrics.get("percent_complete", 0)
         eta_seconds = metrics.get("eta_seconds", 0)
         log_fn(
-            f"Processed {processed} items (inserted {inserted}, deduplicated {deduplicated}). "
-            f"{percent_complete}% complete, ETA {eta_seconds}s for {group}",
+            "Processed %s items (inserted %s, deduplicated %s). "
+            "%s%% complete, ETA %ss for %s",
+            processed,
+            inserted,
+            deduplicated,
+            percent_complete,
+            eta_seconds,
+            group,
             extra=metrics,
         )
         aggregate.add(metrics)
