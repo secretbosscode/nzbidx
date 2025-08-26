@@ -40,7 +40,9 @@ DummyConn.__module__ = "sqlite3"
 @pytest.mark.parametrize(
     "seg_data",
     [
-        orjson.dumps([{"number": 1, "message_id": "m1", "group": "g", "size": 123}]).decode(),
+        orjson.dumps(
+            [{"number": 1, "message_id": "m1", "group": "g", "size": 123}]
+        ).decode(),
         orjson.dumps([[1, "m1", "g", 123]]).decode(),
     ],
 )
@@ -56,7 +58,9 @@ def test_build_nzb_for_release_accepts_segment_formats(monkeypatch, seg_data):
     "seg_data",
     [
         orjson.dumps([[1, "m1", "g"]]).decode(),
-        orjson.dumps([{ "number": "x", "message_id": "m1", "group": "g", "size": 1}]).decode(),
+        orjson.dumps(
+            [{"number": "x", "message_id": "m1", "group": "g", "size": 1}]
+        ).decode(),
         orjson.dumps([123]).decode(),
     ],
 )

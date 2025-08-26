@@ -28,4 +28,3 @@ def test_cache_rss_skips_when_no_items() -> None:
     asyncio.run(search_cache.cache_rss("k", "<rss></rss>"))
 
     assert asyncio.run(search_cache.get_cached_rss("k")) is None
-
