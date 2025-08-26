@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import sqlite3
 
 from nzbidx_api import backfill_release_parts as backfill_mod
@@ -45,7 +45,7 @@ def test_auto_backfill_populates_segments_and_is_idempotent(
     cur2.execute("SELECT segments FROM release WHERE id = 1")
     seg_json = cur2.fetchone()[0]
     conn2.close()
-    assert json.loads(seg_json)[0]["message_id"] == "m1"
+    assert orjson.loads(seg_json)[0]["message_id"] == "m1"
 
     processed_again = backfill_mod.backfill_release_parts(auto=True)
     assert processed_again == 0
