@@ -3,6 +3,9 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+import logging
+import sqlite3
+
 import pytest
 
 import nzbidx_ingest.cursors as cursors
@@ -51,7 +54,7 @@ def test_cursor_postgres_dsn(monkeypatch):
         executed.append(("url", url))
         return DummyConn()
 
-    fake_psycopg = types.SimpleNamespace(connect=fake_connect)
+    fake_psycopg = types.SimpleNamespace(connect=fake_connect, Error=Exception)
     monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
     monkeypatch.setenv("CURSOR_DB", "postgres://user@host/db")
     importlib.reload(config)
@@ -89,26 +92,27 @@ def test_conn_sqlite_path_no_name_error(tmp_path, monkeypatch):
         conn.close()
 
 
-def test_concurrent_backends_isolated(tmp_path, monkeypatch):
-    import importlib
-    import nzbidx_ingest.cursors as curs
-    import nzbidx_ingest.config as cfg
+def test_set_cursors_logs_error_on_failure(monkeypatch, caplog):
+    calls: dict[str, bool] = {"closed": False, "rollback": False}
 
-    monkeypatch.setenv("CURSOR_DB", str(tmp_path / "conn.sqlite"))
-    importlib.reload(cfg)
-    importlib.reload(curs)
+    class DummyConn:
+        def executemany(self, stmt, data):
+            raise sqlite3.OperationalError("locked")
 
-    calls: list[None] = []
-    orig = curs._get_conn
+        def commit(self) -> None:  # pragma: no cover - not reached
+            pass
 
-    def counting_get_conn():
-        if curs._CONN is None:
-            calls.append(None)
-        return orig()
+        def rollback(self) -> None:
+            calls["rollback"] = True
 
-    monkeypatch.setattr(curs, "_get_conn", counting_get_conn)
+        def close(self) -> None:
+            calls["closed"] = True
 
-    curs.get_cursor("g1")
-    curs.set_cursor("g1", 1)
+    monkeypatch.setattr(cursors, "_conn", lambda: (DummyConn(), "?"))
 
-    assert len(calls) == 1
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError):
+            cursors.set_cursors({"g": 1})
+
+    assert calls["rollback"] and calls["closed"]
+    assert "cursor_update_failed" in caplog.text
