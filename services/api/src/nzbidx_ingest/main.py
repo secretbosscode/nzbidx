@@ -670,9 +670,26 @@ def insert_release(
 
 def prune_group(conn: Any, group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
+    prune_groups(conn, [group])
+
+
+def prune_groups(conn: Any, groups: Iterable[str]) -> None:
+    """Remove all releases associated with ``groups`` from storage."""
     cur = conn.cursor()
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-    cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
+    group_list = list(groups)
+    if not group_list:
+        return
+    if conn.__class__.__module__.startswith("sqlite3"):
+        placeholders = ",".join(["?"] * len(group_list))
+        cur.execute(
+            f"DELETE FROM release WHERE source_group IN ({placeholders})",
+            group_list,
+        )
+    else:
+        cur.execute(
+            "DELETE FROM release WHERE source_group = ANY(%s)",
+            (group_list,),
+        )
     conn.commit()
 
 
