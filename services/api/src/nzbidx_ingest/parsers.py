@@ -209,15 +209,20 @@ def normalize_subject(
     if not subject:
         return ("", []) if with_tags else ""
 
-    # Extract bracketed tags and structured hints before cleaning. The specific
-    # ``extract_*`` helpers operate on the raw subject, so run them before we
-    # strip punctuation.
-    generic_tags = extract_tags(subject)
-    tag_dict: dict[str, str] = {}
-    for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
-        tag_dict.update(extractor(subject))
-    for t in generic_tags:
-        tag_dict[t] = t
+    if with_tags:
+        # Extract bracketed tags and structured hints before cleaning. The
+        # ``extract_*`` helpers operate on the raw subject, so run them before
+        # we strip punctuation.
+        generic_tags = extract_tags(subject)
+        tag_dict: dict[str, str] = {}
+        for extractor in (
+            extract_music_tags,
+            extract_book_tags,
+            extract_xxx_tags,
+        ):
+            tag_dict.update(extractor(subject))
+        for t in generic_tags:
+            tag_dict[t] = t
 
     # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")
@@ -252,12 +257,12 @@ def normalize_subject(
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
 
-    tags = sorted(
-        {
-            *generic_tags,
-            *[value.lower() for value in tag_dict.values() if value],
-        }
-    )
     if with_tags:
+        tags = sorted(
+            {
+                *generic_tags,
+                *[value.lower() for value in tag_dict.values() if value],
+            }
+        )
         return cleaned, tags
     return cleaned
