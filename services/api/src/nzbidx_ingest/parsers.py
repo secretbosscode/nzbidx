@@ -59,6 +59,8 @@ def extract_tags(subject: str) -> list[str]:
     """Extract lowercased tags from bracketed segments in ``subject``."""
     if not subject:
         return []
+    if "[" not in subject or "]" not in subject:
+        return []
     tags: list[str] = []
     for match in _TAG_RE.finditer(subject):
         content = match.group(1)
