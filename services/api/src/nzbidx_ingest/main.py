@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime, timezone
+from nzbidx_api.json_utils import orjson
 
 try:  # pragma: no cover - optional dependency
     from dateutil import parser as dateutil_parser
@@ -147,7 +147,7 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
     cfg = os.getenv("GROUP_CATEGORY_HINTS_FILE")
     if cfg:
         try:
-            data = json.loads(Path(cfg).read_text())
+            data = orjson.loads(Path(cfg).read_bytes())
             if isinstance(data, dict):
                 extra = [(k, v) for k, v in data.items()]
             else:

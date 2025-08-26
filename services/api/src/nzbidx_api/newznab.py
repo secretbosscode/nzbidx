@@ -6,12 +6,11 @@ import html
 import logging
 from pathlib import Path
 from typing import Any, Optional
+from nzbidx_api.json_utils import orjson
 from datetime import datetime, timezone
 from email.utils import format_datetime
 
 from .metrics_log import inc_nzb_cache_hit, inc_nzb_cache_miss
-
-from .json_utils import orjson
 
 from . import nzb_builder
 from .utils import maybe_await
@@ -122,7 +121,7 @@ def _load_categories() -> list[dict[str, str]]:
     cfg_path = os.getenv("CATEGORY_CONFIG")
     if cfg_path:
         try:
-            data = orjson.loads(Path(cfg_path).read_text(encoding="utf-8"))
+            data = orjson.loads(Path(cfg_path).read_bytes())
             return [{"id": str(c["id"]), "name": str(c["name"])} for c in data]
         except FileNotFoundError:
             log.warning("category config file not found")
@@ -180,7 +179,7 @@ BOOKS_CATEGORY_IDS = _collect_category_ids("EBook")
 ADULT_CATEGORY_IDS = _collect_category_ids("XXX")
 
 
-def _generate_caps_xml() -> str:
+def caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
     categories = [f'<category id="{c["id"]}" name="{c["name"]}"/>' for c in CATEGORIES]
     cats_xml = f"<categories>{''.join(categories)}</categories>"
@@ -194,14 +193,6 @@ def _generate_caps_xml() -> str:
         '<limits max="100" default="50"/>'
         f"{searching_xml}{cats_xml}</caps>"
     )
-
-
-_CACHED_CAPS_XML = _generate_caps_xml()
-
-
-def caps_xml() -> str:
-    """Return a minimal Newznab caps XML document."""
-    return _CACHED_CAPS_XML
 
 
 def rss_xml(
