@@ -26,6 +26,9 @@ def test_load_groups_uses_wildcard(monkeypatch) -> None:
     called: dict[str, object] = {}
 
     class DummyClient:
+        def __init__(self, _settings=None) -> None:  # pragma: no cover - trivial
+            pass
+
         def list_groups(self, pattern):  # pragma: no cover - simple
             called["pattern"] = pattern
             return []

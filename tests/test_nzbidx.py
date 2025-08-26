@@ -16,15 +16,17 @@ import pytest
 from nzbidx_api import nzb_builder, newznab  # type: ignore
 from nzbidx_api import db as api_db  # type: ignore
 import nzbidx_api.config as api_config  # type: ignore
-api_config.reload_api_keys = lambda: None  # type: ignore
-api_config.reload_if_env_changed = lambda: None  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
+import nzbidx_ingest.config as ingest_config  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
 from nzbidx_ingest.main import (
     CATEGORY_MAP,
     _infer_category,
     connect_db,
 )  # type: ignore
+
+api_config.reload_api_keys = lambda: None  # type: ignore
+api_config.reload_if_env_changed = lambda: None  # type: ignore
 
 
 class DummyResult:
@@ -1047,7 +1049,7 @@ def test_nntp_client_uses_single_host_env(monkeypatch) -> None:
         SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
     )
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     client.connect()
 
     assert called["args"] == ("example.org", 119, None, None, 30.0)
@@ -1091,7 +1093,7 @@ def test_nntp_client_xover(monkeypatch) -> None:
         SimpleNamespace(NNTP=DummyServer, NNTP_SSL=DummyServer, NNTP_SSL_PORT=563),
     )
 
-    client = nntp_client.NNTPClient()
+    client = nntp_client.NNTPClient(ingest_config.nntp_settings())
     headers = client.xover("alt.binaries.example", 1, 2)
 
     assert headers and headers[0]["message-id"] == "<1@test>"
@@ -1112,7 +1114,7 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
         def quit(self) -> None:
             pass
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    monkeypatch.setattr(loop, "NNTPClient", lambda _settings: DummyClient())
 
     def fake_run_once(_client):
         calls.append(True)

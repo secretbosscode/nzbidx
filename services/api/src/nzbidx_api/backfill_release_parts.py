@@ -8,6 +8,7 @@ import os
 from contextlib import closing
 from typing import Callable, Iterable, Optional
 
+from nzbidx_ingest import config as ingest_config
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.nntp_client import NNTPClient
 from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
@@ -20,9 +21,11 @@ BATCH_SIZE = int(os.getenv("BACKFILL_BATCH_SIZE", "100"))
 XOVER_LOOKBACK = int(os.getenv("BACKFILL_XOVER_LOOKBACK", "10000"))
 
 
-def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
+def _fetch_segments(
+    release_id: str, group: str, client: NNTPClient | None = None
+) -> list[tuple[int, str, int]]:
     """Return ``(number, message_id, size)`` tuples for ``release_id``."""
-    client = NNTPClient()
+    client = client or NNTPClient(ingest_config.NNTP_SETTINGS)
     groups = [group] if group else config.NNTP_GROUPS
     last_exc: Exception | None = None
     last_group = ""
@@ -161,7 +164,13 @@ def backfill_release_parts(
                             f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
                             f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
                         ),
-                        (orjson.dumps(seg_data).decode(), True, len(seg_data), total_size, rel_id),
+                        (
+                            orjson.dumps(seg_data).decode(),
+                            True,
+                            len(seg_data),
+                            total_size,
+                            rel_id,
+                        ),
                     )
                     processed += 1
                     if progress_cb:

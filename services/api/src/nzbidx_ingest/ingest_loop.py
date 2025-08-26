@@ -372,7 +372,7 @@ def run_once() -> float:
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
-    client = NNTPClient()
+    client = NNTPClient(config.NNTP_SETTINGS)
     db = None
     try:
         client.connect()

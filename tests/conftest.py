@@ -9,9 +9,9 @@ API_SRC = ROOT / "services" / "api" / "src"
 if str(API_SRC) not in sys.path:
     sys.path.insert(0, str(API_SRC))
 
-import pytest
+import pytest  # noqa: E402
 
-from nzbidx_api import config as api_config
+from nzbidx_api import config as api_config  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
