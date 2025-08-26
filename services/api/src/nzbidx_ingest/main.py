@@ -259,19 +259,6 @@ def connect_db() -> Any:
                         ")"
                     )
                     partitioned = bool(cur.fetchone()[0])
-                    if not partitioned and os.getenv("NZBIDX_AUTO_MIGRATE"):
-                        from scripts.migrate_release_partitions import migrate
-
-                        migrate(raw)
-                        cur = raw.cursor()
-                        cur.execute(
-                            "SELECT EXISTS ("
-                            "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
-                            ")"
-                        )
-                        partitioned = bool(cur.fetchone()[0])
-                        if partitioned:
-                            logger.info("release_table_auto_migrated")
                     if not partitioned:
                         logger.error("release_table_not_partitioned")
                         raise RuntimeError("release table must be partitioned")
