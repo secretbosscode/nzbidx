@@ -1102,7 +1102,16 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
 
     calls = []
 
-    def fake_run_once():
+    class DummyClient:
+        def connect(self) -> None:
+            pass
+
+        def quit(self) -> None:
+            pass
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+
+    def fake_run_once(_client):
         calls.append(True)
         return 1
 
@@ -1135,9 +1144,6 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     processed: list[str] = []
 
     class DummyClient:
-        def connect(self) -> None:  # pragma: no cover - trivial
-            pass
-
         def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
             return 1
 
@@ -1145,7 +1151,7 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
             processed.append(group)
             return [{"subject": "Example"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     monkeypatch.setattr(loop, "connect_db", lambda: None)
     monkeypatch.setattr(
         loop,
@@ -1154,7 +1160,7 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     )
 
     with caplog.at_level(logging.INFO):
-        loop.run_once()
+        loop.run_once(client)
 
     assert processed == ["alt.good.group"]
     assert any(
@@ -1177,19 +1183,16 @@ def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.offline"], raising=False)
 
     class DummyClient:
-        def connect(self) -> None:  # pragma: no cover - trivial
-            pass
-
         def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
             return 0
 
         def xover(self, group: str, start: int, end: int):  # pragma: no cover - simple
             return []
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     monkeypatch.setattr(loop, "connect_db", lambda: None)
 
-    loop.run_once()
+    loop.run_once(client)
 
     assert cursors.get_irrelevant_groups() == []
 
@@ -1209,16 +1212,13 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
     monkeypatch.setattr(loop, "INGEST_SLEEP_MS", 10, raising=False)
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{"subject": "Example", ":bytes": "123"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     monkeypatch.setattr(loop, "connect_db", lambda: None)
 
     real_sleep = _time.sleep
@@ -1231,6 +1231,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(loop, "insert_release", fake_insert)
 
-    loop.run_once()
+    loop.run_once(client)
 
     assert sleeps and sleeps[0] == 0.01

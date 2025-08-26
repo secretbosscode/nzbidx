@@ -14,9 +14,6 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 3
 
@@ -27,7 +24,7 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
                 {"subject": "Example (2/2)", ":bytes": "200", "message-id": "<b>"},
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -39,7 +36,7 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(loop, "connect_db", _connect)
 
-    loop.run_once()
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT size_bytes, part_count FROM release").fetchone()

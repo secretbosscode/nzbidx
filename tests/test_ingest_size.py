@@ -15,16 +15,13 @@ def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{"subject": "Example", ":bytes": "456"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -36,7 +33,7 @@ def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(loop, "connect_db", _connect)
 
-    loop.run_once()
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
@@ -51,9 +48,6 @@ def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 2
 
@@ -63,7 +57,7 @@ def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
                 {"subject": "Example (2/2)", ":bytes": "200"},
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -75,7 +69,7 @@ def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(loop, "connect_db", _connect)
 
-    loop.run_once()
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
@@ -90,16 +84,13 @@ def test_zero_byte_release_skipped(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{"subject": "Example", ":bytes": "0"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -111,7 +102,7 @@ def test_zero_byte_release_skipped(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(loop, "connect_db", _connect)
 
-    loop.run_once()
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT * FROM release").fetchone()
@@ -128,16 +119,13 @@ def test_same_title_different_groups(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{"subject": "Example", ":bytes": "100"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -149,7 +137,7 @@ def test_same_title_different_groups(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(loop, "connect_db", _connect)
 
-    loop.run_once()
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         rows = check.execute(
