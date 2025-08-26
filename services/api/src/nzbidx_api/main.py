@@ -420,7 +420,7 @@ async def health(request: Request) -> ORJSONResponse:
 async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
-    payload = {"request_id": req_id, "breaker": {"os": os_breaker.state()}}
+    payload = {"request_id": req_id, "breaker": {"os": await os_breaker.state()}}
     return ORJSONResponse(payload)
 
 
