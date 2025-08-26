@@ -178,7 +178,7 @@ BOOKS_CATEGORY_IDS = _collect_category_ids("EBook")
 ADULT_CATEGORY_IDS = _collect_category_ids("XXX")
 
 
-def caps_xml() -> str:
+def _generate_caps_xml() -> str:
     """Return a minimal Newznab caps XML document."""
     categories = [f'<category id="{c["id"]}" name="{c["name"]}"/>' for c in CATEGORIES]
     cats_xml = f"<categories>{''.join(categories)}</categories>"
@@ -192,6 +192,14 @@ def caps_xml() -> str:
         '<limits max="100" default="50"/>'
         f"{searching_xml}{cats_xml}</caps>"
     )
+
+
+_CACHED_CAPS_XML = _generate_caps_xml()
+
+
+def caps_xml() -> str:
+    """Return a minimal Newznab caps XML document."""
+    return _CACHED_CAPS_XML
 
 
 def rss_xml(
