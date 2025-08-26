@@ -181,7 +181,11 @@ class NNTPClient:
                     else:
                         headers = []
                     for line in headers:
-                        text = line.decode(errors="ignore") if isinstance(line, bytes) else line
+                        text = (
+                            line.decode(errors="ignore")
+                            if isinstance(line, bytes)
+                            else line
+                        )
                         if text.lower().startswith("bytes:"):
                             try:
                                 return int(text.split(":", 1)[1].strip())
