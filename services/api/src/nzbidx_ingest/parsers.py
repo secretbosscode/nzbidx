@@ -52,7 +52,6 @@ FILLER_RE = re.compile(r"\b(?:repost|sample)\b", re.IGNORECASE)
 PART_RE = re.compile(r"\bpart\s*\d+\b", re.IGNORECASE)
 ARCHIVE_RE = re.compile(r"\b(rar|par2|zip)\b", re.IGNORECASE)
 WHITESPACE_RE = re.compile(r"\s+")
-TRIM_RE = re.compile(r"^[-\s]+|[-\s]+$")
 
 
 def extract_tags(subject: str) -> list[str]:
@@ -262,7 +261,7 @@ def normalize_subject(
 
     # Collapse whitespace and trim leading/trailing separators or dashes.
     cleaned = WHITESPACE_RE.sub(" ", cleaned).strip()
-    cleaned = TRIM_RE.sub("", cleaned)
+    cleaned = cleaned.strip("- ")
 
     tags = sorted(
         {
