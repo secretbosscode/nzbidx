@@ -32,14 +32,22 @@ and `REINDEX` jobs via APScheduler.
 
 ## Database Initialization
 
-The container image provisions the database on startup. It applies
-`db/init/schema.sql` and runs the Python migrations automatically, installing
-required extensions such as `pg_trgm` and creating the partitioned `release`
-table, so no manual `psql` or `python -m` steps are necessary.
+Seed a fresh PostgreSQL instance before starting ingestion. Apply the schema
+file to install required extensions, create the partitioned `release` table,
+and add the full-text search column and index:
 
-A superuser account is only needed temporarily while the schema and migrations
-run. Once initialization completes, the setup routine drops superuser
-privileges, leaving the role as a regular user.
+```bash
+psql "$DATABASE_URL" -f db/init/schema.sql
+psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
+```
+
+Run these commands once with a superuser account or via your migration tool.
+The `to_regclass` query returns `release_search_idx` when the schema is applied.
+See [docs/db.md#full-text-search](docs/db.md#full-text-search) for details.
+
+The application migrates the `release` table automatically on startup when
+provided a `DATABASE_URL` with superuser privileges, so no separate migration
+script is required.
 
 ## Performance Tuning
 
