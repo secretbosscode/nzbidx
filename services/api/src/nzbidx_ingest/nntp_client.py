@@ -28,7 +28,7 @@ class NNTPClient:
         self.user = os.getenv("NNTP_USER")
         self.password = os.getenv("NNTP_PASS")
         # Default to a generous timeout to handle slow or flaky providers
-        self.timeout = float(config.settings.nntp_timeout_seconds)
+        self.timeout = float(config.nntp_timeout_seconds())
         self._server: Optional[nntplib.NNTP] = None
 
     # ------------------------------------------------------------------
@@ -165,6 +165,52 @@ class NNTPClient:
                 server = self._ensure_connection()
                 if server is None:
                     return 0
+
+                # Try to parse ``Bytes`` header via ``HEAD`` first
+                try:
+                    head_resp = server.head(message_id)
+                    headers: list[str | bytes]
+                    if isinstance(head_resp, tuple):
+                        if len(head_resp) == 4:
+                            _resp, _num, _mid, headers = head_resp
+                        elif len(head_resp) == 2:
+                            _resp, info = head_resp
+                            headers = getattr(info, "lines", [])
+                        else:
+                            headers = []
+                    else:
+                        headers = []
+                    for line in headers:
+                        text = line.decode(errors="ignore") if isinstance(line, bytes) else line
+                        if text.lower().startswith("bytes:"):
+                            try:
+                                return int(text.split(":", 1)[1].strip())
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+                # Some servers include the size in the ``STAT`` response
+                try:
+                    stat_resp = server.stat(message_id)
+                    if isinstance(stat_resp, tuple):
+                        resp_text = str(stat_resp[0])
+                        extra = stat_resp[1:]
+                    else:
+                        resp_text = str(stat_resp)
+                        extra: tuple[object, ...] = ()
+                    parts = resp_text.split()
+                    if parts and parts[-1].isdigit():
+                        return int(parts[-1])
+                    for val in extra:
+                        if isinstance(val, int):
+                            return val
+                        if isinstance(val, (bytes, str)) and str(val).isdigit():
+                            return int(val)
+                except Exception:
+                    pass
+
+                # Fall back to fetching the body if other methods fail
                 _resp, _num, _mid, lines = server.body(message_id, decode=False)
                 return sum(len(line) for line in lines)
             except Exception:  # pragma: no cover - network failure
