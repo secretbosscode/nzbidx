@@ -30,6 +30,9 @@ TAG_SPLIT_RE = re.compile(r"[\s,]+")
 _URL_RE = re.compile(r"http\S+|www\.\S+", re.IGNORECASE)
 _NON_LETTER_RE = re.compile(r"[^A-Za-z\s]+")
 
+# Translation map for common separators converted to spaces
+SEPARATOR_TRANS = str.maketrans({".": " ", "_": " "})
+
 
 def extract_tags(subject: str) -> list[str]:
     """Extract lowercased tags from bracketed segments in ``subject``."""
@@ -208,8 +211,8 @@ def _normalize_cached(subject: str) -> str:
     if not subject:
         return ""
 
-    # Convert common separators to spaces.
-    cleaned = subject.replace(".", " ").replace("_", " ")
+    # Convert common separators to spaces and lowercase the result.
+    cleaned = subject.translate(SEPARATOR_TRANS).lower()
 
     # Remove bracketed tags.
     cleaned = _TAG_RE.sub("", cleaned)

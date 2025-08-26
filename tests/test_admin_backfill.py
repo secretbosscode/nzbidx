@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import os
 import time
 from starlette.testclient import TestClient
 
 
 def _parse(resp):
-    return resp.json() if hasattr(resp, "json") else json.loads(resp.body)
+    return resp.json() if hasattr(resp, "json") else orjson.loads(resp.body)
 
 
 def test_admin_backfill(monkeypatch) -> None:

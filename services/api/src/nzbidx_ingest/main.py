@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+from nzbidx_api.json_utils import orjson
 import logging
 import os
 import re
 import sqlite3
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime, timezone
-from nzbidx_api.json_utils import orjson
 
 try:  # pragma: no cover - optional dependency
     from dateutil import parser as dateutil_parser
@@ -34,7 +35,6 @@ from .db_migrations import (
     ensure_release_adult_year_partition,
     migrate_release_adult_partitions,
 )
-from nzbidx_api.db import sql_placeholder
 from nzbidx_migrations import apply_sync
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,7 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
     cfg = os.getenv("GROUP_CATEGORY_HINTS_FILE")
     if cfg:
         try:
-            data = orjson.loads(Path(cfg).read_bytes())
+            data = orjson.loads(Path(cfg).read_text())
             if isinstance(data, dict):
                 extra = [(k, v) for k, v in data.items()]
             else:
@@ -175,6 +175,11 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
 
 GROUP_CATEGORY_HINTS: list[tuple[str, str]] = _load_group_category_hints()
 
+# Precompiled regex to quickly identify hint tokens in group names
+hint_tokens = [token for token, _ in GROUP_CATEGORY_HINTS]
+GROUP_HINT_RE = re.compile("|".join(map(re.escape, hint_tokens)))
+HINT_TOKEN_MAP = dict(GROUP_CATEGORY_HINTS)
+
 
 DEFAULT_ADULT_KEYWORDS = (
     "brazzers",
@@ -192,28 +197,10 @@ ADULT_KEYWORDS = tuple(
     for k in os.getenv("ADULT_KEYWORDS", ",".join(DEFAULT_ADULT_KEYWORDS)).split(",")
     if k.strip()
 )
+ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
 
-# Precompiled regex patterns for category detection
-MOVIES_HD_RE = re.compile(
-    "|".join(
-        map(
-            re.escape,
-            ("1080p", "720p", "x264", "x265", "hdrip", "webrip", "hd"),
-        )
-    )
-)
-MOVIES_SD_RE = re.compile(
-    "|".join(map(re.escape, ("dvdrip", "xvid", "cam", "ts", "sd")))
-)
-TV_HD_RE = re.compile(
-    "|".join(map(re.escape, ("1080p", "720p", "x264", "x265", "hd")))
-)
-TV_SD_RE = re.compile("|".join(map(re.escape, ("xvid", "dvdrip", "sd"))))
-BLURAY_RE = re.compile("|".join(map(re.escape, ("bluray", "blu-ray"))))
-AUDIO_LOSSLESS_RE = re.compile("|".join(map(re.escape, ("flac", "lossless"))))
-AUDIO_MP3_RE = re.compile("|".join(map(re.escape, ("mp3", "aac", "m4a"))))
-COMIC_RE = re.compile("|".join(map(re.escape, ("cbz", "cbr", "comic"))))
-EBOOK_RE = re.compile("|".join(map(re.escape, ("epub", "mobi", "pdf", "ebook", "isbn"))))
+# Precompiled regular expression for matching TV episode identifiers like "S01E01".
+TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
 
 try:  # pragma: no cover - optional dependency
     from sqlalchemy import create_engine, text
@@ -509,7 +496,6 @@ def insert_release(
         return text.encode("utf-8", "surrogateescape").decode("utf-8", "ignore")
 
     cur = conn.cursor()
-    placeholder = sql_placeholder(conn)
 
     items: list[
         tuple[
@@ -592,7 +578,12 @@ def insert_release(
             )
         )
 
-    placeholders = ",".join([placeholder] * len(titles))
+    placeholders = ",".join(
+        [
+            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+            for _ in titles
+        ]
+    )
     existing: set[tuple[str, int]] = set()
     updates: list[tuple[Optional[datetime], str, int]] = []
     if titles:
@@ -614,7 +605,7 @@ def insert_release(
             updates.append((row[7], row[0], row[2]))
     inserted = {row[0] for row in to_insert}
     if to_insert:
-        if placeholder == "?":
+        if conn.__class__.__module__.startswith("sqlite3"):
             sqlite_rows = [
                 (
                     row[0],
@@ -659,7 +650,8 @@ def insert_release(
                 )
     # Ensure posted_at is updated for existing rows
     if updates:
-        if placeholder == "?":
+        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+        if conn.__class__.__module__.startswith("sqlite3"):
             sqlite_updates = [
                 (u[0].isoformat() if u[0] else None, u[1], u[2]) for u in updates
             ]
@@ -679,33 +671,39 @@ def insert_release(
 def prune_group(conn: Any, group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
     cur = conn.cursor()
-    placeholder = sql_placeholder(conn)
+    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
 
 
-def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
+@lru_cache(maxsize=4096)
+def _infer_category(
+    subject: str,
+    group: Optional[str] = None,
+) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
 
     if group:
         g = group.lower()
-        for key, cat in GROUP_CATEGORY_HINTS:
-            if key in g:
-                if cat == "xxx":
-                    if "dvd" in s:
-                        return CATEGORY_MAP["xxx_dvd"]
-                    if "wmv" in s:
-                        return CATEGORY_MAP["xxx_wmv"]
-                    if "xvid" in s:
-                        return CATEGORY_MAP["xxx_xvid"]
-                    if "x264" in s or "h264" in s:
-                        return CATEGORY_MAP["xxx_x264"]
-                    return CATEGORY_MAP["xxx"]
-                return CATEGORY_MAP[cat]
+        match = GROUP_HINT_RE.search(g)
+        if match:
+            cat = HINT_TOKEN_MAP[match.group()]
+            if cat == "xxx":
+                if "dvd" in s:
+                    return CATEGORY_MAP["xxx_dvd"]
+                if "wmv" in s:
+                    return CATEGORY_MAP["xxx_wmv"]
+                if "xvid" in s:
+                    return CATEGORY_MAP["xxx_xvid"]
+                if "x264" in s or "h264" in s:
+                    return CATEGORY_MAP["xxx_x264"]
+                return CATEGORY_MAP["xxx"]
+            return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
-    for tag in extract_tags(subject):
+    tag_list = extract_tags(subject)
+    for tag in tag_list:
         if tag in CATEGORY_MAP:
             return CATEGORY_MAP[tag]
 
@@ -720,7 +718,7 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["ebook"]
     if "[xxx]" in s:
         return CATEGORY_MAP["xxx"]
-    if any(k in s for k in ADULT_KEYWORDS):
+    if ADULT_KEYWORDS_RE.search(s):
         if "dvd" in s:
             return CATEGORY_MAP["xxx_dvd"]
         if "wmv" in s:
@@ -732,31 +730,31 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["xxx"]
 
     # TV
-    if re.search(r"s\d{1,2}e\d{1,2}", s) or "season" in s or "episode" in s:
+    if TV_EPISODE_RE.search(s) or "season" in s or "episode" in s:
         if "sport" in s or "sports" in s:
             return CATEGORY_MAP["tv_sport"]
-        if TV_HD_RE.search(s):
+        if any(k in s for k in ("1080p", "720p", "x264", "x265", "hd")):
             return CATEGORY_MAP["tv_hd"]
-        if TV_SD_RE.search(s):
+        if any(k in s for k in ("xvid", "dvdrip", "sd")):
             return CATEGORY_MAP["tv_sd"]
         return CATEGORY_MAP["tv"]
 
     # Movies
-    if BLURAY_RE.search(s):
+    if any(k in s for k in ("bluray", "blu-ray")):
         return CATEGORY_MAP["movies_bluray"]
     if "3d" in s:
         return CATEGORY_MAP["movies_3d"]
-    if MOVIES_HD_RE.search(s):
+    if any(k in s for k in ("1080p", "720p", "x264", "x265", "hdrip", "webrip", "hd")):
         return CATEGORY_MAP["movies_hd"]
-    if MOVIES_SD_RE.search(s):
+    if any(k in s for k in ("dvdrip", "xvid", "cam", "ts", "sd")):
         return CATEGORY_MAP["movies_sd"]
 
     # Audio
     if "audiobook" in s or "audio book" in s:
         return CATEGORY_MAP["audio_audiobook"]
-    if AUDIO_LOSSLESS_RE.search(s):
+    if any(k in s for k in ("flac", "lossless")):
         return CATEGORY_MAP["audio_lossless"]
-    if AUDIO_MP3_RE.search(s):
+    if any(k in s for k in ("mp3", "aac", "m4a")):
         return CATEGORY_MAP["audio_mp3"]
     if "video" in s and "music" in s:
         return CATEGORY_MAP["audio_video"]
@@ -764,9 +762,9 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["audio"]
 
     # Books
-    if COMIC_RE.search(s):
+    if any(k in s for k in ("cbz", "cbr", "comic")):
         return CATEGORY_MAP["comics"]
-    if EBOOK_RE.search(s):
+    if any(k in s for k in ("epub", "mobi", "pdf", "ebook", "isbn")):
         return CATEGORY_MAP["ebook"]
 
     return None
