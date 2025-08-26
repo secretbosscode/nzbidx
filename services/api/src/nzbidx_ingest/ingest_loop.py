@@ -313,8 +313,14 @@ def _process_groups(
         percent_complete = metrics.get("percent_complete", 0)
         eta_seconds = metrics.get("eta_seconds", 0)
         log_fn(
-            f"Processed {processed} items (inserted {inserted}, deduplicated {deduplicated}). "
-            f"{percent_complete}% complete, ETA {eta_seconds}s for {group}",
+            "Processed %s items (inserted %s, deduplicated %s). "
+            "%s%% complete, ETA %ss for %s",
+            processed,
+            inserted,
+            deduplicated,
+            percent_complete,
+            eta_seconds,
+            group,
             extra=metrics,
         )
         aggregate.add(metrics)
