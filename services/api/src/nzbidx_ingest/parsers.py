@@ -227,11 +227,19 @@ def normalize_subject(
     # ``extract_*`` helpers operate on the raw subject, so run them before we
     # strip punctuation.
     generic_tags = extract_tags(subject)
+    lower_subject = subject.lower()
     tag_dict: dict[str, str] = {}
-    for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
-        tag_dict.update(extractor(subject))
-    for t in generic_tags:
-        tag_dict[t] = t
+
+    if "flac" in lower_subject or "mp3" in lower_subject:
+        tag_dict.update(extract_music_tags(subject))
+
+    if any(t in lower_subject for t in ("epub", "mobi", "pdf")):
+        tag_dict.update(extract_book_tags(subject))
+
+    if any(
+        t in lower_subject for t in ("1080p", "720p", "2160p", "480p", ".20", ".19")
+    ):
+        tag_dict.update(extract_xxx_tags(subject))
 
     # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")
@@ -263,11 +271,13 @@ def normalize_subject(
     cleaned = WHITESPACE_RE.sub(" ", cleaned).strip()
     cleaned = cleaned.strip("- ")
 
-    tags = sorted(
-        {
-            *generic_tags,
-            *[value.lower() for value in tag_dict.values() if value],
-        }
+    tags = list(
+        dict.fromkeys(
+            [
+                *generic_tags,
+                *[value.lower() for value in tag_dict.values() if value],
+            ]
+        )
     )
 
     if lowercase:
