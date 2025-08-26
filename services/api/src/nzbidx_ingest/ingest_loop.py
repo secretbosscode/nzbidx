@@ -400,10 +400,10 @@ def run_forever(stop_event: Event | None = None) -> None:
         try:
             delay = run_once()
             failure_delay = INGEST_POLL_MIN_SECONDS
-        except BaseException as exc:  # pragma: no cover
-            if isinstance(exc, KeyboardInterrupt):
-                logger.info("ingest_loop_interrupted")
-                raise
+        except KeyboardInterrupt:  # pragma: no cover
+            logger.info("ingest_loop_interrupted")
+            raise
+        except Exception:  # pragma: no cover
             logger.exception("ingest_loop_failure")
             delay = failure_delay
             failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)

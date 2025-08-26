@@ -1116,7 +1116,7 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
 
     monkeypatch.setattr(loop, "NNTPClient", lambda _settings: DummyClient())
 
-    def fake_run_once(_client):
+    def fake_run_once():
         calls.append(True)
         return 1
 
@@ -1129,6 +1129,32 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
     stop.set()
     t.join(1)
     assert calls
+
+
+def test_run_forever_propagates_system_exit(monkeypatch) -> None:
+    """SystemExit should not be swallowed by run_forever."""
+    import nzbidx_ingest.ingest_loop as loop
+
+    def fake_run_once():
+        raise SystemExit("boom")
+
+    monkeypatch.setattr(loop, "run_once", fake_run_once)
+
+    with pytest.raises(SystemExit):
+        loop.run_forever()
+
+
+def test_run_forever_propagates_keyboard_interrupt(monkeypatch) -> None:
+    """KeyboardInterrupt should bubble out of run_forever."""
+    import nzbidx_ingest.ingest_loop as loop
+
+    def fake_run_once():
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(loop, "run_once", fake_run_once)
+
+    with pytest.raises(KeyboardInterrupt):
+        loop.run_forever()
 
 
 def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
