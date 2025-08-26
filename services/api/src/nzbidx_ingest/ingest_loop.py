@@ -346,8 +346,12 @@ def _process_groups(
     return delay
 
 
-def run_once() -> float:
+def run_once(db: object | None) -> float:
     """Process a single batch for each configured NNTP group.
+
+    ``db`` is an open database connection that will remain open across
+    iterations.  The caller is responsible for reconnecting if the
+    connection becomes unusable.
 
     Returns the suggested delay before the next poll.
     """
@@ -372,10 +376,8 @@ def run_once() -> float:
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
     client = NNTPClient()
-    db = None
     try:
         client.connect()
-        db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
         last_run = time.time()
         return delay
@@ -384,34 +386,45 @@ def run_once() -> float:
             client.quit()
         except Exception:
             pass
-        if db is not None:
-            try:
-                db.close()
-            except Exception:
-                pass
 
 
 def run_forever(stop_event: Event | None = None) -> None:
     """Continuously poll groups until ``stop_event`` is set."""
     failure_delay = INGEST_POLL_MIN_SECONDS
-    while not (stop_event and stop_event.is_set()):
-        try:
-            delay = run_once()
-            failure_delay = INGEST_POLL_MIN_SECONDS
-        except BaseException as exc:  # pragma: no cover
-            if isinstance(exc, KeyboardInterrupt):
-                logger.info("ingest_loop_interrupted")
-                raise
-            logger.exception("ingest_loop_failure")
-            delay = failure_delay
-            failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
-        delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
-        if stop_event:
-            if stop_event.wait(delay):
-                break
-        else:
+    db: object | None = None
+    try:
+        while not (stop_event and stop_event.is_set()):
             try:
-                time.sleep(delay)
-            except ValueError:
-                logger.exception("ingest_sleep_failure", extra={"delay": delay})
-                time.sleep(INGEST_POLL_MIN_SECONDS)
+                if db is None:
+                    db = connect_db()
+                delay = run_once(db)
+                failure_delay = INGEST_POLL_MIN_SECONDS
+            except BaseException as exc:  # pragma: no cover
+                if isinstance(exc, KeyboardInterrupt):
+                    logger.info("ingest_loop_interrupted")
+                    raise
+                logger.exception("ingest_loop_failure")
+                try:
+                    if db is not None:
+                        db.close()
+                except Exception:
+                    pass
+                db = None
+                delay = failure_delay
+                failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
+            delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
+            if stop_event:
+                if stop_event.wait(delay):
+                    break
+            else:
+                try:
+                    time.sleep(delay)
+                except ValueError:
+                    logger.exception("ingest_sleep_failure", extra={"delay": delay})
+                    time.sleep(INGEST_POLL_MIN_SECONDS)
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass

@@ -39,9 +39,8 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
         )
         return conn
 
-    monkeypatch.setattr(loop, "connect_db", _connect)
-
-    loop.run_once()
+    with _connect() as conn:
+        loop.run_once(conn)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT size_bytes, part_count FROM release").fetchone()

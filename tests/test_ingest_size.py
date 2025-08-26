@@ -36,9 +36,8 @@ def test_ingested_releases_include_size(monkeypatch, tmp_path) -> None:
         )
         return conn
 
-    monkeypatch.setattr(loop, "connect_db", _connect)
-
-    loop.run_once()
+    with _connect() as conn:
+        loop.run_once(conn)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
@@ -77,9 +76,8 @@ def test_multi_part_release_size_summed(monkeypatch, tmp_path) -> None:
         )
         return conn
 
-    monkeypatch.setattr(loop, "connect_db", _connect)
-
-    loop.run_once()
+    with _connect() as conn:
+        loop.run_once(conn)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT norm_title, size_bytes FROM release").fetchone()
@@ -115,9 +113,8 @@ def test_zero_byte_release_skipped(monkeypatch, tmp_path) -> None:
         )
         return conn
 
-    monkeypatch.setattr(loop, "connect_db", _connect)
-
-    loop.run_once()
+    with _connect() as conn:
+        loop.run_once(conn)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT * FROM release").fetchone()
@@ -155,9 +152,8 @@ def test_same_title_different_groups(monkeypatch, tmp_path) -> None:
         )
         return conn
 
-    monkeypatch.setattr(loop, "connect_db", _connect)
-
-    loop.run_once()
+    with _connect() as conn:
+        loop.run_once(conn)
 
     with sqlite3.connect(db_path) as check:
         rows = check.execute(

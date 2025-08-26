@@ -1103,11 +1103,12 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
 
     calls = []
 
-    def fake_run_once():
+    def fake_run_once(_db):
         calls.append(True)
         return 1
 
     monkeypatch.setattr(loop, "run_once", fake_run_once)
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
     stop = threading.Event()
     t = threading.Thread(target=loop.run_forever, args=(stop,))
@@ -1147,7 +1148,6 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
             return [{"subject": "Example"}]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    monkeypatch.setattr(loop, "connect_db", lambda: None)
     monkeypatch.setattr(
         loop,
         "insert_release",
@@ -1155,7 +1155,7 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     )
 
     with caplog.at_level(logging.INFO):
-        loop.run_once()
+        loop.run_once(None)
 
     assert processed == ["alt.good.group"]
     assert any(
@@ -1188,9 +1188,8 @@ def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None
             return []
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
-    loop.run_once()
+    loop.run_once(None)
 
     assert cursors.get_irrelevant_groups() == []
 
@@ -1222,7 +1221,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
             return [{"subject": "Example", ":bytes": "123"}]
 
     monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
-    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
     real_sleep = _time.sleep
     sleeps: list[float] = []
@@ -1234,6 +1232,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(loop, "insert_release", fake_insert)
 
-    loop.run_once()
+    loop.run_once(None)
 
     assert sleeps and sleeps[0] == 0.01
