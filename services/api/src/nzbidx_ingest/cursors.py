@@ -18,6 +18,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 logger = logging.getLogger(__name__)
 
+
 def _conn() -> Tuple[Any, str]:
     """Return a database connection and its paramstyle."""
     parsed = urlparse(CURSOR_DB)
@@ -76,7 +77,7 @@ def set_cursors(updates: dict[str, int]) -> None:
     conn, paramstyle = _conn()
     stmt = (
         f'INSERT INTO cursor("group", last_article, irrelevant) '
-        f'VALUES ({paramstyle}, {paramstyle}, 0) '
+        f"VALUES ({paramstyle}, {paramstyle}, 0) "
         'ON CONFLICT("group") DO UPDATE SET last_article=excluded.last_article, irrelevant=0'
     )
     errors: tuple[type[Exception], ...]
