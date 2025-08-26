@@ -11,29 +11,25 @@ from nzbidx_ingest import config, cursors  # type: ignore
 def test_ingest_batch_log(monkeypatch, caplog) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{":bytes": "100", "subject": "Example"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
     monkeypatch.setattr(
         loop, "insert_release", lambda _db, releases: {r[0] for r in releases}
     )
 
     with caplog.at_level(logging.INFO):
-        loop.run_once(None)
+        loop.run_once(client)
 
     record = next(r for r in caplog.records if r.message.startswith("Processed"))
     assert "Processed 1 items (inserted 1, deduplicated 0)." in record.message
@@ -49,16 +45,11 @@ def test_ingest_batch_log(monkeypatch, caplog) -> None:
 def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
@@ -71,7 +62,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                 }
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -80,6 +71,8 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
             "CREATE TABLE IF NOT EXISTS release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT, UNIQUE (norm_title, category_id, posted_at))"
         )
         return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
 
     with _connect() as conn:
         conn.execute(
@@ -107,8 +100,10 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
             ),
         )
         conn.commit()
-        monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
-        loop.run_once(conn)
+
+    monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
+
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute(
@@ -135,16 +130,11 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
 def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
@@ -157,7 +147,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
                 }
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -166,6 +156,8 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
             "CREATE TABLE IF NOT EXISTS release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, segments TEXT, UNIQUE (norm_title, category_id, posted_at))",
         )
         return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
 
     with _connect() as conn:
         conn.execute(
@@ -184,30 +176,31 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
             ),
         )
         conn.commit()
-        monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
 
-        class _Existing(list):
-            def __init__(self) -> None:
-                super().__init__(
-                    [
-                        {
-                            "number": 1,
-                            "message_id": "m1",
-                            "group": "alt.test",
-                            "size": 100,
-                        }
-                    ]
-                )
+    monkeypatch.setattr(loop, "insert_release", lambda _db, releases: set())
 
-            def __add__(self, _other):
-                return []
+    class _Existing(list):
+        def __init__(self) -> None:
+            super().__init__(
+                [
+                    {
+                        "number": 1,
+                        "message_id": "m1",
+                        "group": "alt.test",
+                        "size": 100,
+                    }
+                ]
+            )
 
-        def fake_loads(_s: str) -> list[dict[str, object]]:
-            return _Existing()
+        def __add__(self, _other):
+            return []
 
-        monkeypatch.setattr(loop.json, "loads", fake_loads)
+    def fake_loads(_s: str) -> list[dict[str, object]]:
+        return _Existing()
 
-        loop.run_once(conn)
+    monkeypatch.setattr(loop.json, "loads", fake_loads)
+
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute(
