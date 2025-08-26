@@ -12,7 +12,7 @@ def validate_segment_schema(segments: Iterable[dict[str, Any]]) -> None:
     for seg in segments:
         if not isinstance(seg, dict):
             raise AssertionError(f"segment entry is not a dict: {seg!r}")
-        if set(seg.keys()) != EXPECTED_SEGMENT_KEYS:
+        if seg.keys() != EXPECTED_SEGMENT_KEYS:
             raise AssertionError(f"segment keys mismatch: {seg!r}")
         if not isinstance(seg.get("number"), int):
             raise AssertionError(f"segment number must be int: {seg!r}")
