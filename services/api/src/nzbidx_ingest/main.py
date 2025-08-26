@@ -192,6 +192,7 @@ ADULT_KEYWORDS = tuple(
     for k in os.getenv("ADULT_KEYWORDS", ",".join(DEFAULT_ADULT_KEYWORDS)).split(",")
     if k.strip()
 )
+ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
 
 # Precompiled regular expression for matching TV episode identifiers like "S01E01".
 TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
@@ -711,7 +712,7 @@ def _infer_category(
         return CATEGORY_MAP["ebook"]
     if "[xxx]" in s:
         return CATEGORY_MAP["xxx"]
-    if any(k in s for k in ADULT_KEYWORDS):
+    if ADULT_KEYWORDS_RE.search(s):
         if "dvd" in s:
             return CATEGORY_MAP["xxx_dvd"]
         if "wmv" in s:
