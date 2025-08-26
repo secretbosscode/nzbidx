@@ -18,6 +18,8 @@ def scrub_headers(headers: Mapping[str, str]) -> dict[str, str]:
 class LogSanitizerFilter(logging.Filter):
     """Logging filter that redacts sensitive headers and long queries."""
 
+    __slots__ = ()
+
     def filter(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
         headers = getattr(record, "headers", None)
         if isinstance(headers, Mapping):
