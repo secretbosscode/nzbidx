@@ -191,7 +191,7 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
 
 
 def normalize_subject(
-    subject: str, *, with_tags: bool = False
+    subject: str, *, with_tags: bool = False, lowercase: bool = True
 ) -> tuple[str, list[str]] | str:
     """Return a cleaned, human-readable version of a Usenet subject line.
 
@@ -204,7 +204,8 @@ def normalize_subject(
     - Collapse whitespace and trim separators
 
     Also extracts hints via extract_* helpers and returns them as lowercase tags
-    (when ``with_tags=True``).
+    (when ``with_tags=True``). By default the cleaned title is lowercased; pass
+    ``lowercase=False`` to preserve the original casing.
     """
     if not subject:
         return ("", []) if with_tags else ""
@@ -258,6 +259,10 @@ def normalize_subject(
             *[value.lower() for value in tag_dict.values() if value],
         }
     )
+
+    if lowercase:
+        cleaned = cleaned.lower()
+
     if with_tags:
         return cleaned, tags
     return cleaned

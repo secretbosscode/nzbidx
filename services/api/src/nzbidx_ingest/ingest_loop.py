@@ -150,7 +150,6 @@ def _process_groups(
                 continue
             subject = header.get("subject", "")
             norm_title, tags = normalize_subject(subject, with_tags=True)
-            norm_title = norm_title.lower()
             posted = header.get("date")
             day_bucket = ""
             posted_at = None

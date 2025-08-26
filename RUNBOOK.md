@@ -161,14 +161,14 @@ until the migration succeeds.
   rebuild the Docker image so it installs dependencies from `pyproject.toml`.
 
 ## Release IDs
-- **Definition:** `normalize_subject(title).lower():<posted-date>` where
+- **Definition:** `normalize_subject(title):<posted-date>` where
   `<posted-date>` is `YYYY-MM-DD`.
 - **Example:**
   ```python
   from nzbidx_ingest.parsers import normalize_subject
 
   subject = "Example.part01.rar"
-  release_id = f"{normalize_subject(subject).lower()}:2025-08-17"
+  release_id = f"{normalize_subject(subject)}:2025-08-17"
   ```
 - **Usage:** pass the ID to `t=getnzb` requests.
 
