@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from threading import Event
+
+from nzbidx_api.json_utils import orjson as json
 
 from .config import (
     INGEST_BATCH_MIN,
@@ -83,7 +84,11 @@ def _process_groups(
     for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
-        high = client.high_water_mark(group)
+        _resp, _count, _low, high_s, _name = client.group(group)
+        try:
+            high = int(high_s)
+        except Exception:
+            high = 0
         remaining = max(high - last, 0)
         if remaining <= 0:
             headers: list[dict[str, object]] = []
@@ -132,7 +137,7 @@ def _process_groups(
                 str,
                 str | None,
                 str | None,
-                list[str] | None,
+                set[str],
                 str | None,
                 int | None,
                 str | None,
@@ -141,18 +146,15 @@ def _process_groups(
         parts: dict[str, list[tuple[int, str, str, int]]] = {}
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
+            size = int(header.get("bytes") or header.get(":bytes") or 0)
             current = idx
             message_id = str(header.get("message-id") or "").strip()
-            size = int(header.get("bytes") or header.get(":bytes") or 0)
-            if not message_id:
-                continue
-            if size <= 0:
+            if size <= 0 and message_id:
                 size = client.body_size(message_id)
-                if size <= 0:
-                    continue
-            subject = header.get("subject", "")
+            if size <= 0:
+                continue
+            subject = str(header.get("subject", ""))
             norm_title, tags = normalize_subject(subject, with_tags=True)
-            norm_title = norm_title.lower()
             posted = header.get("date")
             day_bucket = ""
             posted_at = None
@@ -165,13 +167,13 @@ def _process_groups(
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
-            category = _infer_category(subject, group) or CATEGORY_MAP["other"]
-            tags = tags or []
+            category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
+            tags = set(tags or [])
             existing = releases.get(dedupe_key)
             if existing:
                 _, ex_cat, ex_lang, ex_tags, ex_group, ex_size, ex_posted = existing
+                ex_tags.update(tags)
                 combined_size = (ex_size or 0) + size
-                combined_tags = sorted(set(ex_tags or []).union(tags))
                 combined_posted = ex_posted
                 if posted_at and (not ex_posted or posted_at < ex_posted):
                     combined_posted = posted_at
@@ -179,7 +181,7 @@ def _process_groups(
                     dedupe_key,
                     ex_cat,
                     ex_lang,
-                    combined_tags,
+                    ex_tags,
                     ex_group,
                     combined_size,
                     combined_posted,
@@ -194,15 +196,28 @@ def _process_groups(
                     size,
                     posted_at,
                 )
-            seg_num = extract_segment_number(subject)
-            parts.setdefault(dedupe_key, []).append(
-                (seg_num, message_id.strip("<>"), group, size)
-            )
+            if message_id:
+                seg_num = extract_segment_number(subject)
+                parts.setdefault(dedupe_key, []).append(
+                    (seg_num, message_id.strip("<>"), group, size)
+                )
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
             db_start = time.monotonic()
-            result = insert_release(db, releases=releases.values())
+            prepared = [
+                (
+                    title,
+                    cat,
+                    lang,
+                    sorted(tags),
+                    grp,
+                    sz,
+                    posted,
+                )
+                for title, cat, lang, tags, grp, sz, posted in releases.values()
+            ]
+            result = insert_release(db, releases=prepared)
             db_latency = time.monotonic() - db_start
             if isinstance(result, set):
                 inserted = result
@@ -233,8 +248,7 @@ def _process_groups(
                             existing_segments = json.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
-                    if config.VALIDATE_SEGMENTS:
-                        validate_segment_schema(existing_segments)
+                    validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
                     deduped: list[dict[str, int | str]] = []
@@ -247,20 +261,19 @@ def _process_groups(
                             {"number": n, "message_id": m, "group": g, "size": s}
                         )
 
-                    existing_ids = {seg["message_id"] for seg in existing_segments}
-                    new_segments = [
-                        seg for seg in deduped if seg["message_id"] not in existing_ids
-                    ]
-                    combined_segments = existing_segments + new_segments
-                    if config.VALIDATE_SEGMENTS:
-                        validate_segment_schema(combined_segments)
+                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
+                    for seg in deduped:
+                        message_id = seg["message_id"]
+                        existing_map.setdefault(message_id, seg)
+                    combined_segments = list(existing_map.values())
+                    validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
                     cur.execute(
                         f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
                         (
-                            json.dumps(combined_segments),
+                            json.dumps(combined_segments).decode(),
                             has_parts,
                             part_counts[title],
                             total_size,
