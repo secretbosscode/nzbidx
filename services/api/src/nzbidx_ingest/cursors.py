@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os  # used to ensure path exists for SQLite databases
 import sqlite3
 from typing import Any, Iterable, Tuple
@@ -37,11 +38,18 @@ def _conn() -> Tuple[Any, str]:
         'CREATE TABLE IF NOT EXISTS cursor ("group" TEXT PRIMARY KEY, last_article INTEGER, irrelevant INTEGER DEFAULT 0)'
     )
     conn.commit()
+    db_specific_errors: tuple[type[BaseException], ...] = (sqlite3.OperationalError,)
+    if psycopg:
+        db_specific_errors += (psycopg.errors.DuplicateColumn,)
     try:
         conn.execute("ALTER TABLE cursor ADD COLUMN irrelevant INTEGER DEFAULT 0")
         conn.commit()
-    except Exception:  # column already exists
+    except db_specific_errors:
         conn.rollback()
+    except Exception:  # pragma: no cover - unexpected schema issue
+        logging.exception("Unexpected error adding 'irrelevant' column to cursor table")
+        conn.rollback()
+        raise
     return conn, paramstyle
 
 
