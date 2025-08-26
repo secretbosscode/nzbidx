@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
-from collections import defaultdict
 from threading import Event
 
-from nzbidx_api.json_utils import orjson as json
-
 from .config import (
+    DETECT_LANGUAGE,
     INGEST_BATCH_MIN,
     INGEST_BATCH_MAX,
     INGEST_POLL_MIN_SECONDS,
@@ -40,10 +39,8 @@ _group_failures: dict[str, int] = {}
 # Counter used to throttle how often batch metrics are logged at INFO level.
 _log_counter = 0
 
-# Monotonic timestamp of the last successful ingest iteration.
+# Timestamp of the last successful ingest iteration (seconds since epoch).
 last_run: float = 0.0
-# Wall-clock timestamp of the last successful ingest iteration.
-last_run_wall: float = 0.0
 
 
 class _AggregateMetrics:
@@ -87,11 +84,7 @@ def _process_groups(
     for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
-        _resp, _count, _low, high_s, _name = client.group(group)
-        try:
-            high = int(high_s)
-        except Exception:
-            high = 0
+        high = client.high_water_mark(group)
         remaining = max(high - last, 0)
         if remaining <= 0:
             headers: list[dict[str, object]] = []
@@ -146,7 +139,7 @@ def _process_groups(
                 str | None,
             ],
         ] = {}
-        parts: defaultdict[str, list[tuple[int, str, str, int]]] = defaultdict(list)
+        parts: dict[str, list[tuple[int, str, str, int]]] = {}
         for idx, header in enumerate(headers, start=start):
             metrics["processed"] += 1
             size = int(header.get("bytes") or header.get(":bytes") or 0)
@@ -156,8 +149,9 @@ def _process_groups(
                 size = client.body_size(message_id)
             if size <= 0:
                 continue
-            subject = str(header.get("subject", ""))
+            subject = header.get("subject", "")
             norm_title, tags = normalize_subject(subject, with_tags=True)
+            norm_title = norm_title.lower()
             posted = header.get("date")
             day_bucket = ""
             posted_at = None
@@ -169,8 +163,11 @@ def _process_groups(
                 except Exception:
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
-            language = detect_language(subject) or "und"
-            category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
+            if DETECT_LANGUAGE:
+                language = detect_language(subject) or "und"
+            else:
+                language = "und"
+            category = _infer_category(subject, group) or CATEGORY_MAP["other"]
             tags = tags or []
             existing = releases.get(dedupe_key)
             if existing:
@@ -201,7 +198,9 @@ def _process_groups(
                 )
             if message_id:
                 seg_num = extract_segment_number(subject)
-                parts[dedupe_key].append((seg_num, message_id.strip("<>"), group, size))
+                parts.setdefault(dedupe_key, []).append(
+                    (seg_num, message_id.strip("<>"), group, size)
+                )
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
@@ -223,20 +222,33 @@ def _process_groups(
                 placeholder = (
                     "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
                 )
-                for title, segs in parts.items():
-                    if not segs:
-                        continue
-                    cur.execute(
-                        f"SELECT segments FROM release WHERE norm_title = {placeholder}",
-                        (title,),
-                    )
-                    row = cur.fetchone()
-                    existing_segments = []
-                    if row:
+                titles = [t for t, segs in parts.items() if segs]
+                existing: dict[str, list[dict[str, int | str]]] = {
+                    t: [] for t in titles
+                }
+                if titles:
+                    if placeholder == "?":
+                        qs = ",".join(["?"] * len(titles))
+                        cur.execute(
+                            f"SELECT norm_title, segments FROM release WHERE norm_title IN ({qs})",
+                            titles,
+                        )
+                    else:
+                        cur.execute(
+                            "SELECT norm_title, segments FROM release WHERE norm_title = ANY(%s)",
+                            (titles,),
+                        )
+                    for row in cur.fetchall():
+                        title, seg_json = row
                         try:
-                            existing_segments = json.loads(row[0] or "[]")
+                            existing[title] = json.loads(seg_json or "[]")
                         except Exception:
-                            existing_segments = []
+                            existing[title] = []
+
+                updates: list[tuple[str, bool, int, int, str]] = []
+                for title in titles:
+                    segs = parts.get(title, [])
+                    existing_segments = existing.get(title, [])
                     validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
@@ -247,31 +259,36 @@ def _process_groups(
                             continue
                         seen_ids.add(m)
                         deduped.append(
-                            {"number": n, "message_id": m, "group": g, "size": s}
+                            {"number": n, "message_id": m, "group": g, "size": s},
                         )
 
-                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
-                    for seg in deduped:
-                        message_id = seg["message_id"]
-                        existing_map.setdefault(message_id, seg)
-                    combined_segments = list(existing_map.values())
+                    existing_ids = {seg["message_id"] for seg in existing_segments}
+                    new_segments = [
+                        seg for seg in deduped if seg["message_id"] not in existing_ids
+                    ]
+                    combined_segments = existing_segments + new_segments
                     validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
-                    cur.execute(
-                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                    updates.append(
                         (
-                            json.dumps(combined_segments).decode(),
+                            json.dumps(combined_segments),
                             has_parts,
                             part_counts[title],
                             total_size,
                             title,
-                        ),
+                        )
                     )
                     has_parts_flags[title] = has_parts
                     changed.add(title)
-                db.commit()
+
+                if updates:
+                    cur.executemany(
+                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                        updates,
+                    )
+                    db.commit()
             except Exception:
                 pass
 
@@ -350,7 +367,7 @@ def run_once() -> float:
 
     Returns the suggested delay before the next poll.
     """
-    global last_run, last_run_wall
+    global last_run
     groups = config.NNTP_GROUPS or config._load_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
@@ -358,16 +375,14 @@ def run_once() -> float:
     groups = [g for g in groups if g not in ignored]
     if not groups:
         logger.info("ingest_no_groups")
-        last_run = time.monotonic()
-        last_run_wall = time.time()
+        last_run = time.time()
         return INGEST_POLL_MAX_SECONDS
     skip = set(cursors.get_irrelevant_groups())
     if skip:
         groups = [g for g in groups if g not in skip]
     if not groups:
         logger.info("ingest_no_groups")
-        last_run = time.monotonic()
-        last_run_wall = time.time()
+        last_run = time.time()
         return INGEST_POLL_MAX_SECONDS
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
@@ -378,8 +393,7 @@ def run_once() -> float:
         client.connect()
         db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
-        last_run = time.monotonic()
-        last_run_wall = time.time()
+        last_run = time.time()
         return delay
     finally:
         try:

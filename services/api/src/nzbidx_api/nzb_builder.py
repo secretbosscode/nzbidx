@@ -129,7 +129,7 @@ NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
 
 
 def build_nzb_for_release(release_id: str) -> bytes:
-    """Return an NZB XML document for ``release_id`` as bytes.
+    """Return an NZB XML document for ``release_id``.
 
     Segment information is retrieved from the database. When no segments are
     found a :class:`newznab.NzbFetchError` is raised.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import asyncio
-from nzbidx_api.json_utils import orjson
+import json
 import logging
 import sqlite3
 import threading
@@ -15,9 +15,6 @@ import pytest
 
 from nzbidx_api import nzb_builder, newznab  # type: ignore
 from nzbidx_api import db as api_db  # type: ignore
-import nzbidx_api.config as api_config  # type: ignore
-api_config.reload_api_keys = lambda: None  # type: ignore
-api_config.reload_if_env_changed = lambda: None  # type: ignore
 import nzbidx_api.main as api_main  # type: ignore
 import nzbidx_ingest.main as main  # type: ignore
 from nzbidx_ingest.main import (
@@ -475,9 +472,9 @@ def test_repeated_nzb_fetch_reuses_db_connection(monkeypatch) -> None:
     """Subsequent NZB builds should reuse the same DB connection."""
 
     calls = 0
-    seg_data = orjson.dumps(
+    seg_data = json.dumps(
         [{"number": 1, "message_id": "m1", "group": "g", "size": 123}]
-    ).decode()
+    )
 
     class DummyCursor:
         def __enter__(self):  # type: ignore[override]
@@ -531,11 +528,11 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
 def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
     """Segments should be fetched using the numeric release id."""
 
-    seg_data = orjson.dumps(
+    seg_data = json.dumps(
         [
             {"number": 1, "message_id": "m1", "group": "g", "size": 123},
         ]
-    ).decode()
+    )
     executed: dict[str, object] = {}
 
     class DummyCursor:
@@ -605,7 +602,7 @@ def test_basic_api_and_ingest(monkeypatch) -> None:
 def test_getnzb_timeout(monkeypatch) -> None:
     """Slow NZB generation should return 504 after timeout."""
 
-    async def slow_get_nzb(_release_id, _cache) -> bytes:
+    async def slow_get_nzb(_release_id, _cache):
         await asyncio.sleep(0.1)
         return b"<nzb></nzb>"
 
@@ -620,7 +617,7 @@ def test_getnzb_timeout(monkeypatch) -> None:
 def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
     """Fetch failures should return 404 when NZB is unavailable."""
 
-    async def error_get_nzb(_release_id, _cache) -> bytes:
+    async def error_get_nzb(_release_id, _cache):
         raise newznab.NzbFetchError("boom")
 
     monkeypatch.setattr(api_main, "get_nzb", error_get_nzb)
@@ -628,7 +625,7 @@ def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 404
     assert "Retry-After" not in resp.headers
-    assert orjson.loads(resp.body) == {
+    assert json.loads(resp.body) == {
         "error": {
             "code": "nzb_not_found",
             "message": "No segments found for release 1",
@@ -646,7 +643,7 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 503
-    assert orjson.loads(resp.body) == {
+    assert json.loads(resp.body) == {
         "error": {"code": "nzb_unavailable", "message": "database query failed"}
     }
 
@@ -654,7 +651,7 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
 def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     """NZB downloads should include a content-disposition header."""
 
-    async def fake_get_nzb(_release_id, _cache) -> bytes:
+    async def fake_get_nzb(_release_id, _cache):
         return b"<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", fake_get_nzb)
@@ -691,7 +688,7 @@ def test_infer_category_from_group() -> None:
 def test_group_category_hints_file(tmp_path, monkeypatch) -> None:
     """Hints should be extendable via an external config file."""
     cfg = tmp_path / "hints.json"
-    cfg.write_text(orjson.dumps([["foo", "xxx"]]).decode())
+    cfg.write_text(json.dumps([["foo", "xxx"]]))
     monkeypatch.setenv("GROUP_CATEGORY_HINTS_FILE", str(cfg))
     reloaded = importlib.reload(main)
     try:
@@ -709,19 +706,19 @@ def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
     """caps.xml should reflect configured categories."""
     cfg = tmp_path / "cats.json"
     cfg.write_text(
-        orjson.dumps(
+        json.dumps(
             [
                 {"id": 123, "name": "Foo"},
                 {"id": 6000, "name": "Adult"},
             ]
-        ).decode(),
+        ),
         encoding="utf-8",
     )
     monkeypatch.setenv("CATEGORY_CONFIG", str(cfg))
     reloaded = importlib.reload(newznab)
     xml = reloaded.caps_xml()
-    assert '<category id="123" name="Foo"/>' in xml
-    assert '<category id="6000"' in xml
+    assert b'<category id="123" name="Foo"/>' in xml
+    assert b'<category id="6000"' in xml
 
 
 def test_caps_xml_defaults(monkeypatch) -> None:
@@ -729,9 +726,9 @@ def test_caps_xml_defaults(monkeypatch) -> None:
     monkeypatch.delenv("CATEGORY_CONFIG", raising=False)
     reloaded = importlib.reload(newznab)
     xml = reloaded.caps_xml()
-    assert '<category id="1000" name="Console"/>' in xml
-    assert '<category id="7030" name="Comics"/>' in xml
-    assert '<category id="6090" name="XXX/WEB-DL"/>' in xml
+    assert b'<category id="1000" name="Console"/>' in xml
+    assert b'<category id="7030" name="Comics"/>' in xml
+    assert b'<category id="6090" name="XXX/WEB-DL"/>' in xml
 
 
 def test_caps_xml_includes_searching_block(monkeypatch) -> None:
@@ -739,8 +736,8 @@ def test_caps_xml_includes_searching_block(monkeypatch) -> None:
     monkeypatch.delenv("CATEGORY_CONFIG", raising=False)
     reloaded = importlib.reload(newznab)
     xml = reloaded.caps_xml()
-    assert "<searching>" in xml
-    assert '<search available="yes" supportedParams="q,cat,limit,offset"/>' in xml
+    assert b"<searching>" in xml
+    assert b'<search available="yes" supportedParams="q,cat,limit,offset"/>' in xml
 
 
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
