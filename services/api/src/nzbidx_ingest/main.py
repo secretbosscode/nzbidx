@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nzbidx_api.json_utils import orjson
+import json
 import logging
 import os
 import re
@@ -146,7 +146,7 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
     cfg = os.getenv("GROUP_CATEGORY_HINTS_FILE")
     if cfg:
         try:
-            data = orjson.loads(Path(cfg).read_text())
+            data = json.loads(Path(cfg).read_text())
             if isinstance(data, dict):
                 extra = [(k, v) for k, v in data.items()]
             else:
@@ -192,6 +192,7 @@ ADULT_KEYWORDS = tuple(
     if k.strip()
 )
 
+# Precompiled regular expression for matching TV episode identifiers like "S01E01".
 TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
 
 try:  # pragma: no cover - optional dependency
