@@ -14,8 +14,12 @@ class _FakeResult:
     def scalar(self) -> bool:
         return self._scalar
 
-    def fetchall(self):  # pragma: no cover - not used
-        return []
+    def __aiter__(self):  # pragma: no cover - not used
+        async def _gen():
+            for _ in []:
+                yield _
+
+        return _gen()
 
 
 class _FakeConn:

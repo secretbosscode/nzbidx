@@ -18,8 +18,11 @@ class _FakeResult:
     def __init__(self, row: _FakeRow) -> None:
         self._row = row
 
-    def fetchall(self) -> list[_FakeRow]:
-        return [self._row]
+    def __aiter__(self):
+        async def _gen():
+            yield self._row
+
+        return _gen()
 
 
 class _FakeConn:

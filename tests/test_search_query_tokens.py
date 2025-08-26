@@ -10,8 +10,12 @@ class _FakeResult:
         self._rows = rows or []
         self._scalar = scalar
 
-    def fetchall(self) -> list[object]:
-        return self._rows
+    def __aiter__(self):
+        async def _gen():
+            for row in self._rows:
+                yield row
+
+        return _gen()
 
     def scalar(self) -> bool | None:
         return self._scalar
