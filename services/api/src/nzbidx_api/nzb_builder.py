@@ -71,12 +71,12 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             try:
                 if isinstance(seg, dict):
                     number = int(seg.get("number", 0))
-                    message_id = str(seg.get("message_id", "")).strip("<>")
+                    message_id = str(seg.get("message_id", ""))
                     group = str(seg.get("group", ""))
                     size = int(seg.get("size", 0) or 0)
                 elif isinstance(seg, (list, tuple)) and len(seg) >= 4:
                     number = int(seg[0])
-                    message_id = str(seg[1]).strip("<>")
+                    message_id = str(seg[1])
                     group = str(seg[2])
                     size = int(seg[3] or 0)
                 else:
