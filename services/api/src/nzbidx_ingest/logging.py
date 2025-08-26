@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import os
 import sys
@@ -29,7 +29,7 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         payload.update(extras)
-        return json.dumps(payload)
+        return orjson.dumps(payload).decode()
 
 
 _LOG_LOCK = threading.Lock()
