@@ -192,6 +192,8 @@ ADULT_KEYWORDS = tuple(
     if k.strip()
 )
 
+TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
+
 try:  # pragma: no cover - optional dependency
     from sqlalchemy import create_engine, text
 except Exception:  # pragma: no cover - optional dependency
@@ -714,7 +716,7 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["xxx"]
 
     # TV
-    if re.search(r"s\d{1,2}e\d{1,2}", s) or "season" in s or "episode" in s:
+    if TV_EPISODE_RE.search(s) or "season" in s or "episode" in s:
         if "sport" in s or "sports" in s:
             return CATEGORY_MAP["tv_sport"]
         if any(k in s for k in ("1080p", "720p", "x264", "x265", "hd")):

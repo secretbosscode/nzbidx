@@ -23,7 +23,36 @@ _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
 _URL_RE = re.compile(r"http\S+|www\.\S+", re.IGNORECASE)
 _NON_LETTER_RE = re.compile(r"[^A-Za-z\s]+")
 
-SEPARATOR_TRANS = str.maketrans({".": " ", "_": " "})
+# Precompiled regular expressions for tag extraction and subject normalization.
+MUSIC_TAG_RE = re.compile(
+    r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
+    r"(?P<format>FLAC|MP3)(?:-(?P<bitrate>\d{3}))?",
+    re.IGNORECASE,
+)
+
+BOOK_TAG_RE = re.compile(
+    r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
+    r"(?P<format>EPUB|MOBI|PDF)(?:-(?P<isbn>\d{10,13}))?",
+    re.IGNORECASE,
+)
+
+XXX_STUDIO_RE = re.compile(
+    r"(?P<studio>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4})\.(?P<resolution>\d{3,4}p)",
+    re.IGNORECASE,
+)
+
+XXX_SITE_RE = re.compile(
+    r"(?P<site>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4}\.\d{2}\.\d{2})",
+    re.IGNORECASE,
+)
+
+YENC_RE = re.compile(r"\byenc\b", re.IGNORECASE)
+PART_SIZE_RE = re.compile(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]")
+FILLER_RE = re.compile(r"\b(?:repost|sample)\b", re.IGNORECASE)
+PART_RE = re.compile(r"\bpart\s*\d+\b", re.IGNORECASE)
+ARCHIVE_RE = re.compile(r"\b(rar|par2|zip)\b", re.IGNORECASE)
+WHITESPACE_RE = re.compile(r"\s+")
+TRIM_RE = re.compile(r"^[-\s]+|[-\s]+$")
 
 
 def extract_tags(subject: str) -> list[str]:
@@ -121,12 +150,7 @@ def extract_music_tags(subject: str) -> dict[str, str]:
     ``Artist-Album-2021-MP3-320``. The returned dict may contain the keys
     ``artist``, ``album``, ``year``, ``format`` and ``bitrate``.
     """
-    pattern = re.compile(
-        r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
-        r"(?P<format>FLAC|MP3)(?:-(?P<bitrate>\d{3}))?",
-        re.IGNORECASE,
-    )
-    match = pattern.search(subject)
+    match = MUSIC_TAG_RE.search(subject)
     if not match:
         return {}
 
@@ -145,12 +169,7 @@ def extract_book_tags(subject: str) -> dict[str, str]:
     Returns a dict with ``author``, ``title``, ``year``, ``format`` and
     optional ``isbn`` keys when found.
     """
-    pattern = re.compile(
-        r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
-        r"(?P<format>EPUB|MOBI|PDF)(?:-(?P<isbn>\d{10,13}))?",
-        re.IGNORECASE,
-    )
-    match = pattern.search(subject)
+    match = BOOK_TAG_RE.search(subject)
     if not match:
         return {}
 
@@ -168,22 +187,13 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
     ``Studio.Name.2022.1080p`` -> ``studio``, ``date`` and ``resolution``
     ``Site.Name.2023.07.12``   -> ``site`` and ``date``
     """
-    studio_re = re.compile(
-        r"(?P<studio>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4})\.(?P<resolution>\d{3,4}p)",
-        re.IGNORECASE,
-    )
-    site_re = re.compile(
-        r"(?P<site>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4}\.\d{2}\.\d{2})",
-        re.IGNORECASE,
-    )
-
-    match = studio_re.search(subject)
+    match = XXX_STUDIO_RE.search(subject)
     if match:
         tags = match.groupdict()
         tags["studio"] = tags["studio"].replace(".", " ")
         return {k: v for k, v in tags.items() if v}
 
-    match = site_re.search(subject)
+    match = XXX_SITE_RE.search(subject)
     if match:
         tags = match.groupdict()
         tags["site"] = tags["site"].replace(".", " ")
@@ -222,16 +232,16 @@ def normalize_subject(
         tag_dict[t] = t
 
     # Convert common separators to spaces.
-    cleaned = subject.translate(SEPARATOR_TRANS)
+    cleaned = subject.replace(".", " ").replace("_", " ")
 
     # Remove bracketed tags.
     cleaned = _TAG_RE.sub("", cleaned)
 
     # Remove explicit yEnc markers.
-    cleaned = re.sub(r"(?i)\byenc\b", "", cleaned)
+    cleaned = YENC_RE.sub("", cleaned)
 
     # Drop part/size information such as "(01/15)" or "[12345/12346]".
-    cleaned = re.sub(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]", "", cleaned)
+    cleaned = PART_SIZE_RE.sub("", cleaned)
 
     # Remove language tokens based on LANGUAGE_TOKENS keys.
     if LANGUAGE_TOKENS:
@@ -239,20 +249,17 @@ def normalize_subject(
         cleaned = re.sub(tokens_pattern, "", cleaned, flags=re.IGNORECASE)
 
     # Remove common filler words.
-    fillers = ("repost", "sample")
-    cleaned = re.sub(
-        rf"\b({'|'.join(map(re.escape, fillers))})\b", "", cleaned, flags=re.IGNORECASE
-    )
+    cleaned = FILLER_RE.sub("", cleaned)
 
     # Strip trailing segment markers and archive extensions commonly found in
     # multipart releases.  Subjects like ``Name.part01.rar`` or ``Name.part1``
     # should normalize to ``Name`` so all segments dedupe to a single entry.
-    cleaned = re.sub(r"(?i)\bpart\s*\d+\b", "", cleaned)
-    cleaned = re.sub(r"(?i)\b(rar|par2|zip)\b", "", cleaned)
+    cleaned = PART_RE.sub("", cleaned)
+    cleaned = ARCHIVE_RE.sub("", cleaned)
 
     # Collapse whitespace and trim leading/trailing separators or dashes.
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"^[-\s]+|[-\s]+$", "", cleaned)
+    cleaned = WHITESPACE_RE.sub(" ", cleaned).strip()
+    cleaned = TRIM_RE.sub("", cleaned)
 
     tags = sorted(
         {
