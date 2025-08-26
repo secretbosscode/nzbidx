@@ -11,6 +11,8 @@ from .config import strict_transport_security
 class SecurityMiddleware(BaseHTTPMiddleware):
     """Add security headers and enforce a request size limit."""
 
+    __slots__ = ("max_request_bytes",)
+
     def __init__(self, app, max_request_bytes: int) -> None:
         super().__init__(app)
         self.max_request_bytes = max_request_bytes

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
-from typing import Dict
 import asyncio
+from typing import Dict
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -16,31 +16,29 @@ from .errors import rate_limited
 
 class RateLimiter:
     """Track request counts per key within a time window using memory."""
+    __slots__ = ("limit", "window", "counts", "_lock")
 
     def __init__(self, limit: int, window: int) -> None:
         self.limit = limit
         self.window = window
-        self.counts: Dict[int, Dict[str, int]] = {}
+        self.counts: tuple[int | None, Dict[str, int]] = (None, {})
         self._lock = asyncio.Lock()
 
     async def increment(self, key: str) -> int:
         """Increment and return current count for ``key``."""
-        now = time.monotonic()
-        bucket = int(now // self.window)
+        bucket = int(time.monotonic() // self.window)
         async with self._lock:
-            bucket_counts = self.counts.setdefault(bucket, {})
+            current_bucket, bucket_counts = self.counts
+            if bucket != current_bucket:
+                bucket_counts = {}
+                current_bucket = bucket
             bucket_counts[key] = bucket_counts.get(key, 0) + 1
-            # Drop old buckets
-            for old in list(self.counts.keys()):
-                if old != bucket:
-                    del self.counts[old]
+            self.counts = (current_bucket, bucket_counts)
             return bucket_counts[key]
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Apply simple IP based rate limiting."""
-
-    __slots__ = ("limiter", "limit")
 
     def __init__(
         self, app, limit: int | None = None, window: int | None = None
