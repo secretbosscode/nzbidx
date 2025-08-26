@@ -28,6 +28,9 @@ _CACHE: TTLCache[str, str] = _new_cache()
 # Guard access to ``_CACHE`` so readers/writers don't interfere with each other
 _CACHE_LOCK = asyncio.Lock()
 
+PURGE_INTERVAL = 30
+_LAST_PURGE = 0.0
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +48,12 @@ def _ensure_cache_config() -> None:
 def _purge_expired_locked(now: Optional[float] = None) -> None:
     """Internal helper that prunes expired entries while the cache lock is held."""
 
-    _CACHE.expire(now)
+    global _LAST_PURGE
+
+    current = now if now is not None else time.monotonic()
+    if current - _LAST_PURGE >= PURGE_INTERVAL:
+        _CACHE.expire(current)
+        _LAST_PURGE = current
 
 
 async def purge_expired() -> None:
@@ -73,7 +81,7 @@ async def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` using the configured TTL."""
     async with _CACHE_LOCK:
         _ensure_cache_config()
-        _purge_expired_locked()
+        _purge_expired_locked(time.monotonic())
         if "<item>" not in xml:
             return
         _CACHE[key] = xml

@@ -129,7 +129,7 @@ from .errors import (
 )
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
-from .config import cors_origins, settings
+from .config import cors_origins, settings, reload_if_env_changed
 from .metrics_log import start as start_metrics, inc_api_5xx, get_counters
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
@@ -826,6 +826,7 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[
+        reload_if_env_changed,
         init_engine,
         apply_schema,
         ensure_search_vector,

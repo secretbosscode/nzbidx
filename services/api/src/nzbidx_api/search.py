@@ -185,7 +185,7 @@ async def search_releases_async(
             skip_count += 1
             continue
         release_id = str(row.id)
-        link = f"/api?t=getnzb&id={quote(release_id, safe='')}"
+        link = f"/api?t=getnzb&id={release_id}"
         if api_key:
             link += f"&apikey={quote(api_key, safe='')}"
         items.append(

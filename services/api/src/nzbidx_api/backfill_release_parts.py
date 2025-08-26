@@ -20,9 +20,10 @@ BATCH_SIZE = int(os.getenv("BACKFILL_BATCH_SIZE", "100"))
 XOVER_LOOKBACK = int(os.getenv("BACKFILL_XOVER_LOOKBACK", "10000"))
 
 
-def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
+def _fetch_segments(
+    release_id: str, group: str, client: NNTPClient
+) -> list[tuple[int, str, int]]:
     """Return ``(number, message_id, size)`` tuples for ``release_id``."""
-    client = NNTPClient()
     groups = [group] if group else config.NNTP_GROUPS
     last_exc: Exception | None = None
     last_group = ""
@@ -38,10 +39,9 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
         segments: list[tuple[int, str, int]] = []
         target = release_id.lower()
         seen_numbers: set[int] = set()
-        max_seen = 0
         for header in headers:
             subject = str(header.get("subject", ""))
-            if normalize_subject(subject) != target:
+            if normalize_subject(subject).lower() != target:
                 continue
             msg_id = str(header.get("message-id") or "").strip("<>")
             if not msg_id:
@@ -56,9 +56,11 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
                 continue
             segments.append((number, msg_id, size))
             seen_numbers.add(number)
-            if number > max_seen:
-                max_seen = number
-            if 1 in seen_numbers and len(seen_numbers) == max_seen and max_seen > 1:
+            if (
+                1 in seen_numbers
+                and len(seen_numbers) == max(seen_numbers)
+                and max(seen_numbers) > 1
+            ):
                 break
         if segments:
             segments.sort(key=lambda s: s[0])
@@ -84,106 +86,110 @@ def backfill_release_parts(
     """
     if not config.NNTP_GROUPS:
         config.validate_nntp_config()
-    conn = connect_db()
+    client = NNTPClient()
+    client.connect()
     try:
-        _cursor = conn.cursor()
-        cursor_cm = _cursor if hasattr(_cursor, "__enter__") else closing(_cursor)
-        with cursor_cm as cur:
-            placeholder = (
-                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            )
-            base_sql = "SELECT id, norm_title, source_group, segments FROM release"
-            params: list[int] | tuple[int, ...] = []
-            if auto and not release_ids:
-                cur.execute(
-                    """
-                    SELECT id FROM release
-                    WHERE has_parts AND segments IS NULL
-                    ORDER BY id
-                    """,
+        conn = connect_db()
+        try:
+            _cursor = conn.cursor()
+            cursor_cm = _cursor if hasattr(_cursor, "__enter__") else closing(_cursor)
+            with cursor_cm as cur:
+                placeholder = (
+                    "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
                 )
-                release_ids = [row[0] for row in cur.fetchall()]
-                if not release_ids:
-                    return 0
-            if release_ids:
-                ids = list(release_ids)
-                placeholders = ",".join([placeholder] * len(ids))
-                base_sql += f" WHERE id IN ({placeholders})"
-                params = ids
-            cur.execute(f"{base_sql} ORDER BY id", params)
-            processed = 0
-            to_delete: list[tuple[int, str]] = []
-            while True:
-                rows = cur.fetchmany(BATCH_SIZE)
-                if not rows:
-                    break
-                updates: list[tuple[str, bool, int, int, int]] = []
-                for rel_id, norm_title, group, existing in rows:
-                    if existing:
-                        log.info("segments_exist", extra={"id": rel_id})
-                        continue
-                    try:
-                        segments = _fetch_segments(norm_title, group or "")
-                    except ConnectionError as exc:
-                        log.warning(
-                            "nntp_fetch_failed",
-                            extra={"id": rel_id, "group": group, "error": str(exc)},
-                        )
-                        raise
-                    except Exception as exc:  # pragma: no cover - unexpected
-                        log.warning(
-                            "unexpected_error", extra={"id": rel_id, "error": str(exc)}
-                        )
-                        to_delete.append((rel_id, norm_title))
-                        continue
-                    if not segments:
-                        log.info("no_segments", extra={"id": rel_id})
-                        to_delete.append((rel_id, norm_title))
-                        continue
-                    seg_data = [
-                        {
-                            "number": num,
-                            "message_id": msg_id,
-                            "group": group or "",
-                            "size": size,
-                        }
-                        for num, msg_id, size in segments
-                    ]
-                    validate_segment_schema(seg_data)
-                    total_size = sum(size for _, _, size in segments)
-                    updates.append(
-                        (
-                            json.dumps(seg_data),
-                            True,
-                            len(seg_data),
-                            total_size,
-                            rel_id,
-                        )
+                base_sql = "SELECT id, norm_title, source_group, segments FROM release"
+                params: list[int] | tuple[int, ...] = []
+                if auto and not release_ids:
+                    cur.execute(
+                        """
+                        SELECT id FROM release
+                        WHERE has_parts AND segments IS NULL
+                        ORDER BY id
+                        """,
                     )
-                    processed += 1
-                    if progress_cb:
-                        try:
-                            progress_cb(processed)
-                        except Exception:  # pragma: no cover - progress callback errors
-                            log.exception("progress_callback_failed")
-                if updates:
-                    conn.executemany(
-                        (
-                            f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
-                            f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
-                        ),
-                        updates,
-                    )
-                if to_delete:
-                    ids = [r for r, _ in to_delete]
+                    release_ids = [row[0] for row in cur.fetchall()]
+                    if not release_ids:
+                        return 0
+                if release_ids:
+                    ids = list(release_ids)
                     placeholders = ",".join([placeholder] * len(ids))
-                    conn.execute(
-                        f"DELETE FROM release WHERE id IN ({placeholders})", ids
-                    )
-                    log.info("deleted %d invalid releases", len(ids))
-                    to_delete.clear()
-                conn.commit()
-                log.info("processed %d releases", processed)
-            return processed
+                    base_sql += f" WHERE id IN ({placeholders})"
+                    params = ids
+                cur.execute(f"{base_sql} ORDER BY id", params)
+                processed = 0
+                to_delete: list[tuple[int, str]] = []
+                while True:
+                    rows = cur.fetchmany(BATCH_SIZE)
+                    if not rows:
+                        break
+                    for rel_id, norm_title, group, existing in rows:
+                        if existing:
+                            log.info("segments_exist", extra={"id": rel_id})
+                            continue
+                        try:
+                            segments = _fetch_segments(norm_title, group or "", client)
+                        except ConnectionError as exc:
+                            log.warning(
+                                "nntp_fetch_failed",
+                                extra={"id": rel_id, "group": group, "error": str(exc)},
+                            )
+                            raise
+                        except Exception as exc:  # pragma: no cover - unexpected
+                            log.warning(
+                                "unexpected_error",
+                                extra={"id": rel_id, "error": str(exc)},
+                            )
+                            to_delete.append((rel_id, norm_title))
+                            continue
+                        if not segments:
+                            log.info("no_segments", extra={"id": rel_id})
+                            to_delete.append((rel_id, norm_title))
+                            continue
+                        seg_data = [
+                            {
+                                "number": num,
+                                "message_id": msg_id,
+                                "group": group or "",
+                                "size": size,
+                            }
+                            for num, msg_id, size in segments
+                        ]
+                        validate_segment_schema(seg_data)
+                        total_size = sum(size for _, _, size in segments)
+                        conn.execute(
+                            (
+                                f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
+                                f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
+                            ),
+                            (
+                                json.dumps(seg_data),
+                                True,
+                                len(seg_data),
+                                total_size,
+                                rel_id,
+                            ),
+                        )
+                        processed += 1
+                        if progress_cb:
+                            try:
+                                progress_cb(processed)
+                            except (
+                                Exception
+                            ):  # pragma: no cover - progress callback errors
+                                log.exception("progress_callback_failed")
+                    conn.commit()
+                    if to_delete:
+                        ids = [r for r, _ in to_delete]
+                        placeholders = ",".join([placeholder] * len(ids))
+                        conn.execute(
+                            f"DELETE FROM release WHERE id IN ({placeholders})", ids
+                        )
+                        conn.commit()
+                        log.info("deleted %d invalid releases", len(ids))
+                        to_delete.clear()
+                    log.info("processed %d releases", processed)
+                return processed
+        finally:
+            conn.close()
     finally:
-        conn.close()
+        client.quit()

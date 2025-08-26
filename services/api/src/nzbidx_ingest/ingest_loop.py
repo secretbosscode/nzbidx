@@ -25,7 +25,7 @@ from .main import (
     _infer_category,
     connect_db,
     CATEGORY_MAP,
-    prune_group,
+    prune_groups,
 )
 from email.utils import parsedate_to_datetime
 from datetime import timezone
@@ -78,11 +78,13 @@ def _process_groups(
 ) -> float:
     aggregate = _AggregateMetrics()
 
-    for ig in ignored:
-        prune_group(db, ig)
+    prune_groups(db, ignored)
+
+    cursor_map = cursors.get_cursors(groups)
+    updates: dict[str, int] = {}
 
     for group in groups:
-        last = cursors.get_cursor(group) or 0
+        last = cursor_map.get(group, 0)
         start = last + 1
         _resp, _count, _low, high_s, _name = client.group(group)
         try:
@@ -148,12 +150,12 @@ def _process_groups(
             metrics["processed"] += 1
             size = int(header.get("bytes") or header.get(":bytes") or 0)
             current = idx
-            message_id = str(header.get("message-id") or "").strip()
+            message_id = str(header.get("message-id") or "").strip("<> ").strip()
             if size <= 0 and message_id:
                 size = client.body_size(message_id)
             if size <= 0:
                 continue
-            subject = header.get("subject", "")
+            subject = str(header.get("subject", ""))
             norm_title, tags = normalize_subject(subject, with_tags=True)
             posted = header.get("date")
             day_bucket = ""
@@ -167,7 +169,7 @@ def _process_groups(
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
-            category = _infer_category(subject, group, tags=tags) or CATEGORY_MAP["other"]
+            category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
             tags = tags or []
             existing = releases.get(dedupe_key)
             if existing:
@@ -198,9 +200,7 @@ def _process_groups(
                 )
             if message_id:
                 seg_num = extract_segment_number(subject)
-                parts.setdefault(dedupe_key, []).append(
-                    (seg_num, message_id.strip("<>"), group, size)
-                )
+                parts.setdefault(dedupe_key, []).append((seg_num, message_id, group, size))
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
@@ -275,7 +275,7 @@ def _process_groups(
                 pass
 
         changed |= inserted
-        cursors.set_cursor(group, current)
+        updates[group] = current
         metrics["deduplicated"] = metrics["processed"] - metrics["inserted"]
         duration_s = time.monotonic() - batch_start
         metrics["duration_ms"] = int(duration_s * 1000)
@@ -328,6 +328,8 @@ def _process_groups(
             sleep_ms = max(sleep_ms, int(INGEST_SLEEP_MS * ratio))
         if sleep_ms > 0:
             time.sleep(sleep_ms / 1000)
+    if updates:
+        cursors.set_cursors(updates)
 
     summary = aggregate.summary()
     logger.info("ingest_summary", extra={"event": "ingest_summary", **summary})
@@ -344,8 +346,12 @@ def _process_groups(
     return delay
 
 
-def run_once() -> float:
+def run_once(db: object | None) -> float:
     """Process a single batch for each configured NNTP group.
+
+    ``db`` is an open database connection that will remain open across
+    iterations.  The caller is responsible for reconnecting if the
+    connection becomes unusable.
 
     Returns the suggested delay before the next poll.
     """
@@ -370,10 +376,8 @@ def run_once() -> float:
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
     client = NNTPClient()
-    db = None
     try:
         client.connect()
-        db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
         last_run = time.time()
         return delay
@@ -382,34 +386,45 @@ def run_once() -> float:
             client.quit()
         except Exception:
             pass
-        if db is not None:
-            try:
-                db.close()
-            except Exception:
-                pass
 
 
 def run_forever(stop_event: Event | None = None) -> None:
     """Continuously poll groups until ``stop_event`` is set."""
     failure_delay = INGEST_POLL_MIN_SECONDS
-    while not (stop_event and stop_event.is_set()):
-        try:
-            delay = run_once()
-            failure_delay = INGEST_POLL_MIN_SECONDS
-        except BaseException as exc:  # pragma: no cover
-            if isinstance(exc, KeyboardInterrupt):
-                logger.info("ingest_loop_interrupted")
-                raise
-            logger.exception("ingest_loop_failure")
-            delay = failure_delay
-            failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
-        delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
-        if stop_event:
-            if stop_event.wait(delay):
-                break
-        else:
+    db: object | None = None
+    try:
+        while not (stop_event and stop_event.is_set()):
             try:
-                time.sleep(delay)
-            except ValueError:
-                logger.exception("ingest_sleep_failure", extra={"delay": delay})
-                time.sleep(INGEST_POLL_MIN_SECONDS)
+                if db is None:
+                    db = connect_db()
+                delay = run_once(db)
+                failure_delay = INGEST_POLL_MIN_SECONDS
+            except BaseException as exc:  # pragma: no cover
+                if isinstance(exc, KeyboardInterrupt):
+                    logger.info("ingest_loop_interrupted")
+                    raise
+                logger.exception("ingest_loop_failure")
+                try:
+                    if db is not None:
+                        db.close()
+                except Exception:
+                    pass
+                db = None
+                delay = failure_delay
+                failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
+            delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
+            if stop_event:
+                if stop_event.wait(delay):
+                    break
+            else:
+                try:
+                    time.sleep(delay)
+                except ValueError:
+                    logger.exception("ingest_sleep_failure", extra={"delay": delay})
+                    time.sleep(INGEST_POLL_MIN_SECONDS)
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
