@@ -153,7 +153,7 @@ def _process_groups(
                 size = client.body_size(message_id)
             if size <= 0:
                 continue
-            subject = header.get("subject", "")
+            subject = str(header.get("subject", ""))
             norm_title, tags = normalize_subject(subject, with_tags=True)
             norm_title = norm_title.lower()
             posted = header.get("date")
@@ -168,7 +168,7 @@ def _process_groups(
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
-            category = _infer_category(subject, group, tags=tags) or CATEGORY_MAP["other"]
+            category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
             tags = tags or []
             existing = releases.get(dedupe_key)
             if existing:
