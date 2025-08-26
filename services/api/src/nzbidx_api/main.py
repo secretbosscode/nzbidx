@@ -2,85 +2,28 @@
 
 # ruff: noqa: E402
 
+import asyncio
 import hashlib
 import logging
 import os
 import sys
+import threading
 import time
-import asyncio
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable, Optional
 from urllib.parse import urlencode
 
-import threading
 from nzbidx_ingest import ingest_loop
 
+from .starlette_compat import (
+    BaseHTTPMiddleware,
+    CORSMiddleware,
+    Middleware,
+    Request,
+    Route,
+    Starlette,
+)
 from .json_utils import orjson
-
-SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "nzbidx-api")
-
-
-# Starlette (with safe fallbacks for tests/minimal envs)
-try:  # pragma: no cover - import guard
-    from starlette.applications import Starlette
-    from starlette.requests import Request
-    from starlette.routing import Route
-    from starlette.middleware import Middleware
-    from starlette.middleware.cors import CORSMiddleware
-    from starlette.middleware.base import BaseHTTPMiddleware
-except Exception:  # pragma: no cover - optional dependency
-
-    class Request:  # type: ignore
-        """Very small subset of Starlette's Request used for testing."""
-
-        def __init__(self, scope: dict) -> None:
-            self.query_params = scope.get("query_params", {})
-            self.scope = scope
-
-    class Route:  # type: ignore
-        def __init__(
-            self, path: str, endpoint: Callable, methods: Optional[list[str]] = None
-        ) -> None:
-            """Minimal route container used when Starlette isn't available."""
-            self.path = path
-            self.endpoint = endpoint
-            self.methods = methods or ["GET"]
-
-    class Middleware:  # type: ignore
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-    class CORSMiddleware:  # type: ignore
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-    class BaseHTTPMiddleware:  # type: ignore
-        def __init__(self, *args, **kwargs) -> None:
-            pass
-
-    class Starlette:  # type: ignore
-        def __init__(
-            self,
-            *,
-            routes: Optional[list[Route]] = None,
-            on_startup: Optional[list[Callable]] = None,
-            on_shutdown: Optional[list[Callable]] = None,
-            middleware: Optional[list[Middleware]] = None,
-        ) -> None:
-            """Store basic application configuration for tests.
-
-            This stub only keeps track of routes so that a lightweight test
-            client can dispatch to the correct endpoint.  The full ASGI
-            interface and middleware handling provided by Starlette are far
-            beyond the needs of the smoke tests, so they are intentionally
-            omitted.
-            """
-            self.routes = routes or []
-            self.on_startup = on_startup or []
-            self.on_shutdown = on_shutdown or []
-            self.middleware = middleware or []
-
-
 from .orjson_response import ORJSONResponse, Response
 from .db import (
     apply_schema,
@@ -139,6 +82,8 @@ from .config import cors_origins, settings, reload_if_env_changed
 from .metrics_log import start as start_metrics, inc_api_5xx, get_counters
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
+
+SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "nzbidx-api")
 
 _stop_metrics: Callable[[], None] | None = None
 _ingest_stop: threading.Event | None = None
