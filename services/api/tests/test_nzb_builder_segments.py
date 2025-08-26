@@ -49,7 +49,7 @@ def test_build_nzb_for_release_accepts_segment_formats(monkeypatch, seg_data):
 
     xml = nzb_builder.build_nzb_for_release("123")
 
-    assert '<segment bytes="123" number="1">m1</segment>' in xml
+    assert b'<segment bytes="123" number="1">m1</segment>' in xml
 
 
 @pytest.mark.parametrize(

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import argparse
-from nzbidx_api.json_utils import orjson
+import json
 import sys
 from pathlib import Path
 
@@ -15,14 +15,17 @@ sys.path.append(str(ROOT / "services" / "api" / "src"))
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.segment_schema import validate_segment_schema
 
-BATCH_SIZE = 1000
+try:  # Prefer ingest helper but fall back to API helper if unavailable.
+    from nzbidx_ingest.sql import sql_placeholder
+except Exception:  # pragma: no cover - fallback
+    from nzbidx_api.db import sql_placeholder  # type: ignore
 
 
 def _convert(seg):
     if isinstance(seg, dict):
         return {
             "number": int(seg.get("number", 0)),
-            "message_id": str(seg.get("message_id", "")),
+            "message_id": str(seg.get("message_id", "")).strip("<>"),
             "group": str(seg.get("group", "")),
             "size": int(seg.get("size", 0) or 0),
         }
@@ -30,7 +33,7 @@ def _convert(seg):
         n, m, g, s = seg[:4]
         return {
             "number": int(n),
-            "message_id": str(m),
+            "message_id": str(m).strip("<>"),
             "group": str(g),
             "size": int(s),
         }
@@ -40,41 +43,39 @@ def _convert(seg):
 def normalize() -> int:
     conn = connect_db()
     cur = conn.cursor()
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    placeholder = sql_placeholder(conn)
     cur.execute("SELECT id, segments FROM release WHERE segments IS NOT NULL")
-    updated = 0
-    while True:
-        rows = cur.fetchmany(BATCH_SIZE)
-        if not rows:
-            break
-        for rid, seg_json in rows:
-            try:
-                data = (
-                    orjson.loads(seg_json or "[]")
-                    if isinstance(seg_json, (str, bytes))
-                    else seg_json or []
-                )
-            except Exception:
-                continue
-            try:
-                validate_segment_schema(data)
-                continue
-            except AssertionError:
-                pass
-            converted = []
-            try:
-                for seg in data:
-                    converted.append(_convert(seg))
-            except Exception:
-                continue
-            cur.execute(
-                f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
-                (orjson.dumps(converted).decode(), rid),
+    rows = cur.fetchall()
+    batch = []
+    for rid, seg_json in rows:
+        try:
+            data = (
+                json.loads(seg_json or "[]")
+                if isinstance(seg_json, (str, bytes))
+                else seg_json or []
             )
-            updated += 1
-        conn.commit()
+        except Exception:
+            continue
+        try:
+            validate_segment_schema(data)
+            continue
+        except AssertionError:
+            pass
+        converted = []
+        try:
+            for seg in data:
+                converted.append(_convert(seg))
+        except Exception:
+            continue
+        batch.append((json.dumps(converted), rid))
+    if batch:
+        cur.executemany(
+            f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
+            batch,
+        )
+    conn.commit()
     conn.close()
-    return updated
+    return len(batch)
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helper

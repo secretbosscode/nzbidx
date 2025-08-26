@@ -279,7 +279,7 @@ def rss_xml(
     )
 
 
-async def get_nzb(release_id: str, cache: Optional[Any]) -> str:
+async def get_nzb(release_id: str, cache: Optional[Any]) -> bytes:
     """Return an NZB document for ``release_id`` using an optional in-memory cache.
 
     The actual NZB building is delegated to
@@ -303,9 +303,9 @@ async def get_nzb(release_id: str, cache: Optional[Any]) -> str:
                 inc_nzb_cache_hit()
                 if cached == FAIL_SENTINEL:
                     raise NzbFetchError("previous fetch failed")
-                if isinstance(cached, (bytes, bytearray)):
-                    return cached.decode("utf-8")
-                return cached
+                if isinstance(cached, str):
+                    return cached.encode("utf-8")
+                return bytes(cached)
             inc_nzb_cache_miss()
 
     try:
