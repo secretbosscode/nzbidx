@@ -30,8 +30,16 @@ def test_cursor_postgres_dsn(monkeypatch):
             if stmt.startswith("INSERT") and params:
                 storage[params[0]] = params[1]
             if stmt.startswith("SELECT") and params:
-                return types.SimpleNamespace(fetchone=lambda: (storage.get(params[0]),))
-            return types.SimpleNamespace(fetchone=lambda: None)
+                value = storage.get(params[0])
+                return types.SimpleNamespace(
+                    fetchone=lambda: (value,),
+                    fetchall=lambda: [(params[0], value)] if value is not None else [],
+                )
+            return types.SimpleNamespace(fetchone=lambda: None, fetchall=lambda: [])
+
+        def executemany(self, stmt: str, param_list):  # type: ignore[override]
+            for params in param_list:
+                self.execute(stmt, params)
 
         def commit(self) -> None:  # pragma: no cover - trivial
             return None
@@ -55,6 +63,17 @@ def test_cursor_postgres_dsn(monkeypatch):
     insert_stmt = next(stmt for stmt, _ in executed if stmt.startswith("INSERT"))
     select_stmt = next(stmt for stmt, _ in executed if stmt.startswith("SELECT"))
     assert "%s" in insert_stmt and "%s" in select_stmt
+
+
+def test_bulk_cursor_helpers(tmp_path, monkeypatch):
+    db_path = tmp_path / "bulk.sqlite"
+    monkeypatch.setenv("CURSOR_DB", str(db_path))
+    importlib.reload(config)
+    importlib.reload(cursors)
+
+    cursors.set_cursors({"g1": 1, "g2": 2})
+    result = cursors.get_cursors(["g1", "g2", "g3"])
+    assert result == {"g1": 1, "g2": 2}
 
 
 def test_conn_sqlite_path_no_name_error(tmp_path, monkeypatch):
