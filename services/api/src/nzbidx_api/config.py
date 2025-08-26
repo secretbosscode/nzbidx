@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def api_keys() -> set[str]:
     return {k.strip() for k in keys.split(",") if k.strip()}
 
 
-@dataclass
+@dataclass(slots=True)
 class Settings:
     """Integer-based configuration settings loaded from the environment."""
 
@@ -95,7 +95,8 @@ class Settings:
     def reload(self) -> None:
         """Reload settings from the current environment."""
         new = type(self)()
-        self.__dict__.update(vars(new))
+        for f in fields(self):
+            setattr(self, f.name, getattr(new, f.name))
 
 
 settings = Settings()
