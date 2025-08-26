@@ -9,7 +9,7 @@ from nzbidx_api import rate_limit as rl  # type: ignore
 def test_in_memory_rate_limiter_counts() -> None:
     """RateLimiter should track counts per key."""
 
-    limiter = rl.RateLimiter(limit=5, window=60, max_entries=100)
+    limiter = rl.RateLimiter(limit=5, window=60)
     assert asyncio.run(limiter.increment("1.2.3.4")) == 1
     assert asyncio.run(limiter.increment("1.2.3.4")) == 2
     assert asyncio.run(limiter.increment("5.6.7.8")) == 1
@@ -18,7 +18,7 @@ def test_in_memory_rate_limiter_counts() -> None:
 def test_parallel_increment_counts() -> None:
     """Concurrent increments should produce sequential counts."""
 
-    limiter = rl.RateLimiter(limit=1000, window=60, max_entries=1000)
+    limiter = rl.RateLimiter(limit=1000, window=60)
 
     def call_increment() -> int:
         return asyncio.run(limiter.increment("1.2.3.4"))
@@ -30,13 +30,21 @@ def test_parallel_increment_counts() -> None:
     assert asyncio.run(limiter.increment("1.2.3.4")) == 101
 
 
-def test_lru_eviction() -> None:
-    """Limiter should evict least recently used IPs when full."""
+def test_window_resets_counts(monkeypatch) -> None:
+    """Counts reset when a new time window begins."""
 
-    limiter = rl.RateLimiter(limit=5, window=60, max_entries=2)
-    asyncio.run(limiter.increment("1.1.1.1"))
-    asyncio.run(limiter.increment("2.2.2.2"))
-    # Third unique IP should evict the least recently used (1.1.1.1)
-    asyncio.run(limiter.increment("3.3.3.3"))
-    assert "1.1.1.1" not in limiter.counts
-    assert asyncio.run(limiter.increment("2.2.2.2")) == 2
+    current = 0.0
+
+    def fake_monotonic() -> float:
+        return current
+
+    monkeypatch.setattr(rl.time, "monotonic", fake_monotonic)
+
+    limiter = rl.RateLimiter(limit=5, window=10)
+    assert asyncio.run(limiter.increment("1.2.3.4")) == 1
+
+    current = 5.0
+    assert asyncio.run(limiter.increment("1.2.3.4")) == 2
+
+    current = 15.0
+    assert asyncio.run(limiter.increment("1.2.3.4")) == 1

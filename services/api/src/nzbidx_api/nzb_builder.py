@@ -7,14 +7,14 @@ exist the function raises :class:`newznab.NzbFetchError`.
 
 from __future__ import annotations
 
-from nzbidx_api.json_utils import orjson
+import json
 import logging
 import sqlite3
 import xml.etree.ElementTree as ET
 from typing import List, Tuple
 
 from . import config
-from .db import get_connection
+from .db import get_connection, sql_placeholder
 from .backfill_release_parts import backfill_release_parts
 
 # Collect database exception types that should be handled.  Optional
@@ -46,9 +46,7 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
     try:
         rid = int(release_id)
         with conn.cursor() as cur:
-            placeholder = (
-                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            )
+            placeholder = sql_placeholder(conn)
             cur.execute(
                 f"SELECT segments FROM release WHERE id = {placeholder}",
                 (rid,),
@@ -63,7 +61,7 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             raise LookupError("release has no segments")
         try:
             data = (
-                orjson.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
+                json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
             )
         except Exception:
             log.warning("invalid_segments_json", extra={"release_id": rid})
@@ -73,12 +71,12 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             try:
                 if isinstance(seg, dict):
                     number = int(seg.get("number", 0))
-                    message_id = str(seg.get("message_id", ""))
+                    message_id = str(seg.get("message_id", "")).strip("<>")
                     group = str(seg.get("group", ""))
                     size = int(seg.get("size", 0) or 0)
                 elif isinstance(seg, (list, tuple)) and len(seg) >= 4:
                     number = int(seg[0])
-                    message_id = str(seg[1])
+                    message_id = str(seg[1]).strip("<>")
                     group = str(seg[2])
                     size = int(seg[3] or 0)
                 else:
@@ -111,11 +109,11 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
 
 def _build_xml_from_segments(
     release_id: str, segments: List[Tuple[int, str, str, int]]
-) -> str:
+) -> bytes:
     root = ET.Element("nzb", xmlns=NZB_XMLNS)
     file_el = ET.SubElement(root, "file", {"subject": release_id})
     groups_el = ET.SubElement(file_el, "groups")
-    for g in sorted({g for _, _, g, _ in segments}):
+    for g in dict.fromkeys(g for _, _, g, _ in segments):
         if g:
             ET.SubElement(groups_el, "group").text = g
     segs_el = ET.SubElement(file_el, "segments")
@@ -123,24 +121,21 @@ def _build_xml_from_segments(
         seg_el = ET.SubElement(
             segs_el, "segment", {"bytes": str(size), "number": str(number)}
         )
-        seg_el.text = msgid.strip("<>")
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
+        seg_el.text = msgid
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
 
 
-def build_nzb_for_release(release_id: str) -> str:
-    """Return an NZB XML document for ``release_id``.
+def build_nzb_for_release(release_id: str) -> bytes:
+    """Return an NZB XML document for ``release_id`` as bytes.
 
     Segment information is retrieved from the database. When no segments are
     found a :class:`newznab.NzbFetchError` is raised.
     """
 
     from . import newznab
-
-    # Ensure environment changes to timeouts are honored across calls.
-    config.settings.reload()
 
     missing = config.validate_nntp_config()
     _groups = config.NNTP_GROUPS  # ensure groups are loaded

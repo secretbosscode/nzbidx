@@ -405,8 +405,9 @@ async def health(request: Request) -> ORJSONResponse:
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
     payload = {"status": "ok", "db": db_status, "request_id": req_id}
     last = getattr(ingest_loop, "last_run", 0.0)
-    payload["ingest_last_run"] = int(last)
-    age = time.time() - last if last else None
+    last_wall = getattr(ingest_loop, "last_run_wall", 0.0)
+    payload["ingest_last_run"] = int(last_wall)
+    age = time.monotonic() - last if last else None
     payload["ingest_age_seconds"] = int(age) if age is not None else None
     if age is None or age > INGEST_STALE_SECONDS:
         payload["ingest"] = "stale"

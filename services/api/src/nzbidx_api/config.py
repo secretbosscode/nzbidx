@@ -29,6 +29,21 @@ def api_keys() -> set[str]:
     return {k.strip() for k in keys.split(",") if k.strip()}
 
 
+def reload_api_keys() -> None:
+    """Backward-compatible no-op for reloading API keys."""
+
+    return None
+
+
+def reload_if_env_changed() -> None:
+    """Reload settings and cached configuration when environment changes."""
+
+    settings.reload()
+    cors_origins.cache_clear()
+    strict_transport_security.cache_clear()
+    request_id_header.cache_clear()
+
+
 @dataclass(slots=True)
 class Settings:
     """Integer-based configuration settings loaded from the environment."""
@@ -159,3 +174,18 @@ def clear_validate_cache() -> None:
     """Clear :func:`validate_nntp_config` cache."""
 
     validate_nntp_config.cache_clear()
+
+
+def reload_api_keys() -> None:
+    """Backwards-compatible no-op for reloading API keys."""
+    # ``api_keys`` reads from the environment on each call so there is
+    # nothing to refresh. This function is kept for compatibility with
+    # callers that expect it to exist.
+    return None
+
+
+def reload_if_env_changed() -> None:
+    """Backwards-compatible no-op for reloading settings when the environment changes."""
+    # Settings are resolved on access; this helper exists for legacy callers
+    # that previously relied on a reload hook.
+    return None
