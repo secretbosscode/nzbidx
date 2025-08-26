@@ -9,16 +9,11 @@ from nzbidx_ingest import config, cursors  # type: ignore
 def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 3
 
@@ -29,7 +24,7 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
                 {"subject": "Example (2/2)", ":bytes": "200", "message-id": "<b>"},
             ]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
     db_path = tmp_path / "db.sqlite"
 
     def _connect() -> sqlite3.Connection:
@@ -39,8 +34,9 @@ def test_duplicate_headers_not_counted(monkeypatch, tmp_path) -> None:
         )
         return conn
 
-    with _connect() as conn:
-        loop.run_once(conn)
+    monkeypatch.setattr(loop, "connect_db", _connect)
+
+    loop.run_once(client)
 
     with sqlite3.connect(db_path) as check:
         row = check.execute("SELECT size_bytes, part_count FROM release").fetchone()
