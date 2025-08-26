@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import os
 from contextlib import closing
@@ -12,9 +12,7 @@ from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.nntp_client import NNTPClient
 from nzbidx_ingest.parsers import extract_segment_number, normalize_subject
 from nzbidx_ingest.segment_schema import validate_segment_schema
-from nzbidx_ingest import config as ingest_config
 from . import config
-from .db import sql_placeholder
 
 log = logging.getLogger(__name__)
 
@@ -92,7 +90,9 @@ def backfill_release_parts(
         _cursor = conn.cursor()
         cursor_cm = _cursor if hasattr(_cursor, "__enter__") else closing(_cursor)
         with cursor_cm as cur:
-            placeholder = sql_placeholder(conn)
+            placeholder = (
+                "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+            )
             base_sql = "SELECT id, norm_title, source_group, segments FROM release"
             params: list[int] | tuple[int, ...] = []
             if auto and not release_ids:
@@ -103,7 +103,12 @@ def backfill_release_parts(
                     ORDER BY id
                     """,
                 )
-                release_ids = [row[0] for row in cur.fetchall()]
+                release_ids = []
+                while True:
+                    rows = cur.fetchmany(BATCH_SIZE)
+                    if not rows:
+                        break
+                    release_ids.extend(row[0] for row in rows)
                 if not release_ids:
                     return 0
             if release_ids:
@@ -149,15 +154,14 @@ def backfill_release_parts(
                         }
                         for num, msg_id, size in segments
                     ]
-                    if ingest_config.VALIDATE_SEGMENTS:
-                        validate_segment_schema(seg_data)
+                    validate_segment_schema(seg_data)
                     total_size = sum(size for _, _, size in segments)
                     conn.execute(
                         (
                             f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
                             f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
                         ),
-                        (json.dumps(seg_data), True, len(seg_data), total_size, rel_id),
+                        (orjson.dumps(seg_data).decode(), True, len(seg_data), total_size, rel_id),
                     )
                     processed += 1
                     if progress_cb:

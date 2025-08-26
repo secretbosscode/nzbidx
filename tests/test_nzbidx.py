@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import asyncio
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import sqlite3
 import threading
@@ -151,7 +151,7 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "10")
     monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "10")
-    api_config.reload_if_env_changed()
+    api_config.settings.reload()
     assert api_config.settings.nzb_timeout_seconds == 10
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "20")
@@ -161,7 +161,6 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
         nzb_builder, "_segments_from_db", lambda _rid: [(1, "m1", "g", 123)]
     )
 
-    api_config.reload_if_env_changed()
     nzb_builder.build_nzb_for_release("123")
 
     assert api_config.settings.nzb_timeout_seconds == 20
@@ -476,9 +475,9 @@ def test_repeated_nzb_fetch_reuses_db_connection(monkeypatch) -> None:
     """Subsequent NZB builds should reuse the same DB connection."""
 
     calls = 0
-    seg_data = json.dumps(
+    seg_data = orjson.dumps(
         [{"number": 1, "message_id": "m1", "group": "g", "size": 123}]
-    )
+    ).decode()
 
     class DummyCursor:
         def __enter__(self):  # type: ignore[override]
@@ -532,11 +531,11 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
 def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
     """Segments should be fetched using the numeric release id."""
 
-    seg_data = json.dumps(
+    seg_data = orjson.dumps(
         [
             {"number": 1, "message_id": "m1", "group": "g", "size": 123},
         ]
-    )
+    ).decode()
     executed: dict[str, object] = {}
 
     class DummyCursor:
@@ -629,7 +628,7 @@ def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 404
     assert "Retry-After" not in resp.headers
-    assert json.loads(resp.body) == {
+    assert orjson.loads(resp.body) == {
         "error": {
             "code": "nzb_not_found",
             "message": "No segments found for release 1",
@@ -647,7 +646,7 @@ def test_getnzb_database_error_returns_503(monkeypatch) -> None:
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "1"}, headers={})
     resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 503
-    assert json.loads(resp.body) == {
+    assert orjson.loads(resp.body) == {
         "error": {"code": "nzb_unavailable", "message": "database query failed"}
     }
 
@@ -692,7 +691,7 @@ def test_infer_category_from_group() -> None:
 def test_group_category_hints_file(tmp_path, monkeypatch) -> None:
     """Hints should be extendable via an external config file."""
     cfg = tmp_path / "hints.json"
-    cfg.write_text(json.dumps([["foo", "xxx"]]))
+    cfg.write_text(orjson.dumps([["foo", "xxx"]]).decode())
     monkeypatch.setenv("GROUP_CATEGORY_HINTS_FILE", str(cfg))
     reloaded = importlib.reload(main)
     try:
@@ -710,12 +709,12 @@ def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
     """caps.xml should reflect configured categories."""
     cfg = tmp_path / "cats.json"
     cfg.write_text(
-        json.dumps(
+        orjson.dumps(
             [
                 {"id": 123, "name": "Foo"},
                 {"id": 6000, "name": "Adult"},
             ]
-        ),
+        ).decode(),
         encoding="utf-8",
     )
     monkeypatch.setenv("CATEGORY_CONFIG", str(cfg))
@@ -1106,12 +1105,20 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
 
     calls = []
 
-    def fake_run_once(_db):
+    class DummyClient:
+        def connect(self) -> None:
+            pass
+
+        def quit(self) -> None:
+            pass
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+
+    def fake_run_once(_client):
         calls.append(True)
         return 1
 
     monkeypatch.setattr(loop, "run_once", fake_run_once)
-    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
     stop = threading.Event()
     t = threading.Thread(target=loop.run_forever, args=(stop,))
@@ -1140,9 +1147,6 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     processed: list[str] = []
 
     class DummyClient:
-        def connect(self) -> None:  # pragma: no cover - trivial
-            pass
-
         def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
             return 1
 
@@ -1150,7 +1154,8 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
             processed.append(group)
             return [{"subject": "Example"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
     monkeypatch.setattr(
         loop,
         "insert_release",
@@ -1158,7 +1163,7 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     )
 
     with caplog.at_level(logging.INFO):
-        loop.run_once(None)
+        loop.run_once(client)
 
     assert processed == ["alt.good.group"]
     assert any(
@@ -1181,18 +1186,16 @@ def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.offline"], raising=False)
 
     class DummyClient:
-        def connect(self) -> None:  # pragma: no cover - trivial
-            pass
-
         def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
             return 0
 
         def xover(self, group: str, start: int, end: int):  # pragma: no cover - simple
             return []
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
-    loop.run_once(None)
+    loop.run_once(client)
 
     assert cursors.get_irrelevant_groups() == []
 
@@ -1205,25 +1208,21 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
     monkeypatch.setattr(loop, "INGEST_DB_LATENCY_MS", 0, raising=False)
     monkeypatch.setattr(loop, "INGEST_SLEEP_MS", 10, raising=False)
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{"subject": "Example", ":bytes": "123"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
     real_sleep = _time.sleep
     sleeps: list[float] = []
@@ -1235,6 +1234,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(loop, "insert_release", fake_insert)
 
-    loop.run_once(None)
+    loop.run_once(client)
 
     assert sleeps and sleeps[0] == 0.01

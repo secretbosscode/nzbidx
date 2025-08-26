@@ -52,15 +52,12 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         if self.reload_keys:
             reload_api_keys()
             self.valid_keys = api_keys()
-        path = ""
-        if hasattr(request, "url"):
-            path = getattr(request.url, "path", "")
-        if not path.startswith("/api"):
+        if not request.url.path.startswith("/api"):
             return await call_next(request)
         if not self.valid_keys:
             return await call_next(request)
         provided = request.headers.get("X-Api-Key")
-        if not provided and hasattr(request, "query_params"):
+        if not provided:
             provided = request.query_params.get("apikey")
         if not provided:
             auth = request.headers.get("Authorization")

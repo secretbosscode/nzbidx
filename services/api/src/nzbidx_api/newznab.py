@@ -1,6 +1,7 @@
 """Helpers for the Newznab API."""
 
 import asyncio
+from nzbidx_api.json_utils import orjson
 import os
 import html
 import logging
