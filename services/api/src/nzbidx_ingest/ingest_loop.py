@@ -84,7 +84,11 @@ def _process_groups(
     for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
-        high = client.high_water_mark(group)
+        _resp, _count, _low, high_s, _name = client.group(group)
+        try:
+            high = int(high_s)
+        except Exception:
+            high = 0
         remaining = max(high - last, 0)
         if remaining <= 0:
             headers: list[dict[str, object]] = []
