@@ -5,15 +5,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
+from nzbidx_api.db import sql_placeholder
 from nzbidx_ingest.main import connect_db
 from nzbidx_ingest.segment_schema import validate_segment_schema
-from nzbidx_api.json_utils import orjson
+from nzbidx_ingest.sql import sql_placeholder
 
 
 def _convert(seg):
@@ -38,14 +40,14 @@ def _convert(seg):
 def normalize() -> int:
     conn = connect_db()
     cur = conn.cursor()
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    placeholder = sql_placeholder(conn)
     cur.execute("SELECT id, segments FROM release WHERE segments IS NOT NULL")
     rows = cur.fetchall()
-    updated = 0
+    batch = []
     for rid, seg_json in rows:
         try:
             data = (
-                orjson.loads(seg_json or "[]")
+                json.loads(seg_json or "[]")
                 if isinstance(seg_json, (str, bytes))
                 else seg_json or []
             )
@@ -62,14 +64,15 @@ def normalize() -> int:
                 converted.append(_convert(seg))
         except Exception:
             continue
-        cur.execute(
+        batch.append((json.dumps(converted), rid))
+    if batch:
+        cur.executemany(
             f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
-            (orjson.dumps(converted).decode(), rid),
+            batch,
         )
-        updated += 1
     conn.commit()
     conn.close()
-    return updated
+    return len(batch)
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helper

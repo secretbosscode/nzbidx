@@ -129,7 +129,7 @@ from .errors import (
 )
 from .log_sanitize import LogSanitizerFilter
 from .openapi import openapi_json
-from .config import cors_origins, settings
+from .config import cors_origins, settings, reload_if_env_changed
 from .metrics_log import start as start_metrics, inc_api_5xx, get_counters
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
@@ -420,7 +420,7 @@ async def health(request: Request) -> ORJSONResponse:
 async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
     req_id = getattr(getattr(request, "state", object()), "request_id", "")
-    payload = {"request_id": req_id, "breaker": {"os": os_breaker.state()}}
+    payload = {"request_id": req_id, "breaker": {"os": await os_breaker.state()}}
     return ORJSONResponse(payload)
 
 
@@ -826,6 +826,7 @@ if origins:
 app = Starlette(
     routes=routes,
     on_startup=[
+        reload_if_env_changed,
         init_engine,
         apply_schema,
         ensure_search_vector,
