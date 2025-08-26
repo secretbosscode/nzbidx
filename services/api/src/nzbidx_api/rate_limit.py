@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import time
-from typing import Dict
 import threading
+
+from cachetools import TTLCache
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -17,36 +17,37 @@ from .errors import rate_limited
 class RateLimiter:
     """Track request counts per key within a time window using memory."""
 
-    def __init__(self, limit: int, window: int) -> None:
+    def __init__(self, limit: int, window: int, max_entries: int) -> None:
         self.limit = limit
         self.window = window
-        self.counts: Dict[int, Dict[str, int]] = {}
+        self.counts: TTLCache[str, int] = TTLCache(maxsize=max_entries, ttl=window)
         self._lock = threading.Lock()
 
     async def increment(self, key: str) -> int:
         """Increment and return current count for ``key``."""
-        now = int(time.time())
-        bucket = now // self.window
         with self._lock:
-            bucket_counts = self.counts.setdefault(bucket, {})
-            bucket_counts[key] = bucket_counts.get(key, 0) + 1
-            # Drop old buckets
-            for old in list(self.counts.keys()):
-                if old != bucket:
-                    del self.counts[old]
-            return bucket_counts[key]
+            count = self.counts.get(key, 0) + 1
+            self.counts[key] = count
+            return count
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Apply simple IP based rate limiting."""
 
     def __init__(
-        self, app, limit: int | None = None, window: int | None = None
+        self,
+        app,
+        limit: int | None = None,
+        window: int | None = None,
+        max_entries: int | None = None,
     ) -> None:
         super().__init__(app)
         limit_val = limit if limit is not None else settings.rate_limit
         window_val = window if window is not None else settings.rate_window
-        self.limiter = RateLimiter(limit_val, window_val)
+        max_entries_val = (
+            max_entries if max_entries is not None else settings.rate_limit_max_ips
+        )
+        self.limiter = RateLimiter(limit_val, window_val, max_entries_val)
         self.limit = limit_val
 
     async def dispatch(self, request: Request, call_next) -> Response:

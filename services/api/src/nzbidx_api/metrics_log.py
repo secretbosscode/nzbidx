@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 _interval = int(os.getenv("METRICS_LOG_INTERVAL", "60"))
 _counters: Counter[str] = Counter()
 _prev_counters: Counter[str] = Counter()
+_dirty_keys: set[str] = set()
 
 
 def get_counters() -> dict[str, int]:
@@ -28,11 +29,13 @@ def _label_key(name: str, labels: Optional[dict[str, str]]) -> str:
 def inc(name: str, *, labels: Optional[dict[str, str]] = None, value: int = 1) -> None:
     key = _label_key(name, labels)
     _counters[key] += value
+    _dirty_keys.add(key)
 
 
 def emit_metrics() -> None:
     changed = False
-    for k, v in _counters.items():
+    for k in _dirty_keys:
+        v = _counters[k]
         if _prev_counters.get(k) != v:
             logger.info(
                 "Metric %s=%s",
@@ -44,6 +47,7 @@ def emit_metrics() -> None:
     if changed:
         _prev_counters.clear()
         _prev_counters.update(_counters)
+    _dirty_keys.clear()
 
 
 def start(interval: int | None = None) -> Callable[[], None]:
