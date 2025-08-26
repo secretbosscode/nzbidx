@@ -148,7 +148,7 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "10")
     monkeypatch.setenv("NNTP_TOTAL_TIMEOUT", "10")
-    api_config.reload_if_env_changed()
+    api_config.settings.reload()
     assert api_config.settings.nzb_timeout_seconds == 10
 
     monkeypatch.setenv("NZB_TIMEOUT_SECONDS", "20")
@@ -158,7 +158,6 @@ def test_build_nzb_clears_nzb_timeout_cache(monkeypatch) -> None:
         nzb_builder, "_segments_from_db", lambda _rid: [(1, "m1", "g", 123)]
     )
 
-    api_config.reload_if_env_changed()
     nzb_builder.build_nzb_for_release("123")
 
     assert api_config.settings.nzb_timeout_seconds == 20
@@ -1103,12 +1102,20 @@ def test_run_forever_respects_stop(monkeypatch) -> None:
 
     calls = []
 
-    def fake_run_once(_db):
+    class DummyClient:
+        def connect(self) -> None:
+            pass
+
+        def quit(self) -> None:
+            pass
+
+    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+
+    def fake_run_once(_client):
         calls.append(True)
         return 1
 
     monkeypatch.setattr(loop, "run_once", fake_run_once)
-    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
     stop = threading.Event()
     t = threading.Thread(target=loop.run_forever, args=(stop,))
@@ -1137,9 +1144,6 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     processed: list[str] = []
 
     class DummyClient:
-        def connect(self) -> None:  # pragma: no cover - trivial
-            pass
-
         def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
             return 1
 
@@ -1147,7 +1151,8 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
             processed.append(group)
             return [{"subject": "Example"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
     monkeypatch.setattr(
         loop,
         "insert_release",
@@ -1155,7 +1160,7 @@ def test_irrelevant_groups_skipped(tmp_path, monkeypatch, caplog) -> None:
     )
 
     with caplog.at_level(logging.INFO):
-        loop.run_once(None)
+        loop.run_once(client)
 
     assert processed == ["alt.good.group"]
     assert any(
@@ -1178,18 +1183,16 @@ def test_network_failure_does_not_mark_irrelevant(tmp_path, monkeypatch) -> None
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.offline"], raising=False)
 
     class DummyClient:
-        def connect(self) -> None:  # pragma: no cover - trivial
-            pass
-
         def high_water_mark(self, group: str) -> int:  # pragma: no cover - simple
             return 0
 
         def xover(self, group: str, start: int, end: int):  # pragma: no cover - simple
             return []
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
-    loop.run_once(None)
+    loop.run_once(client)
 
     assert cursors.get_irrelevant_groups() == []
 
@@ -1202,25 +1205,21 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
-    monkeypatch.setattr(cursors, "get_cursors", lambda gs: {g: 0 for g in gs})
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
-    monkeypatch.setattr(cursors, "set_cursors", lambda _u: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
     monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
     monkeypatch.setattr(loop, "INGEST_DB_LATENCY_MS", 0, raising=False)
     monkeypatch.setattr(loop, "INGEST_SLEEP_MS", 10, raising=False)
 
     class DummyClient:
-        def connect(self) -> None:
-            pass
-
         def high_water_mark(self, group: str) -> int:
             return 1
 
         def xover(self, group: str, start: int, end: int):
             return [{"subject": "Example", ":bytes": "123"}]
 
-    monkeypatch.setattr(loop, "NNTPClient", lambda: DummyClient())
+    client = DummyClient()
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
 
     real_sleep = _time.sleep
     sleeps: list[float] = []
@@ -1232,6 +1231,6 @@ def test_batch_throttle_on_latency(monkeypatch) -> None:
 
     monkeypatch.setattr(loop, "insert_release", fake_insert)
 
-    loop.run_once(None)
+    loop.run_once(client)
 
     assert sleeps and sleeps[0] == 0.01

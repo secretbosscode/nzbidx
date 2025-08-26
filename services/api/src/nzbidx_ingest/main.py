@@ -592,72 +592,49 @@ def insert_release(
             )
         )
 
-    placeholders = ",".join([placeholder] * len(titles))
-    existing: set[tuple[str, int]] = set()
+    inserted: set[str] = set()
     updates: list[tuple[Optional[datetime], str, int]] = []
-    if titles:
-        cur.execute(
-            f"SELECT norm_title, category_id FROM release WHERE norm_title IN ({placeholders})",
-            titles,
-        )
-        existing = {(row[0], row[1]) for row in cur.fetchall()}
-
-    to_insert: list[
-        tuple[str, str, int, str, str, Optional[str], Optional[int], Optional[datetime]]
-    ] = []
     for row in cleaned:
-        key = (row[0], row[2])
-        if key not in existing:
-            to_insert.append(row)
-            existing.add(key)
-        elif row[7]:
-            updates.append((row[7], row[0], row[2]))
-    inserted = {row[0] for row in to_insert}
-    if to_insert:
         if placeholder == "?":
-            sqlite_rows = [
-                (
-                    row[0],
-                    row[1],
-                    row[2],
-                    row[3],
-                    row[4],
-                    row[5],
-                    row[6],
-                    row[7].isoformat() if row[7] else None,
-                )
-                for row in to_insert
-            ]
-            cur.executemany(
-                "INSERT OR IGNORE INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                sqlite_rows,
+            params = (
+                row[0],
+                row[1],
+                row[2],
+                row[3],
+                row[4],
+                row[5],
+                row[6],
+                row[7].isoformat() if row[7] else None,
             )
+            cur.execute(
+                "INSERT OR IGNORE INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                params,
+            )
+            if cur.rowcount > 0:
+                inserted.add(row[0])
+            elif row[7]:
+                updates.append((row[7], row[0], row[2]))
         else:
-            adult_rows: dict[int, list[tuple[Any, ...]]] = defaultdict(list)
-            other_rows: list[tuple[Any, ...]] = []
-            for row in to_insert:
-                category_id = row[2]
-                posted_at = row[7]
-                if (
-                    category_id is not None
-                    and 6000 <= category_id < 7000
-                    and posted_at is not None
-                ):
-                    adult_rows[posted_at.year].append(row)
-                else:
-                    other_rows.append(row)
-            for year, rows in adult_rows.items():
-                ensure_release_adult_year_partition(conn, year)
-                cur.executemany(
-                    f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
-                    rows,
-                )
-            if other_rows:
-                cur.executemany(
-                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
-                    other_rows,
-                )
-    # Ensure posted_at is updated for existing rows
+            table = "release"
+            category_id = row[2]
+            posted_at = row[7]
+            if (
+                category_id is not None
+                and 6000 <= category_id < 7000
+                and posted_at is not None
+            ):
+                ensure_release_adult_year_partition(conn, posted_at.year)
+                table = f"release_adult_{posted_at.year}"
+            cur.execute(
+                f"INSERT INTO {table} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id) DO NOTHING RETURNING norm_title",
+                row,
+            )
+            res = cur.fetchone()
+            if res:
+                inserted.add(res[0])
+            elif row[7]:
+                updates.append((row[7], row[0], row[2]))
+
     if updates:
         if placeholder == "?":
             sqlite_updates = [
