@@ -41,7 +41,7 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
         max_seen = 0
         for header in headers:
             subject = str(header.get("subject", ""))
-            if normalize_subject(subject).lower() != target:
+            if normalize_subject(subject) != target:
                 continue
             msg_id = str(header.get("message-id") or "").strip("<>")
             if not msg_id:

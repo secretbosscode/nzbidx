@@ -337,7 +337,7 @@ log `psycopg_unavailable` and fall back to SQLite.
 
 Releases are addressed by a stable ID combining the normalized title and the
 date the post was seen.  The ID format is
-``normalize_subject(title).lower():<posted-date>`` where `<posted-date>` is in
+``normalize_subject(title):<posted-date>`` where `<posted-date>` is in
 `YYYY-MM-DD` form.
 
 Derive an ID from a raw subject:
@@ -347,7 +347,7 @@ from nzbidx_ingest.parsers import normalize_subject
 
 subject = "[01/15] - Some.Release.part01.rar"
 title = normalize_subject(subject)
-release_id = f"{title.lower()}:2025-08-17"
+release_id = f"{title}:2025-08-17"
 ```
 
 Use the resulting ID with the `t=getnzb` endpoint (URL-encoded if needed):
