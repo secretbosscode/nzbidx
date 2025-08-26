@@ -15,6 +15,8 @@ from .metrics_log import inc_rate_limited
 class QuotaMiddleware(BaseHTTPMiddleware):
     """Token bucket keyed by ``X-Api-Key`` header."""
 
+    __slots__ = ("limiter", "limit")
+
     def __init__(
         self, app, limit: int | None = None, window: int | None = None
     ) -> None:
@@ -25,7 +27,7 @@ class QuotaMiddleware(BaseHTTPMiddleware):
         self.limit = limit_val
 
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
-        path = getattr(getattr(request, "url", None), "path", "")
+        path = request.url.path
         if not path.startswith("/api"):
             return await call_next(request)
         api_key = request.headers.get("X-Api-Key")
