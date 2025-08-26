@@ -41,6 +41,9 @@ class Settings:
     )
     rate_limit: int = field(default_factory=lambda: _int_env("RATE_LIMIT", 60))
     rate_window: int = field(default_factory=lambda: _int_env("RATE_WINDOW", 60))
+    rate_limit_max_ips: int = field(
+        default_factory=lambda: _int_env("RATE_LIMIT_MAX_IPS", 1024)
+    )
     key_rate_limit: int = field(default_factory=lambda: _int_env("KEY_RATE_LIMIT", 100))
     key_rate_window: int = field(
         default_factory=lambda: _int_env("KEY_RATE_WINDOW", 60)
