@@ -21,6 +21,7 @@ dependencies = [
     "setuptools>=78.1.1",
     "apscheduler",
     "langdetect",
+    "cachetools",
     "standard-nntplib",
 ]
 
