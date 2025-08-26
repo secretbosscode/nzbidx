@@ -84,3 +84,10 @@ INGEST_DB_LATENCY_MS: int = int(os.getenv("INGEST_DB_LATENCY_MS", "1200"))
 # Emit ingest batch metrics at INFO level every N batches. Set to 0 to disable.
 INGEST_LOG_EVERY: int = int(os.getenv("INGEST_LOG_EVERY", "100"))
 RELEASE_PART_MAX_RELEASES: int = int(os.getenv("RELEASE_PART_MAX_RELEASES", "100000"))
+# Enable strict segment schema validation when set to a truthy value.
+# Disabled by default to reduce ingest overhead in production.
+VALIDATE_SEGMENTS: bool = os.getenv("VALIDATE_SEGMENTS", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
