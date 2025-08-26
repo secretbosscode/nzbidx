@@ -2,6 +2,10 @@
 
 Manual steps to create the database for NZBidx.
 
+When using the provided Docker setup, the database and required extensions are
+provisioned automatically. The manual steps below apply only to custom
+installations.
+
 ## Prerequisites
 
 * PostgreSQL 15+.
