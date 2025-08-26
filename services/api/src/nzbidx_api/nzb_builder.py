@@ -75,12 +75,12 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
             try:
                 if isinstance(seg, dict):
                     number = int(seg.get("number", 0))
-                    message_id = str(seg.get("message_id", ""))
+                    message_id = str(seg.get("message_id", "")).strip("<>")
                     group = str(seg.get("group", ""))
                     size = int(seg.get("size", 0) or 0)
                 elif isinstance(seg, (list, tuple)) and len(seg) >= 4:
                     number = int(seg[0])
-                    message_id = str(seg[1])
+                    message_id = str(seg[1]).strip("<>")
                     group = str(seg[2])
                     size = int(seg[3] or 0)
                 else:
@@ -117,7 +117,7 @@ def _build_xml_from_segments(
     root = ET.Element("nzb", xmlns=NZB_XMLNS)
     file_el = ET.SubElement(root, "file", {"subject": release_id})
     groups_el = ET.SubElement(file_el, "groups")
-    for g in sorted({g for _, _, g, _ in segments}):
+    for g in dict.fromkeys(g for _, _, g, _ in segments):
         if g:
             ET.SubElement(groups_el, "group").text = g
     segs_el = ET.SubElement(file_el, "segments")
@@ -125,7 +125,7 @@ def _build_xml_from_segments(
         seg_el = ET.SubElement(
             segs_el, "segment", {"bytes": str(size), "number": str(number)}
         )
-        seg_el.text = msgid.strip("<>")
+        seg_el.text = msgid
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
