@@ -29,6 +29,12 @@ logger = logging.getLogger(__name__)
 MAX_LIMIT = settings.max_limit
 MAX_OFFSET = settings.max_offset
 
+ORDER_MAP = {
+    "date": "posted_at",
+    "size": "size_bytes",
+    "title": "norm_title",
+}
+
 
 def _format_pubdate(dt: datetime | str | None) -> str:
     """Return ``dt`` converted to RFC 2822 format."""
@@ -119,13 +125,8 @@ async def search_releases_async(
         conditions.append("tags LIKE :tag")
         params["tag"] = f"{tag}%"
 
-    order_map = {
-        "date": "posted_at",
-        "size": "size_bytes",
-        "title": "norm_title",
-    }
     sort_key = sort or "date"
-    sort_field = order_map.get(sort_key, "posted_at")
+    sort_field = ORDER_MAP.get(sort_key, "posted_at")
 
     where_clause = " AND ".join(conditions)
     sql = text(

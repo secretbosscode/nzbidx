@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from nzbidx_api.json_utils import orjson
+import json
 import logging
 import os
 import re
 import sqlite3
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
@@ -146,7 +147,7 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
     cfg = os.getenv("GROUP_CATEGORY_HINTS_FILE")
     if cfg:
         try:
-            data = orjson.loads(Path(cfg).read_text())
+            data = json.loads(Path(cfg).read_text())
             if isinstance(data, dict):
                 extra = [(k, v) for k, v in data.items()]
             else:
@@ -174,6 +175,11 @@ def _load_group_category_hints() -> list[tuple[str, str]]:
 
 GROUP_CATEGORY_HINTS: list[tuple[str, str]] = _load_group_category_hints()
 
+# Precompiled regex to quickly identify hint tokens in group names
+hint_tokens = [token for token, _ in GROUP_CATEGORY_HINTS]
+GROUP_HINT_RE = re.compile("|".join(map(re.escape, hint_tokens)))
+HINT_TOKEN_MAP = dict(GROUP_CATEGORY_HINTS)
+
 
 DEFAULT_ADULT_KEYWORDS = (
     "brazzers",
@@ -191,7 +197,9 @@ ADULT_KEYWORDS = tuple(
     for k in os.getenv("ADULT_KEYWORDS", ",".join(DEFAULT_ADULT_KEYWORDS)).split(",")
     if k.strip()
 )
+ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
 
+# Precompiled regular expression for matching TV episode identifiers like "S01E01".
 TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
 
 try:  # pragma: no cover - optional dependency
@@ -668,28 +676,34 @@ def prune_group(conn: Any, group: str) -> None:
     conn.commit()
 
 
-def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
+@lru_cache(maxsize=4096)
+def _infer_category(
+    subject: str,
+    group: Optional[str] = None,
+) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
 
     if group:
         g = group.lower()
-        for key, cat in GROUP_CATEGORY_HINTS:
-            if key in g:
-                if cat == "xxx":
-                    if "dvd" in s:
-                        return CATEGORY_MAP["xxx_dvd"]
-                    if "wmv" in s:
-                        return CATEGORY_MAP["xxx_wmv"]
-                    if "xvid" in s:
-                        return CATEGORY_MAP["xxx_xvid"]
-                    if "x264" in s or "h264" in s:
-                        return CATEGORY_MAP["xxx_x264"]
-                    return CATEGORY_MAP["xxx"]
-                return CATEGORY_MAP[cat]
+        match = GROUP_HINT_RE.search(g)
+        if match:
+            cat = HINT_TOKEN_MAP[match.group()]
+            if cat == "xxx":
+                if "dvd" in s:
+                    return CATEGORY_MAP["xxx_dvd"]
+                if "wmv" in s:
+                    return CATEGORY_MAP["xxx_wmv"]
+                if "xvid" in s:
+                    return CATEGORY_MAP["xxx_xvid"]
+                if "x264" in s or "h264" in s:
+                    return CATEGORY_MAP["xxx_x264"]
+                return CATEGORY_MAP["xxx"]
+            return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
-    for tag in extract_tags(subject):
+    tag_list = extract_tags(subject)
+    for tag in tag_list:
         if tag in CATEGORY_MAP:
             return CATEGORY_MAP[tag]
 
@@ -704,7 +718,7 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["ebook"]
     if "[xxx]" in s:
         return CATEGORY_MAP["xxx"]
-    if any(k in s for k in ADULT_KEYWORDS):
+    if ADULT_KEYWORDS_RE.search(s):
         if "dvd" in s:
             return CATEGORY_MAP["xxx_dvd"]
         if "wmv" in s:
