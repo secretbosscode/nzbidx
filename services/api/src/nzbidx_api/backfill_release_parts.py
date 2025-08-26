@@ -103,7 +103,12 @@ def backfill_release_parts(
                     ORDER BY id
                     """,
                 )
-                release_ids = [row[0] for row in cur.fetchall()]
+                release_ids = []
+                while True:
+                    rows = cur.fetchmany(BATCH_SIZE)
+                    if not rows:
+                        break
+                    release_ids.extend(row[0] for row in rows)
                 if not release_ids:
                     return 0
             if release_ids:
