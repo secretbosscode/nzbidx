@@ -192,6 +192,9 @@ ADULT_KEYWORDS = tuple(
     if k.strip()
 )
 
+# Precompiled regular expression for matching TV episode identifiers like "S01E01".
+TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
+
 try:  # pragma: no cover - optional dependency
     from sqlalchemy import create_engine, text
 except Exception:  # pragma: no cover - optional dependency
@@ -666,7 +669,11 @@ def prune_group(conn: Any, group: str) -> None:
     conn.commit()
 
 
-def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
+def _infer_category(
+    subject: str,
+    group: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
 
@@ -687,7 +694,8 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
                 return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
-    for tag in extract_tags(subject):
+    tag_list = tags if tags is not None else extract_tags(subject)
+    for tag in tag_list:
         if tag in CATEGORY_MAP:
             return CATEGORY_MAP[tag]
 
@@ -714,7 +722,7 @@ def _infer_category(subject: str, group: Optional[str] = None) -> Optional[str]:
         return CATEGORY_MAP["xxx"]
 
     # TV
-    if re.search(r"s\d{1,2}e\d{1,2}", s) or "season" in s or "episode" in s:
+    if TV_EPISODE_RE.search(s) or "season" in s or "episode" in s:
         if "sport" in s or "sports" in s:
             return CATEGORY_MAP["tv_sport"]
         if any(k in s for k in ("1080p", "720p", "x264", "x265", "hd")):

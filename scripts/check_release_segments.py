@@ -10,7 +10,6 @@ message-ids.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -19,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_api.db import get_connection
+from nzbidx_api.json_utils import orjson
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helper
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helpe
 
     seg_data = row[0]
     segments = (
-        json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
+        orjson.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
     ) or []
 
     if not segments:
