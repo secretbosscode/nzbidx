@@ -14,6 +14,8 @@ from nzbidx_ingest import ingest_loop
 
 from .json_utils import orjson
 
+SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "nzbidx-api")
+
 
 # Starlette (with safe fallbacks for tests/minimal envs)
 try:  # pragma: no cover - import guard
@@ -376,20 +378,20 @@ class TimingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[override]
         start = time.monotonic()
         response = await call_next(request)
-        path = getattr(getattr(request, "url", None), "path", "")
+        path = request.url.path
         if path.startswith("/api"):
             duration = int((time.monotonic() - start) * 1000)
             ip = request.client.host if request.client else ""
             logger.info(
                 "request",
                 extra={
-                    "service": os.getenv("OTEL_SERVICE_NAME", "nzbidx-api"),
+                    "service": SERVICE_NAME,
                     "route": path,
                     "status": response.status_code,
                     "duration_ms": duration,
                     "ip": ip,
                     "trace_id": current_trace_id(),
-                    "request_id": getattr(request.state, "request_id", ""),
+                    "request_id": request.state.request_id,
                 },
             )
         if response.status_code >= 500:
@@ -400,7 +402,7 @@ class TimingMiddleware(BaseHTTPMiddleware):
 async def health(request: Request) -> ORJSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
-    req_id = getattr(getattr(request, "state", object()), "request_id", "")
+    req_id = getattr(request.state, "request_id", "")
     payload = {"status": "ok", "db": db_status, "request_id": req_id}
     last = getattr(ingest_loop, "last_run", 0.0)
     payload["ingest_last_run"] = int(last)
@@ -419,7 +421,7 @@ async def health(request: Request) -> ORJSONResponse:
 
 async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
-    req_id = getattr(getattr(request, "state", object()), "request_id", "")
+    req_id = getattr(request.state, "request_id", "")
     payload = {"request_id": req_id, "breaker": {"os": await os_breaker.state()}}
     return ORJSONResponse(payload)
 
