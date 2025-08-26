@@ -88,6 +88,7 @@ faster serializer once compatible.
 | `API_KEYS` | Comma separated API keys; accepted via `X-Api-Key` header, `apikey` query parameter, or HTTP Basic auth | _(empty)_ |
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
+| `RATE_LIMIT_MAX_IPS` | Maximum unique IPs tracked for rate limiting | `1024` |
 | `NZBIDX_USE_STD_JSON` | `0` uses `orjson` if installed; `1` or unset uses the standard library `json` module | `1` |
 | `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing (≥ `NNTP_TOTAL_TIMEOUT`) | `NNTP_TOTAL_TIMEOUT` (`600`) |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
@@ -185,7 +186,8 @@ Protect the `/api` endpoints by supplying one or more keys:
     curl -H 'X-Api-Key: dev' 'http://localhost:8080/api?t=caps'
 
 Requests are limited per IP using `RATE_LIMIT` requests per `RATE_WINDOW`
-seconds. Exceeding the limit returns HTTP 429.
+seconds. The limiter tracks up to `RATE_LIMIT_MAX_IPS` addresses, evicting
+least-recently-used entries when full. Exceeding the limit returns HTTP 429.
 
 ## Pagination & Caching
 
