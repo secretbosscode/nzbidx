@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Any, Iterable
 from urllib.parse import urlparse, urlunparse
@@ -669,10 +670,10 @@ def prune_group(conn: Any, group: str) -> None:
     conn.commit()
 
 
+@lru_cache(maxsize=4096)
 def _infer_category(
     subject: str,
     group: Optional[str] = None,
-    tags: Optional[list[str]] = None,
 ) -> Optional[str]:
     """Heuristic category detection from the raw subject or group."""
     s = subject.lower()
@@ -694,7 +695,7 @@ def _infer_category(
                 return CATEGORY_MAP[cat]
 
     # Prefer explicit bracketed tags like "[music]" or "[books]" if present.
-    tag_list = tags if tags is not None else extract_tags(subject)
+    tag_list = extract_tags(subject)
     for tag in tag_list:
         if tag in CATEGORY_MAP:
             return CATEGORY_MAP[tag]
