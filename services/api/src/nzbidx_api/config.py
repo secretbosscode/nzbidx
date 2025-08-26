@@ -174,3 +174,18 @@ def clear_validate_cache() -> None:
     """Clear :func:`validate_nntp_config` cache."""
 
     validate_nntp_config.cache_clear()
+
+
+def reload_api_keys() -> None:
+    """Backwards-compatible no-op for reloading API keys."""
+    # ``api_keys`` reads from the environment on each call so there is
+    # nothing to refresh. This function is kept for compatibility with
+    # callers that expect it to exist.
+    return None
+
+
+def reload_if_env_changed() -> None:
+    """Backwards-compatible no-op for reloading settings when the environment changes."""
+    # Settings are resolved on access; this helper exists for legacy callers
+    # that previously relied on a reload hook.
+    return None
