@@ -258,11 +258,11 @@ def _process_groups(
                             {"number": n, "message_id": m, "group": g, "size": s},
                         )
 
-                    existing_ids = {seg["message_id"] for seg in existing_segments}
-                    new_segments = [
-                        seg for seg in deduped if seg["message_id"] not in existing_ids
-                    ]
-                    combined_segments = existing_segments + new_segments
+                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
+                    for seg in deduped:
+                        message_id = seg["message_id"]
+                        existing_map.setdefault(message_id, seg)
+                    combined_segments = list(existing_map.values())
                     validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
