@@ -15,14 +15,7 @@ LANGUAGE_TOKENS: dict[str, str] = {
     "[GERMAN]": "de",
 }
 
-LANGUAGE_TOKENS_RE = (
-    re.compile("|".join(map(re.escape, LANGUAGE_TOKENS.keys())), re.IGNORECASE)
-    if LANGUAGE_TOKENS
-    else None
-)
-
 _TAG_RE = re.compile(r"\[([^\[\]]+)\]")
-TAG_SPLIT_RE = re.compile(r"[\s,]+")
 
 # Regexes used to sanitize text before automatic language detection. We strip
 # URLs and anything that is not an ASCII letter so short subjects with a lot of
@@ -30,22 +23,47 @@ TAG_SPLIT_RE = re.compile(r"[\s,]+")
 _URL_RE = re.compile(r"http\S+|www\.\S+", re.IGNORECASE)
 _NON_LETTER_RE = re.compile(r"[^A-Za-z\s]+")
 
+# Precompiled regular expressions for tag extraction and subject normalization.
+MUSIC_TAG_RE = re.compile(
+    r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
+    r"(?P<format>FLAC|MP3)(?:-(?P<bitrate>\d{3}))?",
+    re.IGNORECASE,
+)
+
+BOOK_TAG_RE = re.compile(
+    r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
+    r"(?P<format>EPUB|MOBI|PDF)(?:-(?P<isbn>\d{10,13}))?",
+    re.IGNORECASE,
+)
+
+XXX_STUDIO_RE = re.compile(
+    r"(?P<studio>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4})\.(?P<resolution>\d{3,4}p)",
+    re.IGNORECASE,
+)
+
+XXX_SITE_RE = re.compile(
+    r"(?P<site>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4}\.\d{2}\.\d{2})",
+    re.IGNORECASE,
+)
+
 YENC_RE = re.compile(r"\byenc\b", re.IGNORECASE)
 PART_SIZE_RE = re.compile(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]")
 FILLER_RE = re.compile(r"\b(?:repost|sample)\b", re.IGNORECASE)
 PART_RE = re.compile(r"\bpart\s*\d+\b", re.IGNORECASE)
-ARCHIVE_RE = re.compile(r"\b(?:rar|par2|zip)\b", re.IGNORECASE)
-TRIM_RE = re.compile(r"^[-\s]+|[-\s]+$")
+ARCHIVE_RE = re.compile(r"\b(rar|par2|zip)\b", re.IGNORECASE)
+WHITESPACE_RE = re.compile(r"\s+")
 
 
 def extract_tags(subject: str) -> list[str]:
     """Extract lowercased tags from bracketed segments in ``subject``."""
     if not subject:
         return []
+    if "[" not in subject or "]" not in subject:
+        return []
     tags: list[str] = []
     for match in _TAG_RE.finditer(subject):
         content = match.group(1)
-        for tag in TAG_SPLIT_RE.split(content):
+        for tag in re.split(r"[\s,]+", content):
             tag = tag.strip().lower()
             if tag:
                 tags.append(tag)
@@ -123,7 +141,7 @@ def _clean_language_text(text: str) -> str:
     """
     text = _URL_RE.sub(" ", text)
     text = _NON_LETTER_RE.sub(" ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    return WHITESPACE_RE.sub(" ", text).strip()
 
 
 def extract_music_tags(subject: str) -> dict[str, str]:
@@ -133,12 +151,7 @@ def extract_music_tags(subject: str) -> dict[str, str]:
     ``Artist-Album-2021-MP3-320``. The returned dict may contain the keys
     ``artist``, ``album``, ``year``, ``format`` and ``bitrate``.
     """
-    pattern = re.compile(
-        r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
-        r"(?P<format>FLAC|MP3)(?:-(?P<bitrate>\d{3}))?",
-        re.IGNORECASE,
-    )
-    match = pattern.search(subject)
+    match = MUSIC_TAG_RE.search(subject)
     if not match:
         return {}
 
@@ -157,12 +170,7 @@ def extract_book_tags(subject: str) -> dict[str, str]:
     Returns a dict with ``author``, ``title``, ``year``, ``format`` and
     optional ``isbn`` keys when found.
     """
-    pattern = re.compile(
-        r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
-        r"(?P<format>EPUB|MOBI|PDF)(?:-(?P<isbn>\d{10,13}))?",
-        re.IGNORECASE,
-    )
-    match = pattern.search(subject)
+    match = BOOK_TAG_RE.search(subject)
     if not match:
         return {}
 
@@ -180,22 +188,13 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
     ``Studio.Name.2022.1080p`` -> ``studio``, ``date`` and ``resolution``
     ``Site.Name.2023.07.12``   -> ``site`` and ``date``
     """
-    studio_re = re.compile(
-        r"(?P<studio>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4})\.(?P<resolution>\d{3,4}p)",
-        re.IGNORECASE,
-    )
-    site_re = re.compile(
-        r"(?P<site>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+)\.(?P<date>\d{4}\.\d{2}\.\d{2})",
-        re.IGNORECASE,
-    )
-
-    match = studio_re.search(subject)
+    match = XXX_STUDIO_RE.search(subject)
     if match:
         tags = match.groupdict()
         tags["studio"] = tags["studio"].replace(".", " ")
         return {k: v for k, v in tags.items() if v}
 
-    match = site_re.search(subject)
+    match = XXX_SITE_RE.search(subject)
     if match:
         tags = match.groupdict()
         tags["site"] = tags["site"].replace(".", " ")
@@ -204,16 +203,35 @@ def extract_xxx_tags(subject: str) -> dict[str, str]:
     return {}
 
 
-@lru_cache(maxsize=4096)
-def _normalize_cached(subject: str) -> str:
+def normalize_subject(
+    subject: str, *, with_tags: bool = False, lowercase: bool = True
+) -> tuple[str, list[str]] | str:
     """Return a cleaned, human-readable version of a Usenet subject line.
 
-    This helper performs the normalization steps only and is cached so repeated
-    calls for the same ``subject`` are inexpensive. Tag extraction happens
-    separately in :func:`normalize_subject`.
+    Lightweight normalization:
+    - Convert separators ('.', '_') to spaces
+    - Remove explicit 'yEnc' markers
+    - Drop part counters like '(01/15)' or '[12345/12346]'
+    - Remove language tokens (e.g., '[FRENCH]', '[GERMAN]', '[ITA]')
+    - Remove common filler words (e.g., 'repost', 'sample')
+    - Collapse whitespace and trim separators
+
+    Also extracts hints via extract_* helpers and returns them as lowercase tags
+    (when ``with_tags=True``). By default the cleaned title is lowercased; pass
+    ``lowercase=False`` to preserve the original casing.
     """
     if not subject:
-        return ""
+        return ("", []) if with_tags else ""
+
+    # Extract bracketed tags and structured hints before cleaning. The specific
+    # ``extract_*`` helpers operate on the raw subject, so run them before we
+    # strip punctuation.
+    generic_tags = extract_tags(subject)
+    tag_dict: dict[str, str] = {}
+    for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
+        tag_dict.update(extractor(subject))
+    for t in generic_tags:
+        tag_dict[t] = t
 
     # Convert common separators to spaces.
     cleaned = subject.replace(".", " ").replace("_", " ")
@@ -228,59 +246,33 @@ def _normalize_cached(subject: str) -> str:
     cleaned = PART_SIZE_RE.sub("", cleaned)
 
     # Remove language tokens based on LANGUAGE_TOKENS keys.
-    if LANGUAGE_TOKENS_RE:
-        cleaned = LANGUAGE_TOKENS_RE.sub("", cleaned)
+    if LANGUAGE_TOKENS:
+        tokens_pattern = "|".join(map(re.escape, LANGUAGE_TOKENS.keys()))
+        cleaned = re.sub(tokens_pattern, "", cleaned, flags=re.IGNORECASE)
 
     # Remove common filler words.
     cleaned = FILLER_RE.sub("", cleaned)
 
     # Strip trailing segment markers and archive extensions commonly found in
-    # multipart releases. Subjects like ``Name.part01.rar`` or ``Name.part1``
+    # multipart releases.  Subjects like ``Name.part01.rar`` or ``Name.part1``
     # should normalize to ``Name`` so all segments dedupe to a single entry.
     cleaned = PART_RE.sub("", cleaned)
     cleaned = ARCHIVE_RE.sub("", cleaned)
 
     # Collapse whitespace and trim leading/trailing separators or dashes.
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = TRIM_RE.sub("", cleaned)
+    cleaned = WHITESPACE_RE.sub(" ", cleaned).strip()
+    cleaned = cleaned.strip("- ")
 
-    return cleaned.lower()
+    tags = sorted(
+        {
+            *generic_tags,
+            *[value.lower() for value in tag_dict.values() if value],
+        }
+    )
 
-
-def normalize_subject(
-    subject: str, *, with_tags: bool = False
-) -> tuple[str, list[str]] | str:
-    """Return a cleaned, human-readable version of a Usenet subject line.
-
-    Lightweight normalization:
-    - Convert separators ('.', '_') to spaces
-    - Remove explicit 'yEnc' markers
-    - Drop part counters like '(01/15)' or '[12345/12346]'
-    - Remove language tokens (e.g., '[FRENCH]', '[GERMAN]', '[ITA]')
-    - Remove common filler words (e.g., 'repost', 'sample')
-    - Collapse whitespace and trim separators
-
-    Also extracts hints via extract_* helpers and returns them as lowercase tags
-    (when ``with_tags=True``).
-    """
-    if not subject:
-        return ("", []) if with_tags else ""
-
-    cleaned = _normalize_cached(subject)
+    if lowercase:
+        cleaned = cleaned.lower()
 
     if with_tags:
-        generic_tags = extract_tags(subject)
-        tag_dict: dict[str, str] = {}
-        for extractor in (extract_music_tags, extract_book_tags, extract_xxx_tags):
-            tag_dict.update(extractor(subject))
-        for t in generic_tags:
-            tag_dict[t] = t
-        tags = sorted(
-            {
-                *generic_tags,
-                *[value.lower() for value in tag_dict.values() if value],
-            }
-        )
         return cleaned, tags
-
     return cleaned
