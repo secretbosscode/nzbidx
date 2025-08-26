@@ -490,6 +490,9 @@ def insert_release(
 ) -> set[str]:
     """Insert one or more releases and return the inserted titles."""
 
+    is_sqlite = conn.__class__.__module__.startswith("sqlite3")
+    placeholder = "?" if is_sqlite else "%s"
+
     def _clean(text: Optional[str]) -> Optional[str]:
         if text is None:
             return None
@@ -578,12 +581,7 @@ def insert_release(
             )
         )
 
-    placeholders = ",".join(
-        [
-            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            for _ in titles
-        ]
-    )
+    placeholders = ",".join([placeholder] * len(titles))
     existing: set[tuple[str, int]] = set()
     updates: list[tuple[Optional[datetime], str, int]] = []
     if titles:
@@ -605,7 +603,7 @@ def insert_release(
             updates.append((row[7], row[0], row[2]))
     inserted = {row[0] for row in to_insert}
     if to_insert:
-        if conn.__class__.__module__.startswith("sqlite3"):
+        if is_sqlite:
             sqlite_rows = [
                 (
                     row[0],
@@ -650,8 +648,7 @@ def insert_release(
                 )
     # Ensure posted_at is updated for existing rows
     if updates:
-        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-        if conn.__class__.__module__.startswith("sqlite3"):
+        if is_sqlite:
             sqlite_updates = [
                 (u[0].isoformat() if u[0] else None, u[1], u[2]) for u in updates
             ]
