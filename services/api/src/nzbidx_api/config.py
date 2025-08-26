@@ -100,6 +100,46 @@ class Settings:
 
 settings = Settings()
 
+# Track configuration-related environment variables so settings are only
+# reloaded when necessary.  This avoids the overhead of reloading on every
+# NZB build or request.
+_RELOAD_ENV_VARS = {
+    "SEARCH_TTL_SECONDS",
+    "RATE_LIMIT",
+    "RATE_WINDOW",
+    "KEY_RATE_LIMIT",
+    "KEY_RATE_WINDOW",
+    "MAX_REQUEST_BYTES",
+    "MAX_QUERY_BYTES",
+    "MAX_PARAM_BYTES",
+    "NNTP_TIMEOUT",
+    "NNTP_TOTAL_TIMEOUT",
+    "NZB_TIMEOUT_SECONDS",
+    "NZB_MAX_SEGMENTS",
+    "CB_FAILURE_THRESHOLD",
+    "CB_RESET_SECONDS",
+    "RETRY_MAX",
+    "RETRY_BASE_MS",
+    "RETRY_JITTER_MS",
+    "MAX_LIMIT",
+    "MAX_OFFSET",
+    "NNTP_HOST",
+    "NNTP_PORT",
+    "NNTP_USER",
+    "NNTP_PASS",
+    "NNTP_GROUPS",
+}
+_env_cache = {name: os.getenv(name) for name in _RELOAD_ENV_VARS}
+
+
+def reload_if_env_changed() -> None:
+    """Reload settings if tracked environment variables have changed."""
+    global _env_cache
+    current = {name: os.getenv(name) for name in _RELOAD_ENV_VARS}
+    if current != _env_cache:
+        settings.reload()
+        _env_cache = current
+
 
 def nntp_timeout_seconds() -> int:
     """Backwards-compatible accessor for the NNTP timeout."""
