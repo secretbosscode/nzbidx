@@ -38,9 +38,10 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
         segments: list[tuple[int, str, int]] = []
         target = release_id.lower()
         seen_numbers: set[int] = set()
+        max_seen = 0
         for header in headers:
             subject = str(header.get("subject", ""))
-            if normalize_subject(subject).lower() != target:
+            if normalize_subject(subject) != target:
                 continue
             msg_id = str(header.get("message-id") or "").strip("<>")
             if not msg_id:
@@ -55,11 +56,9 @@ def _fetch_segments(release_id: str, group: str) -> list[tuple[int, str, int]]:
                 continue
             segments.append((number, msg_id, size))
             seen_numbers.add(number)
-            if (
-                1 in seen_numbers
-                and len(seen_numbers) == max(seen_numbers)
-                and max(seen_numbers) > 1
-            ):
+            if number > max_seen:
+                max_seen = number
+            if 1 in seen_numbers and len(seen_numbers) == max_seen and max_seen > 1:
                 break
         if segments:
             segments.sort(key=lambda s: s[0])
@@ -103,7 +102,12 @@ def backfill_release_parts(
                     ORDER BY id
                     """,
                 )
-                release_ids = [row[0] for row in cur.fetchall()]
+                release_ids = []
+                while True:
+                    rows = cur.fetchmany(BATCH_SIZE)
+                    if not rows:
+                        break
+                    release_ids.extend(row[0] for row in rows)
                 if not release_ids:
                     return 0
             if release_ids:
@@ -118,6 +122,7 @@ def backfill_release_parts(
                 rows = cur.fetchmany(BATCH_SIZE)
                 if not rows:
                     break
+                updates: list[tuple[str, bool, int, int, int]] = []
                 for rel_id, norm_title, group, existing in rows:
                     if existing:
                         log.info("segments_exist", extra={"id": rel_id})
@@ -151,12 +156,14 @@ def backfill_release_parts(
                     ]
                     validate_segment_schema(seg_data)
                     total_size = sum(size for _, _, size in segments)
-                    conn.execute(
+                    updates.append(
                         (
-                            f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
-                            f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
-                        ),
-                        (json.dumps(seg_data), True, len(seg_data), total_size, rel_id),
+                            json.dumps(seg_data),
+                            True,
+                            len(seg_data),
+                            total_size,
+                            rel_id,
+                        )
                     )
                     processed += 1
                     if progress_cb:
@@ -164,16 +171,23 @@ def backfill_release_parts(
                             progress_cb(processed)
                         except Exception:  # pragma: no cover - progress callback errors
                             log.exception("progress_callback_failed")
-                conn.commit()
+                if updates:
+                    conn.executemany(
+                        (
+                            f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
+                            f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
+                        ),
+                        updates,
+                    )
                 if to_delete:
                     ids = [r for r, _ in to_delete]
                     placeholders = ",".join([placeholder] * len(ids))
                     conn.execute(
                         f"DELETE FROM release WHERE id IN ({placeholders})", ids
                     )
-                    conn.commit()
                     log.info("deleted %d invalid releases", len(ids))
                     to_delete.clear()
+                conn.commit()
                 log.info("processed %d releases", processed)
             return processed
     finally:
