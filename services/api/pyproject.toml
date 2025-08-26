@@ -22,6 +22,7 @@ dependencies = [
     "apscheduler",
     "langdetect",
     "standard-nntplib",
+    "cachetools",
 ]
 
 [project.optional-dependencies]
