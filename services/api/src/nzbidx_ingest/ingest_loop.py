@@ -137,7 +137,7 @@ def _process_groups(
                 str,
                 str | None,
                 str | None,
-                list[str] | None,
+                set[str],
                 str | None,
                 int | None,
                 str | None,
@@ -168,12 +168,12 @@ def _process_groups(
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
             category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
-            tags = tags or []
+            tags = set(tags or [])
             existing = releases.get(dedupe_key)
             if existing:
                 _, ex_cat, ex_lang, ex_tags, ex_group, ex_size, ex_posted = existing
+                ex_tags.update(tags)
                 combined_size = (ex_size or 0) + size
-                combined_tags = sorted(set(ex_tags or []).union(tags))
                 combined_posted = ex_posted
                 if posted_at and (not ex_posted or posted_at < ex_posted):
                     combined_posted = posted_at
@@ -181,7 +181,7 @@ def _process_groups(
                     dedupe_key,
                     ex_cat,
                     ex_lang,
-                    combined_tags,
+                    ex_tags,
                     ex_group,
                     combined_size,
                     combined_posted,
@@ -205,7 +205,19 @@ def _process_groups(
         inserted: set[str] = set()
         if releases:
             db_start = time.monotonic()
-            result = insert_release(db, releases=releases.values())
+            prepared = [
+                (
+                    title,
+                    cat,
+                    lang,
+                    sorted(tags),
+                    grp,
+                    sz,
+                    posted,
+                )
+                for title, cat, lang, tags, grp, sz, posted in releases.values()
+            ]
+            result = insert_release(db, releases=prepared)
             db_latency = time.monotonic() - db_start
             if isinstance(result, set):
                 inserted = result
