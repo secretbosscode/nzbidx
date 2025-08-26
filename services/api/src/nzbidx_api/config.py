@@ -29,6 +29,12 @@ def api_keys() -> set[str]:
     return {k.strip() for k in keys.split(",") if k.strip()}
 
 
+def reload_api_keys() -> None:
+    """Reload API key configuration from the environment."""
+    # ``api_keys`` reads directly from the environment so no action is needed.
+    return None
+
+
 @dataclass(slots=True)
 class Settings:
     """Integer-based configuration settings loaded from the environment."""
@@ -159,3 +165,14 @@ def clear_validate_cache() -> None:
     """Clear :func:`validate_nntp_config` cache."""
 
     validate_nntp_config.cache_clear()
+
+
+_LAST_ENV = os.environ.copy()
+
+
+def reload_if_env_changed() -> None:
+    """Reload settings if environment variables have changed."""
+    global _LAST_ENV
+    if os.environ != _LAST_ENV:
+        settings.reload()
+        _LAST_ENV = os.environ.copy()

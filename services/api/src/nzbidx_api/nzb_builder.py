@@ -109,7 +109,7 @@ def _segments_from_db(release_id: int | str) -> List[Tuple[int, str, str, int]]:
 
 def _build_xml_from_segments(
     release_id: str, segments: List[Tuple[int, str, str, int]]
-) -> str:
+) -> bytes:
     root = ET.Element("nzb", xmlns=NZB_XMLNS)
     file_el = ET.SubElement(root, "file", {"subject": release_id})
     groups_el = ET.SubElement(file_el, "groups")
@@ -122,13 +122,13 @@ def _build_xml_from_segments(
             segs_el, "segment", {"bytes": str(size), "number": str(number)}
         )
         seg_el.text = msgid
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
 NZB_XMLNS = "http://www.newzbin.com/DTD/2003/nzb"
 
 
-def build_nzb_for_release(release_id: str) -> str:
+def build_nzb_for_release(release_id: str) -> bytes:
     """Return an NZB XML document for ``release_id``.
 
     Segment information is retrieved from the database. When no segments are

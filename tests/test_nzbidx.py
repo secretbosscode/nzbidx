@@ -110,7 +110,7 @@ def test_build_nzb_autoload_groups(monkeypatch) -> None:
     )
 
     nzb = nzb_builder.build_nzb_for_release("123")
-    assert "<nzb" in nzb
+    assert b"<nzb" in nzb
     assert called["value"]
     assert api_config.NNTP_GROUPS == ["alt.auto"]
 
@@ -344,7 +344,7 @@ def test_auto_backfill_success(monkeypatch) -> None:
     monkeypatch.setattr(nzb_builder, "backfill_release_parts", _backfill)
 
     xml = nzb_builder.build_nzb_for_release("123")
-    assert "m1" in xml
+    assert b"m1" in xml
     assert called == [123]
     assert calls["count"] == 2
 
@@ -521,8 +521,8 @@ def test_builds_nzb_from_db(monkeypatch) -> None:
         ],
     )
     xml = nzb_builder.build_nzb_for_release("123")
-    assert '<segment bytes="123" number="1">msg1@example.com</segment>' in xml
-    assert '<segment bytes="456" number="2">msg2@example.com</segment>' in xml
+    assert b'<segment bytes="123" number="1">msg1@example.com</segment>' in xml
+    assert b'<segment bytes="456" number="2">msg2@example.com</segment>' in xml
 
 
 def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
@@ -561,7 +561,7 @@ def test_fetch_segments_by_numeric_id(monkeypatch) -> None:
     monkeypatch.setattr(nzb_builder, "get_connection", lambda: DummyConn())
 
     xml = nzb_builder.build_nzb_for_release("123")
-    assert '<segment bytes="123" number="1">m1</segment>' in xml
+    assert b'<segment bytes="123" number="1">m1</segment>' in xml
     assert (
         str(executed.get("sql", ""))
         .lower()
@@ -604,7 +604,7 @@ def test_getnzb_timeout(monkeypatch) -> None:
 
     async def slow_get_nzb(_release_id, _cache):
         await asyncio.sleep(0.1)
-        return "<nzb></nzb>"
+        return b"<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", slow_get_nzb)
     monkeypatch.setattr(api_main.settings, "nzb_timeout_seconds", 0.01)
@@ -636,7 +636,7 @@ def test_getnzb_fetch_error_returns_404(monkeypatch) -> None:
 def test_getnzb_database_error_returns_503(monkeypatch) -> None:
     """Database errors should return 503 and not be cached."""
 
-    def db_error_build(_release_id: str) -> str:
+    def db_error_build(_release_id: str) -> bytes:
         raise newznab.NzbDatabaseError("db down")
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error_build)
@@ -652,7 +652,7 @@ def test_getnzb_sets_content_disposition(monkeypatch) -> None:
     """NZB downloads should include a content-disposition header."""
 
     async def fake_get_nzb(_release_id, _cache):
-        return "<nzb></nzb>"
+        return b"<nzb></nzb>"
 
     monkeypatch.setattr(api_main, "get_nzb", fake_get_nzb)
     req = SimpleNamespace(query_params={"t": "getnzb", "id": "123"}, headers={})
@@ -717,8 +717,8 @@ def test_caps_xml_uses_config(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CATEGORY_CONFIG", str(cfg))
     reloaded = importlib.reload(newznab)
     xml = reloaded.caps_xml()
-    assert '<category id="123" name="Foo"/>' in xml
-    assert '<category id="6000"' in xml
+    assert b'<category id="123" name="Foo"/>' in xml
+    assert b'<category id="6000"' in xml
 
 
 def test_caps_xml_defaults(monkeypatch) -> None:
@@ -726,9 +726,9 @@ def test_caps_xml_defaults(monkeypatch) -> None:
     monkeypatch.delenv("CATEGORY_CONFIG", raising=False)
     reloaded = importlib.reload(newznab)
     xml = reloaded.caps_xml()
-    assert '<category id="1000" name="Console"/>' in xml
-    assert '<category id="7030" name="Comics"/>' in xml
-    assert '<category id="6090" name="XXX/WEB-DL"/>' in xml
+    assert b'<category id="1000" name="Console"/>' in xml
+    assert b'<category id="7030" name="Comics"/>' in xml
+    assert b'<category id="6090" name="XXX/WEB-DL"/>' in xml
 
 
 def test_caps_xml_includes_searching_block(monkeypatch) -> None:
@@ -736,8 +736,8 @@ def test_caps_xml_includes_searching_block(monkeypatch) -> None:
     monkeypatch.delenv("CATEGORY_CONFIG", raising=False)
     reloaded = importlib.reload(newznab)
     xml = reloaded.caps_xml()
-    assert "<searching>" in xml
-    assert '<search available="yes" supportedParams="q,cat,limit,offset"/>' in xml
+    assert b"<searching>" in xml
+    assert b'<search available="yes" supportedParams="q,cat,limit,offset"/>' in xml
 
 
 @pytest.mark.parametrize("cache_cls", [DummyCache, DummyAsyncCache])
@@ -745,7 +745,7 @@ def test_failed_fetch_not_cached(monkeypatch, cache_cls) -> None:
     cache = cache_cls()
     calls: list[str] = []
 
-    def boom(release_id: str) -> str:
+    def boom(release_id: str) -> bytes:
         calls.append(release_id)
         raise RuntimeError("boom")
 
@@ -769,7 +769,7 @@ def test_failed_fetch_not_cached(monkeypatch, cache_cls) -> None:
 def test_database_error_not_cached(monkeypatch, cache_cls) -> None:
     cache = cache_cls()
 
-    def db_error(_release_id: str) -> str:
+    def db_error(_release_id: str) -> bytes:
         raise newznab.NzbDatabaseError("db down")
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", db_error)
@@ -785,9 +785,9 @@ def test_getnzb_not_cached(monkeypatch) -> None:
 
     build_calls: list[str] = []
 
-    def fake_build(release_id: str) -> str:
+    def fake_build(release_id: str) -> bytes:
         build_calls.append(release_id)
-        return "<nzb></nzb>"
+        return b"<nzb></nzb>"
 
     monkeypatch.setattr(newznab.nzb_builder, "build_nzb_for_release", fake_build)
 

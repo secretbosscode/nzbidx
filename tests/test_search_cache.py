@@ -23,11 +23,11 @@ def test_cache_purges_expired_entries(monkeypatch):
         timer=fake_time,
     )
 
-    asyncio.run(search_cache.cache_rss("old", "<rss><item>old</item></rss>"))
+    asyncio.run(search_cache.cache_rss("old", b"<rss><item>old</item></rss>"))
     assert "old" in search_cache._CACHE
 
     t[0] += 2
-    asyncio.run(search_cache.cache_rss("new", "<rss><item>new</item></rss>"))
+    asyncio.run(search_cache.cache_rss("new", b"<rss><item>new</item></rss>"))
 
     assert "old" not in search_cache._CACHE
     assert "new" in search_cache._CACHE
@@ -47,7 +47,7 @@ def test_get_cached_rss_purges_expired_entries(monkeypatch):
         timer=fake_time,
     )
 
-    asyncio.run(search_cache.cache_rss("old", "<rss><item>old</item></rss>"))
+    asyncio.run(search_cache.cache_rss("old", b"<rss><item>old</item></rss>"))
     assert "old" in search_cache._CACHE
 
     t[0] += 2
@@ -65,7 +65,9 @@ def test_concurrent_cache_access(monkeypatch):
     )
 
     async def writer(i: int) -> None:
-        await search_cache.cache_rss(f"k{i % 5}", f"<rss><item>{i}</item></rss>")
+        await search_cache.cache_rss(
+            f"k{i % 5}", f"<rss><item>{i}</item></rss>".encode()
+        )
 
     async def reader(i: int) -> None:
         await search_cache.get_cached_rss(f"k{i % 5}")
@@ -89,10 +91,10 @@ def test_cache_skips_empty_response(monkeypatch) -> None:
         ttl=config.settings.search_ttl_seconds,
     )
 
-    asyncio.run(search_cache.cache_rss("empty", "<rss></rss>"))
+    asyncio.run(search_cache.cache_rss("empty", b"<rss></rss>"))
     assert "empty" not in search_cache._CACHE
 
-    asyncio.run(search_cache.cache_rss("full", "<rss><item>1</item></rss>"))
+    asyncio.run(search_cache.cache_rss("full", b"<rss><item>1</item></rss>"))
     assert "full" in search_cache._CACHE
 
 
