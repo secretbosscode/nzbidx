@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from .config import api_keys
+from .config import api_keys, reload_api_keys
 from .errors import unauthorized
 
 
@@ -43,11 +43,15 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     allowed.
     """
 
-    def __init__(self, app) -> None:
+    def __init__(self, app, reload_keys: bool = False) -> None:
         super().__init__(app)
+        self.reload_keys = reload_keys
         self.valid_keys: Set[str] = api_keys()
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if self.reload_keys:
+            reload_api_keys()
+            self.valid_keys = api_keys()
         path = ""
         if hasattr(request, "url"):
             path = getattr(request.url, "path", "")

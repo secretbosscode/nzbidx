@@ -21,8 +21,7 @@ class DummyClient:
 
 def test_fetch_segments_limits_xover_range(monkeypatch) -> None:
     client = DummyClient()
-    monkeypatch.setattr(backfill_mod, "NNTPClient", lambda: client)
     monkeypatch.setattr(backfill_mod, "XOVER_LOOKBACK", 10)
 
-    backfill_mod._fetch_segments("my release", "alt.test")
+    backfill_mod._fetch_segments("my release", "alt.test", client)
     assert client.called == (91, 100)
