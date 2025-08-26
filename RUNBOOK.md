@@ -13,18 +13,9 @@ Connections to PostgreSQL require the `psycopg` driver. The Docker images
 install `psycopg[binary] >= 3.1` from the service `pyproject.toml` files. The
 `pg_trgm` and `vector` extensions must be installed by a superuser; the init
 script at `db/init/schema.sql` handles this during database provisioning.
-
-Run the Python migration `nzbidx_api.migrations.0001_add_search_vector` after the
-schema is in place to add the `search_vector` column and `release_search_idx`
-index:
-
-```bash
-python -m nzbidx_api.migrations.0001_add_search_vector
-psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
-```
-
-`to_regclass` returns `release_search_idx` when the index exists. See
-[docs/db.md#full-text-search](docs/db.md#full-text-search).
+The application creates the `search_vector` column and `release_search_idx`
+index during startup; no manual migration is required. For advanced or manual
+setup instructions, see [docs/db.md](docs/db.md).
 
 ## Engine lifecycle
 `init_engine()` binds the async database engine to the currently running event loop.
