@@ -218,20 +218,33 @@ def _process_groups(
                 placeholder = (
                     "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
                 )
-                for title, segs in parts.items():
-                    if not segs:
-                        continue
-                    cur.execute(
-                        f"SELECT segments FROM release WHERE norm_title = {placeholder}",
-                        (title,),
-                    )
-                    row = cur.fetchone()
-                    existing_segments = []
-                    if row:
+                titles = [t for t, segs in parts.items() if segs]
+                existing: dict[str, list[dict[str, int | str]]] = {
+                    t: [] for t in titles
+                }
+                if titles:
+                    if placeholder == "?":
+                        qs = ",".join(["?"] * len(titles))
+                        cur.execute(
+                            f"SELECT norm_title, segments FROM release WHERE norm_title IN ({qs})",
+                            titles,
+                        )
+                    else:
+                        cur.execute(
+                            "SELECT norm_title, segments FROM release WHERE norm_title = ANY(%s)",
+                            (titles,),
+                        )
+                    for row in cur.fetchall():
+                        title, seg_json = row
                         try:
-                            existing_segments = json.loads(row[0] or "[]")
+                            existing[title] = json.loads(seg_json or "[]")
                         except Exception:
-                            existing_segments = []
+                            existing[title] = []
+
+                updates: list[tuple[str, bool, int, int, str]] = []
+                for title in titles:
+                    segs = parts.get(title, [])
+                    existing_segments = existing.get(title, [])
                     validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
@@ -242,7 +255,7 @@ def _process_groups(
                             continue
                         seen_ids.add(m)
                         deduped.append(
-                            {"number": n, "message_id": m, "group": g, "size": s}
+                            {"number": n, "message_id": m, "group": g, "size": s},
                         )
 
                     existing_ids = {seg["message_id"] for seg in existing_segments}
@@ -254,19 +267,24 @@ def _process_groups(
                     total_size = sum(seg["size"] for seg in combined_segments)
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
-                    cur.execute(
-                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                    updates.append(
                         (
                             json.dumps(combined_segments),
                             has_parts,
                             part_counts[title],
                             total_size,
                             title,
-                        ),
+                        )
                     )
                     has_parts_flags[title] = has_parts
                     changed.add(title)
-                db.commit()
+
+                if updates:
+                    cur.executemany(
+                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                        updates,
+                    )
+                    db.commit()
             except Exception:
                 pass
 
