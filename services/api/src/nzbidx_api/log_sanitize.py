@@ -8,11 +8,21 @@ from typing import Mapping
 SENSITIVE_HEADERS = {"authorization", "x-api-key", "cookie"}
 
 
-def scrub_headers(headers: Mapping[str, str]) -> dict[str, str]:
-    return {
-        k: ("[redacted]" if k.lower() in SENSITIVE_HEADERS else v)
-        for k, v in headers.items()
-    }
+def scrub_headers(headers: Mapping[str, str]) -> Mapping[str, str]:
+    """Redact sensitive header values.
+
+    A new ``dict`` is only created when at least one sensitive header is present.
+    Otherwise the original mapping is returned unchanged.
+    """
+
+    if not any(k.lower() in SENSITIVE_HEADERS for k in headers):
+        return headers
+
+    redacted = dict(headers)
+    for k in headers:
+        if k.lower() in SENSITIVE_HEADERS:
+            redacted[k] = "[redacted]"
+    return redacted
 
 
 class LogSanitizerFilter(logging.Filter):
