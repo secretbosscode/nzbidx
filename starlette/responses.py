@@ -13,6 +13,8 @@ except Exception:  # pragma: no cover - minimal fallback
 
 
 class Response:  # pragma: no cover - trivial
+    __slots__ = ("status_code", "body", "headers")
+
     def __init__(
         self,
         content: str,
@@ -29,12 +31,12 @@ class Response:  # pragma: no cover - trivial
 
 
 class ORJSONResponse(Response):  # pragma: no cover - trivial
+    __slots__ = ()
+
     def __init__(self, content: dict, *, status_code: int = 200) -> None:
-        super().__init__(
-            orjson.dumps(content).decode(),
-            status_code=status_code,
-            media_type="application/json",
-        )
+        self.status_code = status_code
+        self.body = orjson.dumps(content)
+        self.headers = {"content-type": "application/json"}
 
 
 class JSONResponse(ORJSONResponse):  # pragma: no cover - backwards compat
