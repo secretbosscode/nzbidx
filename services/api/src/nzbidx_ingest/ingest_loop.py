@@ -40,8 +40,10 @@ _group_failures: dict[str, int] = {}
 # Counter used to throttle how often batch metrics are logged at INFO level.
 _log_counter = 0
 
-# Timestamp of the last successful ingest iteration (seconds since epoch).
+# Monotonic timestamp of the last successful ingest iteration.
 last_run: float = 0.0
+# Wall-clock timestamp of the last successful ingest iteration.
+last_run_wall: float = 0.0
 
 
 class _AggregateMetrics:
@@ -348,7 +350,7 @@ def run_once() -> float:
 
     Returns the suggested delay before the next poll.
     """
-    global last_run
+    global last_run, last_run_wall
     groups = config.NNTP_GROUPS or config._load_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
@@ -356,14 +358,16 @@ def run_once() -> float:
     groups = [g for g in groups if g not in ignored]
     if not groups:
         logger.info("ingest_no_groups")
-        last_run = time.time()
+        last_run = time.monotonic()
+        last_run_wall = time.time()
         return INGEST_POLL_MAX_SECONDS
     skip = set(cursors.get_irrelevant_groups())
     if skip:
         groups = [g for g in groups if g not in skip]
     if not groups:
         logger.info("ingest_no_groups")
-        last_run = time.time()
+        last_run = time.monotonic()
+        last_run_wall = time.time()
         return INGEST_POLL_MAX_SECONDS
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
@@ -374,7 +378,8 @@ def run_once() -> float:
         client.connect()
         db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
-        last_run = time.time()
+        last_run = time.monotonic()
+        last_run_wall = time.time()
         return delay
     finally:
         try:
