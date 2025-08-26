@@ -1,7 +1,6 @@
 """Helpers for the Newznab API."""
 
 import asyncio
-from nzbidx_api.json_utils import orjson
 import os
 import html
 import logging
@@ -180,7 +179,7 @@ BOOKS_CATEGORY_IDS = _collect_category_ids("EBook")
 ADULT_CATEGORY_IDS = _collect_category_ids("XXX")
 
 
-def caps_xml() -> str:
+def caps_xml() -> bytes:
     """Return a minimal Newznab caps XML document."""
     categories = [f'<category id="{c["id"]}" name="{c["name"]}"/>' for c in CATEGORIES]
     cats_xml = f"<categories>{''.join(categories)}</categories>"
@@ -193,7 +192,7 @@ def caps_xml() -> str:
         '<caps><server version="0.1" title="nzbidx"/>'
         '<limits max="100" default="50"/>'
         f"{searching_xml}{cats_xml}</caps>"
-    )
+    ).encode("utf-8")
 
 
 def rss_xml(
@@ -205,7 +204,7 @@ def rss_xml(
     description: str = "nzbidx RSS feed",
     language: Optional[str] = None,
     feed_url: Optional[str] = None,
-) -> str:
+) -> bytes:
     """Return a simple RSS feed with the provided items.
 
     Each ``item`` dict should contain ``title``, ``guid``, ``pubDate``,
@@ -270,11 +269,11 @@ def rss_xml(
     if feed_url:
         rss_attrs.append('xmlns:atom="http://www.w3.org/2005/Atom"')
 
-    return "".join(
+    return b"".join(
         [
-            f"<rss {' '.join(rss_attrs)}>",
-            "".join(channel_parts),
-            "</rss>",
+            f"<rss {' '.join(rss_attrs)}>".encode("utf-8"),
+            "".join(channel_parts).encode("utf-8"),
+            b"</rss>",
         ]
     )
 
@@ -303,9 +302,9 @@ async def get_nzb(release_id: str, cache: Optional[Any]) -> bytes:
                 inc_nzb_cache_hit()
                 if cached == FAIL_SENTINEL:
                     raise NzbFetchError("previous fetch failed")
-                if isinstance(cached, str):
-                    return cached.encode("utf-8")
-                return bytes(cached)
+                if isinstance(cached, (bytes, bytearray)):
+                    return bytes(cached)
+                return str(cached).encode("utf-8")
             inc_nzb_cache_miss()
 
     try:

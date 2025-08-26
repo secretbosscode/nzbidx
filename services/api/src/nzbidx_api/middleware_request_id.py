@@ -15,6 +15,8 @@ _request_id_ctx: ContextVar[str] = ContextVar("request_id", default="")
 
 
 class _RequestIDFilter(logging.Filter):
+    __slots__ = ()
+
     def filter(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
         record.request_id = _request_id_ctx.get("")
         return True

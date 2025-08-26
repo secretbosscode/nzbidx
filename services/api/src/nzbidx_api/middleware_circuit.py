@@ -26,6 +26,14 @@ class CircuitOpenError(RuntimeError):
 class CircuitBreaker(Generic[T]):
     """Simple circuit breaker with half-open probing."""
 
+    __slots__ = (
+        "max_failures",
+        "reset_seconds",
+        "_failures",
+        "_opened_at",
+        "_lock",
+    )
+
     def __init__(self, *, max_failures: int, reset_seconds: float) -> None:
         self.max_failures = max_failures
         self.reset_seconds = reset_seconds
