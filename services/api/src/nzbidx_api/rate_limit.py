@@ -16,6 +16,7 @@ from .errors import rate_limited
 
 class RateLimiter:
     """Track request counts per key within a time window using memory."""
+
     __slots__ = ("limit", "window", "counts", "_lock")
 
     def __init__(self, limit: int, window: int) -> None:
