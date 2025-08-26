@@ -24,9 +24,15 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+@lru_cache()
 def api_keys() -> set[str]:
     keys = os.getenv("API_KEYS", "")
     return {k.strip() for k in keys.split(",") if k.strip()}
+
+
+def reload_api_keys() -> None:
+    """Clear cached API keys so changes in the environment take effect."""
+    api_keys.cache_clear()
 
 
 @dataclass
