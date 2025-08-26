@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import os
 from contextlib import closing
@@ -156,7 +156,7 @@ def backfill_release_parts(
                             f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, "
                             f"part_count = {placeholder}, size_bytes = {placeholder} WHERE id = {placeholder}"
                         ),
-                        (json.dumps(seg_data), True, len(seg_data), total_size, rel_id),
+                        (orjson.dumps(seg_data).decode(), True, len(seg_data), total_size, rel_id),
                     )
                     processed += 1
                     if progress_cb:

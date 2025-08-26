@@ -10,7 +10,7 @@ message-ids.
 from __future__ import annotations
 
 import argparse
-import json
+from nzbidx_api.json_utils import orjson
 import sys
 from pathlib import Path
 
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helpe
 
     seg_data = row[0]
     segments = (
-        json.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
+        orjson.loads(seg_data) if isinstance(seg_data, (str, bytes)) else seg_data
     ) or []
 
     if not segments:

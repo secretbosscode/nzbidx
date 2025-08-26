@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import sqlite3
 
 import pytest
@@ -57,7 +57,7 @@ def test_backfill_populates_segments(tmp_path, monkeypatch) -> None:
     cur2 = conn2.cursor()
     cur2.execute("SELECT segments, part_count, size_bytes FROM release WHERE id = 1")
     seg_json, part_count, size_bytes = cur2.fetchone()
-    segments = json.loads(seg_json)
+    segments = orjson.loads(seg_json)
     assert segments[0]["message_id"] == "m1"
     assert segments[1]["message_id"] == "m2"
     assert part_count == 2

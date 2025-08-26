@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import argparse
-import json
+from nzbidx_api.json_utils import orjson
 import sys
 from pathlib import Path
 
@@ -45,7 +45,7 @@ def normalize() -> int:
     for rid, seg_json in rows:
         try:
             data = (
-                json.loads(seg_json or "[]")
+                orjson.loads(seg_json or "[]")
                 if isinstance(seg_json, (str, bytes))
                 else seg_json or []
             )
@@ -64,7 +64,7 @@ def normalize() -> int:
             continue
         cur.execute(
             f"UPDATE release SET segments = {placeholder} WHERE id = {placeholder}",
-            (json.dumps(converted), rid),
+            (orjson.dumps(converted).decode(), rid),
         )
         updated += 1
     conn.commit()

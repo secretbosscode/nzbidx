@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from nzbidx_api.json_utils import orjson
 import logging
 import sqlite3
 
@@ -93,7 +93,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                 100,
                 1,
                 1,
-                json.dumps(
+                orjson.dumps(
                     [
                         {
                             "number": 1,
@@ -102,7 +102,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
                             "size": 100,
                         }
                     ]
-                ),
+                ).decode(),
             ),
         )
         conn.commit()
@@ -117,7 +117,7 @@ def test_existing_release_reindexed_with_new_segments(monkeypatch, tmp_path) -> 
         ).fetchone()
     assert row[0] == 250
     assert row[1] == 2
-    assert json.loads(row[2]) == [
+    assert orjson.loads(row[2]) == [
         {
             "number": 1,
             "message_id": "m1",
@@ -181,7 +181,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
                 100,
                 0,
                 0,
-                json.dumps([]),
+                orjson.dumps([]).decode(),
             ),
         )
         conn.commit()
@@ -207,7 +207,7 @@ def test_duplicate_segments_do_not_set_has_parts(monkeypatch, tmp_path) -> None:
     def fake_loads(_s: str) -> list[dict[str, object]]:
         return _Existing()
 
-    monkeypatch.setattr(loop.json, "loads", fake_loads)
+    monkeypatch.setattr(loop.orjson, "loads", fake_loads)
 
     loop.run_once()
 
