@@ -19,12 +19,24 @@ logger = logging.getLogger(__name__)
 class NNTPClient:
     """Very small NNTP client with a persistent connection."""
 
+    __slots__ = (
+        "host",
+        "port",
+        "ssl",
+        "user",
+        "password",
+        "timeout",
+        "_current_group",
+        "_server",
+        "__dict__",
+    )
+
     def __init__(self) -> None:
         host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
         self.host: Optional[str] = host
         self.port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
         ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
-        self.use_ssl = (ssl_env == "1") if ssl_env is not None else self.port == 563
+        self.ssl = (ssl_env == "1") if ssl_env is not None else self.port == 563
         self.user = os.getenv("NNTP_USER")
         self.password = os.getenv("NNTP_PASS")
         # Default to a generous timeout to handle slow or flaky providers
@@ -37,7 +49,7 @@ class NNTPClient:
     def _create_server(self) -> nntplib.NNTP:
         if nntplib is None:  # pragma: no cover - no compatible library
             raise RuntimeError("No NNTP library available")
-        cls = nntplib.NNTP_SSL if self.use_ssl else nntplib.NNTP
+        cls = nntplib.NNTP_SSL if self.ssl else nntplib.NNTP
         return cls(
             self.host,
             port=self.port,
