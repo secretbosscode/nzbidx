@@ -163,7 +163,7 @@ def _process_groups(
                     day_bucket = ""
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
-            category = _infer_category(subject, group) or CATEGORY_MAP["other"]
+            category = _infer_category(subject, group, tags=tags) or CATEGORY_MAP["other"]
             tags = tags or []
             existing = releases.get(dedupe_key)
             if existing:
