@@ -88,7 +88,6 @@ def backfill_release_parts(
     """
     if not config.get_nntp_groups():
         config.validate_nntp_config()
-        groups = [group] if group else config.get_nntp_groups()
     conn = connect_db()
     try:
         _cursor = conn.cursor()
