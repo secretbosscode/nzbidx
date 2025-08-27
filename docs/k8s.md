@@ -14,6 +14,10 @@ The example manifest also sets `NNTP_TOTAL_TIMEOUT` and
 `NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT` to avoid
 premature API timeouts during NZB generation.
 
+Database maintenance, including vacuuming, analyzing, reindexing and pruning
+releases outside configured size limits, runs automatically via
+`scripts/db_maintenance.py`.
+
 Apply the manifest:
 
 ```bash
