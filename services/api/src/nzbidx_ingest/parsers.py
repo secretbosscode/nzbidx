@@ -81,7 +81,7 @@ def extract_file_extension(subject: str) -> str | None:
     return None
 
 
-_SEGMENT_RE = re.compile(r"\((\d+)/")
+_SEGMENT_RE = re.compile(r"\((\d+)/\d+\)")
 
 
 def extract_segment_number(subject: str) -> int:
