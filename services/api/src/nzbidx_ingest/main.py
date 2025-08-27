@@ -202,9 +202,59 @@ ADULT_KEYWORDS = tuple(
 ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
 
 
+# Default set of file extensions that should be retained without any
+# additional configuration. Environment variables can extend this allow-list
+# via ``FILE_EXTENSIONS_*`` entries.
+DEFAULT_ALLOWED_EXTENSIONS: set[str] = {
+    # Archives and metadata
+    "rar",
+    "par2",
+    "zip",
+    "7z",
+    "nfo",
+    "sfv",
+    # Video
+    "mkv",
+    "mp4",
+    "mov",
+    "m4v",
+    "mpg",
+    "mpeg",
+    "avi",
+    "flv",
+    "webm",
+    "wmv",
+    "vob",
+    "evo",
+    "iso",
+    "m2ts",
+    "ts",
+    # Audio
+    "mp3",
+    "flac",
+    "aac",
+    "m4a",
+    "wav",
+    "ogg",
+    "wma",
+    # Images
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+    # Books and comics
+    "epub",
+    "mobi",
+    "pdf",
+    "azw3",
+    "cbz",
+    "cbr",
+}
+
+
 def _allowed_extensions() -> set[str]:
-    """Return the union of allowed file extensions from the environment."""
-    allowed: set[str] = set()
+    """Return the union of allowed file extensions from defaults and env."""
+    allowed: set[str] = set(DEFAULT_ALLOWED_EXTENSIONS)
     for key, value in os.environ.items():
         if key.startswith("FILE_EXTENSIONS_") and value:
             parts = [p.strip().lower() for p in value.split(",") if p.strip()]
@@ -847,6 +897,7 @@ def main() -> int:
     start_memory_logger()
     from .ingest_loop import run_forever
 
+    prune_disallowed_filetypes()
     run_forever()
     return 0
 
