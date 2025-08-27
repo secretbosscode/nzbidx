@@ -107,7 +107,7 @@ faster serializer once compatible.
 | `RELEASE_MIN_SIZES` | Comma separated `pattern=bytes` overrides for minimum release size (see below) | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
-| `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
+| `DETECT_LANGUAGE` | `1`, `true`, or `yes` enables automatic language detection (any other value disables for faster ingest) | `1` |
 | `ALLOWED_MOVIE_EXTENSIONS` | Comma-separated video extensions allowed for movie releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
 | `ALLOWED_TV_EXTENSIONS` | Comma-separated video extensions allowed for TV releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
 | `ALLOWED_ADULT_EXTENSIONS` | Comma-separated video extensions allowed for adult releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
@@ -118,8 +118,8 @@ faster serializer once compatible.
 
 Language detection improves the accuracy of release metadata but incurs a
 performance cost. Results are cached using an LRU strategy, yet disabling
-language detection (`DETECT_LANGUAGE=0`) may be desirable when ingest speed is
-preferred over precise language tags.
+language detection (e.g. `DETECT_LANGUAGE=0`) may be desirable when ingest speed
+is preferred over precise language tags.
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category
