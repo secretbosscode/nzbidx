@@ -63,23 +63,28 @@ def _clear_file_extension_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_prune_disallowed_filetypes_default(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_file_extension_env(monkeypatch)
-    conn = FakeConnection([
-        {"extension": "rar"},
-        {"extension": "foo"},
-    ])
+    conn = FakeConnection(
+        [
+            {"extension": "rar"},
+            {"extension": "foo"},
+        ]
+    )
     deleted = prune_disallowed_filetypes(conn)
     assert deleted == 1
     assert [r["extension"] for r in conn.rows] == ["rar"]
 
 
-def test_prune_disallowed_filetypes_env_extends(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prune_disallowed_filetypes_env_extends(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _clear_file_extension_env(monkeypatch)
     monkeypatch.setenv("FILE_EXTENSIONS_EXTRA", "foo")
-    conn = FakeConnection([
-        {"extension": "rar"},
-        {"extension": "foo"},
-    ])
+    conn = FakeConnection(
+        [
+            {"extension": "rar"},
+            {"extension": "foo"},
+        ]
+    )
     deleted = prune_disallowed_filetypes(conn)
     assert deleted == 0
     assert [r["extension"] for r in conn.rows] == ["rar", "foo"]
-
