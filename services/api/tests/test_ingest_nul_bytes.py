@@ -46,6 +46,7 @@ def test_ingest_strips_nul_bytes(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(loop, "connect_db", _connect)
 
     from nzbidx_ingest.main import insert_release  # type: ignore
+
     monkeypatch.setattr(loop, "insert_release", insert_release)
 
     # Should not raise despite the NUL byte
