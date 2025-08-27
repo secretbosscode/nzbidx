@@ -279,6 +279,12 @@ def _process_groups(
                         existing_segments = []
                 validate_segment_schema(existing_segments)
 
+                for seg in existing_segments:
+                    seg["message_id"] = _clean_text(str(seg.get("message_id", "")))
+                    seg["group"] = _clean_text(str(seg.get("group", "")))
+
+                validate_segment_schema(existing_segments)
+
                 # Deduplicate newly fetched segments by message-id before merging.
                 deduped: list[dict[str, int | str]] = []
                 seen_ids: set[str] = set()
