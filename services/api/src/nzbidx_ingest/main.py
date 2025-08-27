@@ -609,7 +609,11 @@ def insert_release(
     def _clean(text: Optional[str]) -> Optional[str]:
         if text is None:
             return None
-        return text.encode("utf-8", "surrogateescape").decode("utf-8", "ignore")
+        return (
+            text.replace("\x00", "")
+            .encode("utf-8", "surrogateescape")
+            .decode("utf-8", "ignore")
+        )
 
     cur = conn.cursor()
 
