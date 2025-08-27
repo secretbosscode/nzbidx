@@ -12,7 +12,7 @@ from cachetools import TTLCache
 from .config import settings
 
 
-def _new_cache(timer: Callable[[], float] = time.monotonic) -> TTLCache[str, bytes]:
+def _new_cache(timer: Callable[[], float] = time.monotonic) -> TTLCache[str, str]:
     """Create a TTL cache with the configured limits."""
 
     return TTLCache(
@@ -23,7 +23,7 @@ def _new_cache(timer: Callable[[], float] = time.monotonic) -> TTLCache[str, byt
 
 
 # In-memory cache with automatic TTL and LRU eviction
-_CACHE: TTLCache[str, bytes] = _new_cache()
+_CACHE: TTLCache[str, str] = _new_cache()
 
 # Guard access to ``_CACHE`` so readers/writers don't interfere with each other
 _CACHE_LOCK = asyncio.Lock()
@@ -63,7 +63,7 @@ async def purge_expired() -> None:
         _purge_expired_locked()
 
 
-async def get_cached_rss(key: str) -> Optional[bytes]:
+async def get_cached_rss(key: str) -> Optional[str]:
     """Return cached RSS XML for ``key`` if present and not expired."""
     async with _CACHE_LOCK:
         _ensure_cache_config()
@@ -77,11 +77,11 @@ async def get_cached_rss(key: str) -> Optional[bytes]:
         return xml
 
 
-async def cache_rss(key: str, xml: bytes) -> None:
+async def cache_rss(key: str, xml: str) -> None:
     """Store ``xml`` under ``key`` using the configured TTL."""
     async with _CACHE_LOCK:
         _ensure_cache_config()
         _purge_expired_locked(time.monotonic())
-        if b"<item>" not in xml:
+        if "<item>" not in xml:
             return
         _CACHE[key] = xml
