@@ -123,3 +123,70 @@ VALIDATE_SEGMENTS: bool = os.getenv("VALIDATE_SEGMENTS", "").lower() in {
     "true",
     "yes",
 }
+
+
+MB = 1024 * 1024
+_DEFAULT_MIN_MB = 50
+_DEFAULT_MAX_MB = 100 * 1024
+
+
+def _size_range(
+    prefix: str, default_min: int = _DEFAULT_MIN_MB, default_max: int = _DEFAULT_MAX_MB
+) -> tuple[int, int]:
+    """Return ``(min_bytes, max_bytes)`` for the given category prefix."""
+
+    min_mb = int(os.getenv(f"{prefix}_MIN_SIZE_MB", str(default_min)))
+    max_mb = int(os.getenv(f"{prefix}_MAX_SIZE_MB", str(default_max)))
+    return min_mb * MB, max_mb * MB
+
+
+MOVIE_SIZE_RANGE = _size_range("MOVIE")
+TV_SIZE_RANGE = _size_range("TV")
+XXX_SIZE_RANGE = _size_range("XXX")
+
+from .main import CATEGORY_MAP  # noqa: E402
+
+MOVIE_CATEGORIES = {
+    CATEGORY_MAP["movies"],
+    CATEGORY_MAP["movies_foreign"],
+    CATEGORY_MAP["movies_other"],
+    CATEGORY_MAP["movies_sd"],
+    CATEGORY_MAP["movies_hd"],
+    CATEGORY_MAP["movies_bluray"],
+    CATEGORY_MAP["movies_3d"],
+}
+
+TV_CATEGORIES = {
+    CATEGORY_MAP["tv"],
+    CATEGORY_MAP["tv_foreign"],
+    CATEGORY_MAP["tv_sd"],
+    CATEGORY_MAP["tv_hd"],
+    CATEGORY_MAP["tv_other"],
+    CATEGORY_MAP["tv_sport"],
+}
+
+XXX_CATEGORIES = {
+    CATEGORY_MAP["xxx"],
+    CATEGORY_MAP["xxx_dvd"],
+    CATEGORY_MAP["xxx_wmv"],
+    CATEGORY_MAP["xxx_xvid"],
+    CATEGORY_MAP["xxx_x264"],
+    CATEGORY_MAP["xxx_uhd"],
+    CATEGORY_MAP["xxx_pack"],
+    CATEGORY_MAP["xxx_imageset"],
+    CATEGORY_MAP["xxx_other"],
+    CATEGORY_MAP["xxx_sd"],
+    CATEGORY_MAP["xxx_webdl"],
+}
+
+
+def category_size_range(category: str) -> tuple[int, int] | None:
+    """Return the configured size range for a category code."""
+
+    if category in MOVIE_CATEGORIES:
+        return MOVIE_SIZE_RANGE
+    if category in TV_CATEGORIES:
+        return TV_SIZE_RANGE
+    if category in XXX_CATEGORIES:
+        return XXX_SIZE_RANGE
+    return None

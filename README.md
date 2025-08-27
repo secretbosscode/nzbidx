@@ -103,6 +103,12 @@ faster serializer once compatible.
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
+| `MOVIE_MIN_SIZE_MB` | Minimum size in megabytes for movie releases | `50` |
+| `MOVIE_MAX_SIZE_MB` | Maximum size in megabytes for movie releases | `102400` |
+| `TV_MIN_SIZE_MB` | Minimum size in megabytes for TV releases | `50` |
+| `TV_MAX_SIZE_MB` | Maximum size in megabytes for TV releases | `102400` |
+| `XXX_MIN_SIZE_MB` | Minimum size in megabytes for adult releases | `50` |
+| `XXX_MAX_SIZE_MB` | Maximum size in megabytes for adult releases | `102400` |
 
 > **Note**: To avoid premature API timeouts during NZB generation, ensure
 > `NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT`.
