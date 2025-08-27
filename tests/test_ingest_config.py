@@ -24,6 +24,7 @@ def test_groups_loaded_lazily(monkeypatch) -> None:
     """NNTP groups should not be loaded during module import."""
 
     import nzbidx_ingest.nntp_client as client_mod
+
     called_client = {"count": 0}
 
     class DummyClient:
@@ -36,6 +37,7 @@ def test_groups_loaded_lazily(monkeypatch) -> None:
     monkeypatch.setattr(client_mod, "NNTPClient", DummyClient)
     monkeypatch.delenv("NNTP_GROUPS", raising=False)
     import nzbidx_ingest.config as config
+
     importlib.reload(config)
 
     assert called_client["count"] == 0
