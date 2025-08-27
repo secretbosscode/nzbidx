@@ -98,6 +98,8 @@ def migrate_release_table(conn: Any) -> None:
         "CREATE UNIQUE INDEX release_norm_title_category_id_key ON release (norm_title, category_id)",
     )
 
+    create_release_posted_at_index(conn)
+
     # Copy rows and drop the old table.
     cur.execute("INSERT INTO release SELECT * FROM release_old")
     cur.execute("DROP TABLE release_old")
