@@ -246,9 +246,7 @@ def _process_groups(
         has_parts_flags: dict[str, bool] = {}
         if db is not None:
             cur = db.cursor()
-            placeholder = (
-                "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
-            )
+            placeholder = "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
             for title, segs in parts.items():
                 if not segs:
                     continue

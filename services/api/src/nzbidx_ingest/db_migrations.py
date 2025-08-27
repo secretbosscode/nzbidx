@@ -186,6 +186,7 @@ def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
     )
     conn.commit()
 
+
 def add_release_has_parts_index(conn: Any) -> None:
     """Create partial index on ``release`` rows that have parts."""
 
