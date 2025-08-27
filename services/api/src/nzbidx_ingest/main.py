@@ -642,10 +642,13 @@ def insert_release(
                     other_rows.append(row)
             for year, rows in adult_rows.items():
                 ensure_release_adult_year_partition(conn, year)
-                cur.executemany(
-                    f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
-                    rows,
-                )
+            if adult_rows:
+                create_release_posted_at_index(conn)
+                for year, rows in adult_rows.items():
+                    cur.executemany(
+                        f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
+                        rows,
+                    )
             if other_rows:
                 cur.executemany(
                     "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
