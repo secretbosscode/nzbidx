@@ -143,6 +143,7 @@ def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
         "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT"
     )
     conn.commit()
+    create_release_posted_at_index(conn)
 
     # Copy rows in batches to new partitioned table.
     while True:
@@ -177,6 +178,9 @@ def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
     )
     cur.execute(
         f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON ONLY {table} (posted_at)",
+    )
+    cur.execute(
+        f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON {table} (posted_at)"
     )
     conn.commit()
 
