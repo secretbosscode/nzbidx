@@ -6,6 +6,18 @@ import os
 from typing import Any, Iterable
 
 
+# Category ranges in the ``release`` partitioned table.  The ``other`` category
+# acts as the default partition and therefore has no explicit bounds.
+_CATEGORY_RANGES: dict[str, tuple[int, int] | None] = {
+    "movies": (2000, 3000),
+    "music": (3000, 4000),
+    "tv": (5000, 6000),
+    "adult": (6000, 7000),
+    "books": (7000, 8000),
+    "other": None,
+}
+
+
 def migrate_release_table(conn: Any) -> None:
     """Migrate ``release`` rows into partitioned tables by ``category_id``.
 
@@ -108,64 +120,86 @@ def migrate_release_table(conn: Any) -> None:
     conn.commit()
 
 
-def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
-    """Ensure ``release_adult`` is partitioned by ``posted_at`` and migrate rows.
+def migrate_release_partitions_by_date(
+    conn: Any, category: str, batch_size: int = 1000
+) -> None:
+    """Ensure ``release_<category>`` is partitioned by ``posted_at``.
 
-    The existing ``release_adult`` partition is converted into a partitioned table
-    with yearly child partitions. Rows are moved in batches to avoid long locks.
+    The function converts the existing category partition into a partitioned
+    table by ``posted_at`` and migrates any existing rows into yearly child
+    partitions.  It is safe to call multiple times.
     """
+
+    table = f"release_{category}"
+    ranges = _CATEGORY_RANGES.get(category)
+    if category not in _CATEGORY_RANGES:
+        raise ValueError(f"unknown category: {category}")
 
     cur = conn.cursor()
 
-    # Check if ``release_adult`` is already partitioned by ``posted_at``.
+    # Skip if already partitioned by ``posted_at``
     cur.execute(
-        "SELECT partrelid FROM pg_partitioned_table WHERE partrelid = 'release_adult'::regclass"
+        "SELECT partrelid FROM pg_partitioned_table WHERE partrelid = %s::regclass",
+        (table,),
     )
     if cur.fetchone() is not None:
         return
 
-    # Detach and rename existing partition.
-    cur.execute("ALTER TABLE release DETACH PARTITION release_adult")
-    cur.execute("ALTER TABLE release_adult RENAME TO release_adult_old")
+    # Detach and rename existing partition
+    cur.execute(f"ALTER TABLE release DETACH PARTITION {table}")
+    cur.execute(f"ALTER TABLE {table} RENAME TO {table}_old")
 
-    # Create new partitioned table and initial partitions.
-    cur.execute(
-        "CREATE TABLE release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)"
-    )
+    # Create new partitioned table with the appropriate bounds
+    if ranges is None:
+        cur.execute(
+            f"CREATE TABLE {table} PARTITION OF release DEFAULT PARTITION BY RANGE (posted_at)"
+        )
+    else:
+        start, end = ranges
+        cur.execute(
+            f"CREATE TABLE {table} PARTITION OF release FOR VALUES FROM (%s) TO (%s) PARTITION BY RANGE (posted_at)",
+            (start, end),
+        )
 
-    # Determine years present in existing data.
+    # Determine distinct years present in existing data
     cur.execute(
-        "SELECT DISTINCT EXTRACT(YEAR FROM posted_at) FROM release_adult_old WHERE posted_at IS NOT NULL"
+        f"SELECT DISTINCT EXTRACT(YEAR FROM posted_at) FROM {table}_old WHERE posted_at IS NOT NULL"
     )
-    years = [int(row[0]) for row in cur.fetchall()]
+    years = [int(r[0]) for r in cur.fetchall()]
     for year in years:
         cur.execute(
-            f"CREATE TABLE IF NOT EXISTS release_adult_{year} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')"
+            f"CREATE TABLE IF NOT EXISTS {table}_{year} PARTITION OF {table} FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')"
         )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT"
+        f"CREATE TABLE IF NOT EXISTS {table}_default PARTITION OF {table} DEFAULT"
     )
     conn.commit()
     create_release_posted_at_index(conn)
 
-    # Copy rows in batches to new partitioned table.
+    # Move rows into new partitioned table
     while True:
         cur.execute(
             f"""
             WITH moved AS (
-                SELECT * FROM release_adult_old ORDER BY id LIMIT {batch_size}
+                SELECT * FROM {table}_old ORDER BY id LIMIT {batch_size}
             )
-            INSERT INTO release_adult SELECT * FROM moved RETURNING id
+            INSERT INTO {table} SELECT * FROM moved RETURNING id
             """
         )
         ids = [row[0] for row in cur.fetchall()]
         if not ids:
             break
-        cur.execute("DELETE FROM release_adult_old WHERE id = ANY(%s)", (ids,))
+        cur.execute(f"DELETE FROM {table}_old WHERE id = ANY(%s)", (ids,))
         conn.commit()
 
-    cur.execute("DROP TABLE release_adult_old")
+    cur.execute(f"DROP TABLE {table}_old")
     conn.commit()
+
+
+def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
+    """Backward-compatible wrapper for ``migrate_release_partitions_by_date``."""
+
+    migrate_release_partitions_by_date(conn, "adult", batch_size=batch_size)
 
 
 def ensure_release_adult_year_partition(conn: Any, year: int) -> None:

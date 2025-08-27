@@ -23,8 +23,8 @@ from typing import Any, Optional
 from . import migrations as migrations_pkg
 
 from nzbidx_ingest.db_migrations import (
-    migrate_release_adult_partitions,
-    drop_unused_release_adult_partitions,
+    migrate_release_partitions_by_date,
+    migrate_release_adult_partitions,  # backward compatibility
 )
 from nzbidx_migrations import apply_async, _split_sql
 
@@ -148,9 +148,42 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     statements = load_schema_statements()
 
     async def _apply(conn: Any) -> None:
-        partitioned = False
+        adult_partitioned = False
         try:
-            partitioned = bool(
+            categories = ["movies", "music", "tv", "books", "other", "adult"]
+            missing: list[str] = []
+            for cat in categories:
+                reg = await conn.scalar(
+                    text("SELECT to_regclass(:tbl)"), {"tbl": f"release_{cat}"}
+                )
+                if not reg:
+                    continue
+                exists = await conn.scalar(
+                    text(
+                        "SELECT partrelid FROM pg_partitioned_table WHERE partrelid = to_regclass(:tbl)"
+                    ),
+                    {"tbl": f"release_{cat}"},
+                )
+                if not exists:
+                    missing.append(cat)
+            if missing:
+                try:
+                    raw = engine.sync_engine.raw_connection()
+                    try:
+                        for cat in missing:
+                            migrate_release_partitions_by_date(raw, cat)
+                    finally:  # pragma: no cover - connection cleanup
+                        try:
+                            raw.close()
+                        except DB_CLOSE_ERRORS:
+                            pass
+                except Exception as exc:  # pragma: no cover - best effort
+                    logger.warning(
+                        "release_partition_migration_failed",
+                        exc_info=True,
+                        extra={"error": str(exc)},
+                    )
+            adult_partitioned = bool(
                 await conn.scalar(
                     text(
                         "SELECT EXISTS ("
@@ -160,53 +193,11 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                     )
                 )
             )
-            if not partitioned:
-                try:
-                    raw = engine.sync_engine.raw_connection()
-                    try:
-                        migrate_release_adult_partitions(raw)
-                    finally:  # pragma: no cover - connection cleanup
-                        try:
-                            raw.close()
-                        except DB_CLOSE_ERRORS:
-                            pass
-                    partitioned = bool(
-                        await conn.scalar(
-                            text(
-                                "SELECT EXISTS ("
-                                "SELECT 1 FROM pg_partitioned_table "
-                                "WHERE partrelid = to_regclass('release_adult')"
-                                ")"
-                            )
-                        )
-                    )
-                except Exception as exc:  # pragma: no cover - best effort
-                    logger.warning(
-                        "release_adult_migration_failed",
-                        exc_info=True,
-                        extra={"error": str(exc)},
-                    )
         except Exception:  # pragma: no cover - system catalogs missing
-            partitioned = False
-
-        try:
-            raw = engine.sync_engine.raw_connection()  # type: ignore[attr-defined]
-            try:
-                drop_unused_release_adult_partitions(raw)
-            finally:  # pragma: no cover - connection cleanup
-                try:
-                    raw.close()
-                except DB_CLOSE_ERRORS:
-                    pass
-        except Exception as exc:  # pragma: no cover - best effort
-            logger.warning(
-                "release_adult_partition_cleanup_failed",
-                exc_info=True,
-                extra={"error": str(exc)},
-            )
+            adult_partitioned = False
 
         def _predicate(stmt: str) -> bool:
-            if not partitioned and "PARTITION OF release_adult" in stmt:
+            if not adult_partitioned and "PARTITION OF release_adult" in stmt:
                 raise RuntimeError(f"release_adult_unpartitioned: {stmt}")
             return True
 
