@@ -87,7 +87,7 @@ def _clean_text(s: str) -> str:
     and decoding back to ``str`` drops any such characters.
     """
 
-    return s.encode("utf-8", errors="ignore").decode("utf-8")
+    return s.replace("\x00", "").encode("utf-8", errors="ignore").decode("utf-8")
 
 
 def _process_groups(
@@ -189,13 +189,18 @@ def _process_groups(
             if posted:
                 try:
                     dt = parsedate_to_datetime(str(posted)).astimezone(timezone.utc)
-                    posted_at = dt.isoformat()
+                    posted_at = _clean_text(dt.isoformat())
                     day_bucket = dt.strftime("%Y-%m-%d")
                 except Exception:
                     day_bucket = ""
-            dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
-            language = detect_language(subject) or "und"
-            category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
+            dedupe_key = _clean_text(
+                f"{norm_title}:{day_bucket}" if day_bucket else norm_title
+            )
+            language = _clean_text(detect_language(subject) or "und")
+            category = _clean_text(
+                _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
+            )
+            group_clean = _clean_text(str(group))
             ext = extract_file_extension(subject)
             allowed: set[str] | None = None
             try:
@@ -210,7 +215,7 @@ def _process_groups(
                 allowed = None
             if allowed is not None and (not ext or ext not in allowed):
                 continue
-            tags = tags or []
+            tags = [_clean_text(tag) for tag in (tags or [])]
             existing = releases.get(dedupe_key)
             if existing:
                 _, ex_cat, ex_lang, ex_tags, ex_group, ex_size, ex_posted = existing
@@ -234,14 +239,14 @@ def _process_groups(
                     category,
                     language,
                     tags,
-                    group,
+                    group_clean,
                     size,
                     posted_at,
                 )
             if message_id:
                 seg_num = extract_segment_number(subject)
                 clean_id = _clean_text(message_id.strip("<>"))
-                parts[dedupe_key].append((seg_num, clean_id, group, size))
+                parts[dedupe_key].append((seg_num, clean_id, group_clean, size))
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
@@ -278,17 +283,27 @@ def _process_groups(
                             existing_segments = json.loads(row[0] or "[]")
                         except Exception:
                             existing_segments = []
+                    for seg in existing_segments:
+                        seg["message_id"] = _clean_text(str(seg.get("message_id", "")))
+                        seg["group"] = _clean_text(str(seg.get("group", "")))
                     validate_segment_schema(existing_segments)
 
                     # Deduplicate newly fetched segments by message-id before merging.
                     deduped: list[dict[str, int | str]] = []
                     seen_ids: set[str] = set()
                     for n, m, g, s in segs:
-                        if m in seen_ids:
+                        clean_m = _clean_text(m)
+                        clean_g = _clean_text(g)
+                        if clean_m in seen_ids:
                             continue
-                        seen_ids.add(m)
+                        seen_ids.add(clean_m)
                         deduped.append(
-                            {"number": n, "message_id": m, "group": g, "size": s},
+                            {
+                                "number": n,
+                                "message_id": clean_m,
+                                "group": clean_g,
+                                "size": s,
+                            },
                         )
 
                     existing_map = {seg["message_id"]: seg for seg in existing_segments}
