@@ -51,4 +51,5 @@ src/nzbidx_ingest/segment_schema.py
 src/nzbidx_ingest/sql.py
 tests/test_nzb_builder_segments.py
 tests/test_parsers_extensions.py
+tests/test_parsers_segments.py
 tests/test_search_cache_service.py
