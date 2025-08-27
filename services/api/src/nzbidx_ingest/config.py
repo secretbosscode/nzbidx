@@ -141,9 +141,7 @@ def _load_category_min_sizes() -> dict[str, int]:
         "4000": int(os.getenv("PC_MIN_SIZE", "0")),
         "5000": int(os.getenv("TV_MIN_SIZE", "0")),
         "6000": int(os.getenv("XXX_MIN_SIZE", "0")),
-        "7000": int(
-            os.getenv("BOOKS_MIN_SIZE", os.getenv("OTHER_MIN_SIZE", "0"))
-        ),
+        "7000": int(os.getenv("BOOKS_MIN_SIZE", os.getenv("OTHER_MIN_SIZE", "0"))),
     }
     return env_map
 
@@ -151,7 +149,9 @@ def _load_category_min_sizes() -> dict[str, int]:
 CATEGORY_MIN_SIZES: dict[str, int] = _load_category_min_sizes()
 
 
-def _parse_release_min_sizes() -> tuple[dict[str, int], list[tuple[re.Pattern[str], int]]]:
+def _parse_release_min_sizes() -> tuple[
+    dict[str, int], list[tuple[re.Pattern[str], int]]
+]:
     """Parse ``RELEASE_MIN_SIZES`` into exact and regex mappings.
 
     The environment variable accepts comma separated ``pattern=size`` pairs. A
@@ -209,4 +209,3 @@ def min_size_for_release(norm_title: str, category: str) -> int:
     except Exception:
         base_cat = "7000"  # fall back to "other"
     return CATEGORY_MIN_SIZES.get(base_cat, 0)
-

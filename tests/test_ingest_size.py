@@ -163,9 +163,7 @@ def test_release_min_size_override(monkeypatch, tmp_path) -> None:
             return 1
 
         def xover(self, group: str, start: int, end: int):
-            return [
-                {"subject": "Example", ":bytes": "500", "message-id": "<1@a>"}
-            ]
+            return [{"subject": "Example", ":bytes": "500", "message-id": "<1@a>"}]
 
     client = DummyClient()
     db_path = tmp_path / "db.sqlite"
@@ -201,9 +199,7 @@ def test_category_min_size_fallback(monkeypatch, tmp_path) -> None:
             return 1
 
         def xover(self, group: str, start: int, end: int):
-            return [
-                {"subject": "Example", ":bytes": "500", "message-id": "<1@a>"}
-            ]
+            return [{"subject": "Example", ":bytes": "500", "message-id": "<1@a>"}]
 
     client = DummyClient()
     db_path = tmp_path / "db.sqlite"
