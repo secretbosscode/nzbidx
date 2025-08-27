@@ -258,73 +258,85 @@ def _process_groups(
         part_counts: dict[str, int] = {}
         has_parts_flags: dict[str, bool] = {}
         if db is not None:
-            cur = db.cursor()
             placeholder = "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
-            for title, segs in parts.items():
-                if not segs:
-                    continue
-                try:
-                    cur.execute(
-                        f"SELECT segments FROM release WHERE norm_title = {placeholder}",
-                        (title,),
-                    )
-                    row = cur.fetchone()
-                except Exception:
-                    row = None
-                existing_segments = []
-                if row:
-                    try:
-                        existing_segments = json.loads(row[0] or "[]")
-                    except Exception:
-                        existing_segments = []
-                validate_segment_schema(existing_segments)
 
-                # Deduplicate newly fetched segments by message-id before merging.
-                deduped: list[dict[str, int | str]] = []
-                seen_ids: set[str] = set()
-                for n, m, g, s in segs:
-                    if m in seen_ids:
+            def _update_segments(cur: object) -> None:
+                for title, segs in parts.items():
+                    if not segs:
                         continue
-                    seen_ids.add(m)
-                    deduped.append(
-                        {"number": n, "message_id": m, "group": g, "size": s}
-                    )
+                    try:
+                        cur.execute(
+                            f"SELECT segments FROM release WHERE norm_title = {placeholder}",
+                            (title,),
+                        )
+                        row = cur.fetchone()
+                    except Exception:
+                        row = None
+                    existing_segments = []
+                    if row:
+                        try:
+                            existing_segments = json.loads(row[0] or "[]")
+                        except Exception:
+                            existing_segments = []
+                    validate_segment_schema(existing_segments)
 
-                existing_map = {seg["message_id"]: seg for seg in existing_segments}
-                for seg in deduped:
-                    message_id = seg["message_id"]
-                    existing_map.setdefault(message_id, seg)
-                combined_segments = list(existing_map.values())
-                validate_segment_schema(combined_segments)
-                total_size = sum(seg["size"] for seg in combined_segments)
-                part_counts[title] = len(combined_segments)
-                has_parts = bool(combined_segments)
-                cat = releases.get(title)
-                category_id = str(cat[1]) if cat else CATEGORY_MAP["other"]
-                min_bytes = min_size_for_release(title, category_id)
-                if total_size < min_bytes:
+                    # Deduplicate newly fetched segments by message-id before merging.
+                    deduped: list[dict[str, int | str]] = []
+                    seen_ids: set[str] = set()
+                    for n, m, g, s in segs:
+                        if m in seen_ids:
+                            continue
+                        seen_ids.add(m)
+                        deduped.append(
+                            {"number": n, "message_id": m, "group": g, "size": s},
+                        )
+
+                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
+                    for seg in deduped:
+                        message_id = seg["message_id"]
+                        existing_map.setdefault(message_id, seg)
+                    combined_segments = list(existing_map.values())
+                    validate_segment_schema(combined_segments)
+                    total_size = sum(seg["size"] for seg in combined_segments)
+                    part_counts[title] = len(combined_segments)
+                    has_parts = bool(combined_segments)
+                    cat = releases.get(title)
+                    category_id = str(cat[1]) if cat else CATEGORY_MAP["other"]
+                    min_bytes = min_size_for_release(title, category_id)
+                    if total_size < min_bytes:
+                        cur.execute(
+                            f"DELETE FROM release WHERE norm_title = {placeholder} AND category_id = {placeholder}",
+                            (title, int(category_id)),
+                        )
+                        inserted.discard(title)
+                        continue
                     cur.execute(
-                        f"DELETE FROM release WHERE norm_title = {placeholder} AND category_id = {placeholder}",
-                        (title, int(category_id)),
+                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                        (
+                            json.dumps(combined_segments).decode(),
+                            has_parts,
+                            part_counts[title],
+                            total_size,
+                            title,
+                        ),
                     )
-                    inserted.discard(title)
-                    continue
-                cur.execute(
-                    f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
-                    (
-                        json.dumps(combined_segments).decode(),
-                        has_parts,
-                        part_counts[title],
-                        total_size,
-                        title,
-                    ),
-                )
-                has_parts_flags[title] = has_parts
-                changed.add(title)
+                    has_parts_flags[title] = has_parts
+                    changed.add(title)
+
+            try:
+                with db.cursor() as cur:
+                    _update_segments(cur)
+            except (AttributeError, TypeError):
+                cur = db.cursor()
+                try:
+                    _update_segments(cur)
+                finally:
+                    cur.close()
             try:
                 db.commit()
             except Exception:
-                pass
+                logger.exception("ingest_commit_error", extra={"group": group})
+                raise
 
         changed |= inserted
         cursors.set_cursor(group, current)
