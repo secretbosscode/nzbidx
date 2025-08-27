@@ -190,17 +190,18 @@ def _load_category_min_sizes() -> dict[str, int]:
 
     Values are configured via ``<CATEGORY>_MIN_SIZE`` variables where
     ``CATEGORY`` is the upper-case Newznab style label (e.g. ``MOVIES``).
-    Only a handful of top level categories are supported; unspecified values
-    default to ``0`` which disables filtering for that category.
+    Only a handful of top level categories are supported. Movies, TV, and
+    adult releases default to ``104857600`` bytes (``100`` MB). Unspecified
+    categories default to ``0`` which disables filtering for that category.
     """
 
     env_map = {
         "1000": int(os.getenv("CONSOLE_MIN_SIZE", "0")),
-        "2000": int(os.getenv("MOVIES_MIN_SIZE", "0")),
+        "2000": int(os.getenv("MOVIES_MIN_SIZE", "104857600")),
         "3000": int(os.getenv("AUDIO_MIN_SIZE", "0")),
         "4000": int(os.getenv("PC_MIN_SIZE", "0")),
-        "5000": int(os.getenv("TV_MIN_SIZE", "0")),
-        "6000": int(os.getenv("XXX_MIN_SIZE", "0")),
+        "5000": int(os.getenv("TV_MIN_SIZE", "104857600")),
+        "6000": int(os.getenv("XXX_MIN_SIZE", "104857600")),
         "7000": int(os.getenv("BOOKS_MIN_SIZE", os.getenv("OTHER_MIN_SIZE", "0"))),
     }
     return env_map

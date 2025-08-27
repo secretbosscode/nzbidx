@@ -113,6 +113,8 @@ def test_same_title_different_groups(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         config, "NNTP_GROUPS", ["alt.movies", "alt.music"], raising=False
     )
+    monkeypatch.setitem(config.CATEGORY_MIN_SIZES, "2000", 0)
+    monkeypatch.setattr(config, "ALLOWED_MOVIE_EXTENSIONS", None, raising=False)
     monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
     monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
     monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
