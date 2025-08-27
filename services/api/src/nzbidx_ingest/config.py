@@ -123,3 +123,40 @@ VALIDATE_SEGMENTS: bool = os.getenv("VALIDATE_SEGMENTS", "").lower() in {
     "true",
     "yes",
 }
+
+# Allowed video file extensions per category. Comma separated environment
+# variables override the defaults. The same default set applies to movies,
+# TV and adult releases.
+_DEFAULT_ALLOWED_EXTENSIONS = {
+    "mkv",
+    "mp4",
+    "mov",
+    "m4v",
+    "mpg",
+    "mpeg",
+    "avi",
+    "flv",
+    "webm",
+    "wmv",
+    "vob",
+    "evo",
+    "iso",
+    "m2ts",
+    "ts",
+}
+
+
+def _load_allowed_extensions(env_var: str) -> set[str]:
+    env = os.getenv(env_var)
+    if env:
+        return {ext.strip().lower() for ext in env.split(",") if ext.strip()}
+    return set(_DEFAULT_ALLOWED_EXTENSIONS)
+
+
+ALLOWED_MOVIE_EXTENSIONS: set[str] = _load_allowed_extensions(
+    "ALLOWED_MOVIE_EXTENSIONS"
+)
+ALLOWED_TV_EXTENSIONS: set[str] = _load_allowed_extensions("ALLOWED_TV_EXTENSIONS")
+ALLOWED_ADULT_EXTENSIONS: set[str] = _load_allowed_extensions(
+    "ALLOWED_ADULT_EXTENSIONS"
+)
