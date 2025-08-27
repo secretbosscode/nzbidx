@@ -65,3 +65,10 @@ Whisparr uses the same Newznab category IDs when configuring an indexer. Add nzb
 
 You can also include non-adult categories such as `2000` (Movies), `5000` (TV), `3000` (Audio), or `7020` (EBook) if you want Whisparr to use those.
 
+## Default Minimum Sizes
+
+The ingest worker skips small releases for some categories. Movies, TV, and
+adult (XXX) categories default to a 100 MB minimum size. Override or disable
+these floors via the `MOVIES_MIN_SIZE`, `TV_MIN_SIZE`, and `XXX_MIN_SIZE`
+environment variables.
+

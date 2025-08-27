@@ -111,6 +111,9 @@ faster serializer once compatible.
 | `ALLOWED_MOVIE_EXTENSIONS` | Comma-separated video extensions allowed for movie releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
 | `ALLOWED_TV_EXTENSIONS` | Comma-separated video extensions allowed for TV releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
 | `ALLOWED_ADULT_EXTENSIONS` | Comma-separated video extensions allowed for adult releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
+| `MOVIES_MIN_SIZE` | Minimum size in bytes for movie releases | `104857600` |
+| `TV_MIN_SIZE` | Minimum size in bytes for TV releases | `104857600` |
+| `XXX_MIN_SIZE` | Minimum size in bytes for adult releases | `104857600` |
 
 > **Note**: To avoid premature API timeouts during NZB generation, ensure
 > `NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT`.
@@ -131,6 +134,10 @@ necessary before adding them—defaults cover most cases.
 minimum byte thresholds. Patterns are comma separated in the form
 `pattern=bytes`. Wrap a pattern in `/` characters to treat it as a regular
 expression; otherwise an exact match on the normalized title is used.
+
+Movies, TV, and adult releases enforce a 100 MB minimum size by default. Set
+`MOVIES_MIN_SIZE`, `TV_MIN_SIZE`, or `XXX_MIN_SIZE` to override (or `0` to
+disable) these thresholds.
 
 ```
 RELEASE_MIN_SIZES="tiny.release=1048576,/\\.sample$/=5242880"
