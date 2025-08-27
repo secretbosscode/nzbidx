@@ -30,6 +30,10 @@ Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper schedules `VACUUM (ANALYZE)`, `ANALYZE`,
 and `REINDEX` jobs via APScheduler.
 
+When adjusting the allowed file-type extensions, remove outdated rows:
+
+    make prune-filetypes
+
 ## Database Initialization
 
 Seed a fresh PostgreSQL instance before starting ingestion. Apply the schema

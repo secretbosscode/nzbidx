@@ -36,6 +36,7 @@ from .db_migrations import (
     migrate_release_adult_partitions,
     create_release_posted_at_index,
 )
+from .sql import sql_placeholder
 from nzbidx_migrations import apply_sync
 
 logger = logging.getLogger(__name__)
@@ -199,6 +200,68 @@ ADULT_KEYWORDS = tuple(
     if k.strip()
 )
 ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
+
+
+def _allowed_extensions() -> set[str]:
+    """Return the union of allowed file extensions from the environment."""
+    allowed: set[str] = set()
+    for key, value in os.environ.items():
+        if key.startswith("FILE_EXTENSIONS_") and value:
+            parts = [p.strip().lower() for p in value.split(",") if p.strip()]
+            allowed.update(parts)
+    return allowed
+
+
+def prune_disallowed_filetypes(
+    conn: Any | None = None, batch_size: int | None = None
+) -> int:
+    """Delete releases whose ``extension`` is not in the allowed list.
+
+    Returns the total number of rows removed. When ``conn`` is ``None`` a new
+    connection is established via :func:`connect_db`.
+    """
+
+    allowed = _allowed_extensions()
+    if not allowed:
+        logger.info("prune_filetypes_no_allowlist")
+        return 0
+    if conn is None:
+        conn = connect_db()
+    bs = batch_size or int(os.getenv("PRUNE_BATCH_SIZE", "1000"))
+    placeholder = sql_placeholder(conn)
+    total = 0
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT tablename FROM pg_tables WHERE tablename LIKE 'release_adult_%'"
+        )
+        tables = ["release"] + [row[0] for row in cur.fetchall()]
+    for table in tables:
+        while True:
+            placeholders = ",".join([placeholder] * len(allowed))
+            query = (
+                f"DELETE FROM {table} "
+                f"WHERE ctid IN ("
+                f"SELECT ctid FROM {table} "
+                f"WHERE extension IS NOT NULL AND LOWER(extension) NOT IN ({placeholders}) "
+                f"LIMIT {placeholder})"
+            )
+            with conn.cursor() as cur:
+                cur.execute(query, (*allowed, bs))
+                deleted = cur.rowcount
+            conn.commit()
+            total += deleted
+            logger.info(
+                "prune_filetypes_batch",
+                extra={
+                    "event": "prune_filetypes_batch",
+                    "table": table,
+                    "deleted": deleted,
+                },
+            )
+            if deleted < bs:
+                break
+    return total
+
 
 # Precompiled regular expression for matching TV episode identifiers like "S01E01".
 TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
