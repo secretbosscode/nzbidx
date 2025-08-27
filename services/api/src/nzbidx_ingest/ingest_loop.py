@@ -20,7 +20,12 @@ from .config import (
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
-from .parsers import normalize_subject, detect_language, extract_segment_number
+from .parsers import (
+    normalize_subject,
+    detect_language,
+    extract_segment_number,
+    extract_file_extension,
+)
 from .segment_schema import validate_segment_schema
 from .main import (
     insert_release,
@@ -179,6 +184,20 @@ def _process_groups(
             dedupe_key = f"{norm_title}:{day_bucket}" if day_bucket else norm_title
             language = detect_language(subject) or "und"
             category = _infer_category(subject, str(group)) or CATEGORY_MAP["other"]
+            ext = extract_file_extension(subject)
+            allowed: set[str] | None = None
+            try:
+                cat_int = int(category)
+                if 2000 <= cat_int < 3000:
+                    allowed = config.ALLOWED_MOVIE_EXTENSIONS
+                elif 5000 <= cat_int < 6000:
+                    allowed = config.ALLOWED_TV_EXTENSIONS
+                elif 6000 <= cat_int < 7000:
+                    allowed = config.ALLOWED_ADULT_EXTENSIONS
+            except Exception:
+                allowed = None
+            if allowed is not None and (not ext or ext not in allowed):
+                continue
             tags = tags or []
             existing = releases.get(dedupe_key)
             if existing:
