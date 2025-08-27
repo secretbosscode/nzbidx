@@ -125,68 +125,88 @@ VALIDATE_SEGMENTS: bool = os.getenv("VALIDATE_SEGMENTS", "").lower() in {
 }
 
 
-MB = 1024 * 1024
-_DEFAULT_MIN_MB = 50
-_DEFAULT_MAX_MB = 100 * 1024
+def _load_category_min_sizes() -> dict[str, int]:
+    """Return per-category minimum size thresholds from the environment.
+
+    Values are configured via ``<CATEGORY>_MIN_SIZE`` variables where
+    ``CATEGORY`` is the upper-case Newznab style label (e.g. ``MOVIES``).
+    Only a handful of top level categories are supported; unspecified values
+    default to ``0`` which disables filtering for that category.
+    """
+
+    env_map = {
+        "1000": int(os.getenv("CONSOLE_MIN_SIZE", "0")),
+        "2000": int(os.getenv("MOVIES_MIN_SIZE", "0")),
+        "3000": int(os.getenv("AUDIO_MIN_SIZE", "0")),
+        "4000": int(os.getenv("PC_MIN_SIZE", "0")),
+        "5000": int(os.getenv("TV_MIN_SIZE", "0")),
+        "6000": int(os.getenv("XXX_MIN_SIZE", "0")),
+        "7000": int(
+            os.getenv("BOOKS_MIN_SIZE", os.getenv("OTHER_MIN_SIZE", "0"))
+        ),
+    }
+    return env_map
 
 
-def _size_range(
-    prefix: str, default_min: int = _DEFAULT_MIN_MB, default_max: int = _DEFAULT_MAX_MB
-) -> tuple[int, int]:
-    """Return ``(min_bytes, max_bytes)`` for the given category prefix."""
-
-    min_mb = int(os.getenv(f"{prefix}_MIN_SIZE_MB", str(default_min)))
-    max_mb = int(os.getenv(f"{prefix}_MAX_SIZE_MB", str(default_max)))
-    return min_mb * MB, max_mb * MB
+CATEGORY_MIN_SIZES: dict[str, int] = _load_category_min_sizes()
 
 
-MOVIE_SIZE_RANGE = _size_range("MOVIE")
-TV_SIZE_RANGE = _size_range("TV")
-XXX_SIZE_RANGE = _size_range("XXX")
+def _parse_release_min_sizes() -> tuple[dict[str, int], list[tuple[re.Pattern[str], int]]]:
+    """Parse ``RELEASE_MIN_SIZES`` into exact and regex mappings.
 
-from .main import CATEGORY_MAP  # noqa: E402
+    The environment variable accepts comma separated ``pattern=size`` pairs. A
+    pattern wrapped in forward slashes is treated as a regular expression;
+    otherwise an exact, normalized title match is used.
+    """
 
-MOVIE_CATEGORIES = {
-    CATEGORY_MAP["movies"],
-    CATEGORY_MAP["movies_foreign"],
-    CATEGORY_MAP["movies_other"],
-    CATEGORY_MAP["movies_sd"],
-    CATEGORY_MAP["movies_hd"],
-    CATEGORY_MAP["movies_bluray"],
-    CATEGORY_MAP["movies_3d"],
-}
-
-TV_CATEGORIES = {
-    CATEGORY_MAP["tv"],
-    CATEGORY_MAP["tv_foreign"],
-    CATEGORY_MAP["tv_sd"],
-    CATEGORY_MAP["tv_hd"],
-    CATEGORY_MAP["tv_other"],
-    CATEGORY_MAP["tv_sport"],
-}
-
-XXX_CATEGORIES = {
-    CATEGORY_MAP["xxx"],
-    CATEGORY_MAP["xxx_dvd"],
-    CATEGORY_MAP["xxx_wmv"],
-    CATEGORY_MAP["xxx_xvid"],
-    CATEGORY_MAP["xxx_x264"],
-    CATEGORY_MAP["xxx_uhd"],
-    CATEGORY_MAP["xxx_pack"],
-    CATEGORY_MAP["xxx_imageset"],
-    CATEGORY_MAP["xxx_other"],
-    CATEGORY_MAP["xxx_sd"],
-    CATEGORY_MAP["xxx_webdl"],
-}
+    raw = os.getenv("RELEASE_MIN_SIZES", "").strip()
+    exact: dict[str, int] = {}
+    regex: list[tuple[re.Pattern[str], int]] = []
+    if not raw:
+        return exact, regex
+    for item in raw.split(","):
+        if not item.strip():
+            continue
+        try:
+            pattern, size_str = item.split("=", 1)
+            size = int(size_str.strip())
+        except ValueError:
+            logger.warning("invalid RELEASE_MIN_SIZES entry: %r", item)
+            continue
+        pattern = pattern.strip()
+        if pattern.startswith("/") and pattern.endswith("/"):
+            try:
+                regex.append((re.compile(pattern[1:-1]), size))
+            except re.error:
+                logger.warning("invalid RELEASE_MIN_SIZES regex: %s", pattern)
+        else:
+            exact[pattern] = size
+    return exact, regex
 
 
-def category_size_range(category: str) -> tuple[int, int] | None:
-    """Return the configured size range for a category code."""
+RELEASE_MIN_EXACT, RELEASE_MIN_REGEX = _parse_release_min_sizes()
 
-    if category in MOVIE_CATEGORIES:
-        return MOVIE_SIZE_RANGE
-    if category in TV_CATEGORIES:
-        return TV_SIZE_RANGE
-    if category in XXX_CATEGORIES:
-        return XXX_SIZE_RANGE
-    return None
+
+def min_size_for_release(norm_title: str, category: str) -> int:
+    """Return the minimum size threshold for ``norm_title`` and ``category``.
+
+    ``category`` should be a numeric category ID string. Overrides defined via
+    ``RELEASE_MIN_SIZES`` take precedence; otherwise the base category's
+    configured default is used.
+    """
+
+    override = RELEASE_MIN_EXACT.get(norm_title)
+    if override is None:
+        for pattern, size in RELEASE_MIN_REGEX:
+            if pattern.search(norm_title):
+                override = size
+                break
+    if override is not None:
+        return override
+
+    try:
+        base_cat = str(int(category) // 1000 * 1000)
+    except Exception:
+        base_cat = "7000"  # fall back to "other"
+    return CATEGORY_MIN_SIZES.get(base_cat, 0)
+

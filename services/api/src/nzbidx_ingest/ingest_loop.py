@@ -16,6 +16,7 @@ from .config import (
     INGEST_POLL_MAX_SECONDS,
     INGEST_SLEEP_MS,
     INGEST_DB_LATENCY_MS,
+    min_size_for_release,
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
@@ -92,11 +93,18 @@ def _process_groups(
     for group in groups:
         last = cursors.get_cursor(group) or 0
         start = last + 1
-        _resp, _count, _low, high_s, _name = client.group(group)
-        try:
-            high = int(high_s)
-        except Exception:
-            high = 0
+        high = 0
+        if hasattr(client, "group"):
+            try:
+                _resp, _count, _low, high_s, _name = client.group(group)
+                high = int(high_s)
+            except Exception:
+                high = 0
+        else:
+            try:
+                high = int(client.high_water_mark(group))
+            except Exception:
+                high = 0
         remaining = max(high - last, 0)
         if remaining <= 0:
             headers: list[dict[str, object]] = []
@@ -237,85 +245,72 @@ def _process_groups(
         part_counts: dict[str, int] = {}
         has_parts_flags: dict[str, bool] = {}
         if db is not None:
-            try:
-                cur = db.cursor()
-                placeholder = (
-                    "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
-                )
-                for title, segs in parts.items():
-                    if not segs:
-                        continue
+            cur = db.cursor()
+            placeholder = (
+                "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
+            )
+            for title, segs in parts.items():
+                if not segs:
+                    continue
+                try:
                     cur.execute(
                         f"SELECT segments FROM release WHERE norm_title = {placeholder}",
                         (title,),
                     )
                     row = cur.fetchone()
-                    existing_segments = []
-                    if row:
-                        try:
-                            existing_segments = json.loads(row[0] or "[]")
-                        except Exception:
-                            existing_segments = []
-                    validate_segment_schema(existing_segments)
+                except Exception:
+                    row = None
+                existing_segments = []
+                if row:
+                    try:
+                        existing_segments = json.loads(row[0] or "[]")
+                    except Exception:
+                        existing_segments = []
+                validate_segment_schema(existing_segments)
 
-                    # Deduplicate newly fetched segments by message-id before merging.
-                    deduped: list[dict[str, int | str]] = []
-                    seen_ids: set[str] = set()
-                    for n, m, g, s in segs:
-                        if m in seen_ids:
-                            continue
-                        seen_ids.add(m)
-                        deduped.append(
-                            {"number": n, "message_id": m, "group": g, "size": s}
-                        )
-
-                    existing_map = {seg["message_id"]: seg for seg in existing_segments}
-                    for seg in deduped:
-                        message_id = seg["message_id"]
-                        existing_map.setdefault(message_id, seg)
-                    combined_segments = list(existing_map.values())
-                    validate_segment_schema(combined_segments)
-                    total_size = sum(seg["size"] for seg in combined_segments)
-                    release_info = releases.get(title)
-                    release_category = (
-                        release_info[1] if release_info else CATEGORY_MAP["other"]
+                # Deduplicate newly fetched segments by message-id before merging.
+                deduped: list[dict[str, int | str]] = []
+                seen_ids: set[str] = set()
+                for n, m, g, s in segs:
+                    if m in seen_ids:
+                        continue
+                    seen_ids.add(m)
+                    deduped.append(
+                        {"number": n, "message_id": m, "group": g, "size": s}
                     )
-                    size_range = config.category_size_range(release_category)
-                    if size_range:
-                        min_bytes, max_bytes = size_range
-                        if total_size < min_bytes or total_size > max_bytes:
-                            logger.debug(
-                                "release_size_filtered",
-                                extra={
-                                    "title": title,
-                                    "category": release_category,
-                                    "size_bytes": total_size,
-                                    "min_bytes": min_bytes,
-                                    "max_bytes": max_bytes,
-                                },
-                            )
-                            if title in inserted:
-                                cur.execute(
-                                    f"DELETE FROM release WHERE norm_title = {placeholder}",
-                                    (title,),
-                                )
-                                inserted.remove(title)
-                                metrics["inserted"] -= 1
-                            continue
-                    part_counts[title] = len(combined_segments)
-                    has_parts = bool(combined_segments)
+
+                existing_map = {seg["message_id"]: seg for seg in existing_segments}
+                for seg in deduped:
+                    message_id = seg["message_id"]
+                    existing_map.setdefault(message_id, seg)
+                combined_segments = list(existing_map.values())
+                validate_segment_schema(combined_segments)
+                total_size = sum(seg["size"] for seg in combined_segments)
+                part_counts[title] = len(combined_segments)
+                has_parts = bool(combined_segments)
+                cat = releases.get(title)
+                category_id = str(cat[1]) if cat else CATEGORY_MAP["other"]
+                min_bytes = min_size_for_release(title, category_id)
+                if total_size < min_bytes:
                     cur.execute(
-                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
-                        (
-                            json.dumps(combined_segments).decode(),
-                            has_parts,
-                            part_counts[title],
-                            total_size,
-                            title,
-                        ),
+                        f"DELETE FROM release WHERE norm_title = {placeholder} AND category_id = {placeholder}",
+                        (title, int(category_id)),
                     )
-                    has_parts_flags[title] = has_parts
-                    changed.add(title)
+                    inserted.discard(title)
+                    continue
+                cur.execute(
+                    f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                    (
+                        json.dumps(combined_segments).decode(),
+                        has_parts,
+                        part_counts[title],
+                        total_size,
+                        title,
+                    ),
+                )
+                has_parts_flags[title] = has_parts
+                changed.add(title)
+            try:
                 db.commit()
             except Exception:
                 pass
@@ -390,10 +385,12 @@ def _process_groups(
     return delay
 
 
-def run_once() -> float:
+def run_once(client: NNTPClient | None = None) -> float:
     """Process a single batch for each configured NNTP group.
 
-    Returns the suggested delay before the next poll.
+    ``client`` may be provided for tests; when ``None`` a new client is created
+    using configured settings. Returns the suggested delay before the next
+    poll.
     """
     global last_run, last_run_wall
     groups = config.NNTP_GROUPS or config._load_groups()
@@ -417,20 +414,25 @@ def run_once() -> float:
     config.NNTP_GROUPS = groups
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
-    client = NNTPClient(config.NNTP_SETTINGS)
+    created_client = False
+    if client is None:
+        client = NNTPClient(config.NNTP_SETTINGS)
+        created_client = True
     db = None
     try:
-        client.connect()
+        if created_client:
+            client.connect()
         db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
         last_run = time.monotonic()
         last_run_wall = time.time()
         return delay
     finally:
-        try:
-            client.quit()
-        except Exception:
-            pass
+        if created_client:
+            try:
+                client.quit()
+            except Exception:
+                pass
         if db is not None:
             try:
                 db.close()
