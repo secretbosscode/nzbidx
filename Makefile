@@ -1,4 +1,4 @@
-.PHONY: build up down smoke logs prune prune-filetypes test fmt lint release
+.PHONY: build up down smoke logs prune prune-sizes test fmt lint release
 
 build:
 	docker compose build
@@ -18,8 +18,8 @@ logs:
 prune:
         scripts/prune_branches.sh
 
-prune-filetypes:
-	python scripts/prune_disallowed_filetypes.py
+prune-sizes:
+        python scripts/prune_disallowed_sizes.py
 
 test:
 	PYTHONPATH=. pytest
