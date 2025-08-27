@@ -51,6 +51,7 @@ PART_SIZE_RE = re.compile(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]")
 FILLER_RE = re.compile(r"\b(?:repost|sample)\b", re.IGNORECASE)
 PART_RE = re.compile(r"\bpart\s*\d+\b", re.IGNORECASE)
 ARCHIVE_RE = re.compile(r"\b(rar|par2|zip)\b", re.IGNORECASE)
+_FILE_EXT_RE = re.compile(r"\.([A-Za-z0-9]{2,4})\b")
 
 
 def extract_tags(subject: str) -> list[str]:
@@ -67,6 +68,14 @@ def extract_tags(subject: str) -> list[str]:
             if tag:
                 tags.append(tag)
     return tags
+
+
+def extract_file_extension(subject: str) -> str | None:
+    """Return the lowercased file extension from ``subject`` if present."""
+    match = _FILE_EXT_RE.search(subject)
+    if match:
+        return match.group(1).lower()
+    return None
 
 
 _SEGMENT_RE = re.compile(r"\((\d+)/")
