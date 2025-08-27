@@ -276,6 +276,32 @@ def _process_groups(
                     combined_segments = list(existing_map.values())
                     validate_segment_schema(combined_segments)
                     total_size = sum(seg["size"] for seg in combined_segments)
+                    release_info = releases.get(title)
+                    release_category = (
+                        release_info[1] if release_info else CATEGORY_MAP["other"]
+                    )
+                    size_range = config.category_size_range(release_category)
+                    if size_range:
+                        min_bytes, max_bytes = size_range
+                        if total_size < min_bytes or total_size > max_bytes:
+                            logger.debug(
+                                "release_size_filtered",
+                                extra={
+                                    "title": title,
+                                    "category": release_category,
+                                    "size_bytes": total_size,
+                                    "min_bytes": min_bytes,
+                                    "max_bytes": max_bytes,
+                                },
+                            )
+                            if title in inserted:
+                                cur.execute(
+                                    f"DELETE FROM release WHERE norm_title = {placeholder}",
+                                    (title,),
+                                )
+                                inserted.remove(title)
+                                metrics["inserted"] -= 1
+                            continue
                     part_counts[title] = len(combined_segments)
                     has_parts = bool(combined_segments)
                     cur.execute(

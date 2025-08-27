@@ -107,18 +107,6 @@ INGEST_BATCH_MAX: int = int(os.getenv("INGEST_BATCH_MAX", str(INGEST_BATCH)))
 INGEST_POLL_MIN_SECONDS: int = int(os.getenv("INGEST_POLL_MIN_SECONDS", "5"))
 INGEST_POLL_MAX_SECONDS: int = int(os.getenv("INGEST_POLL_MAX_SECONDS", "60"))
 DETECT_LANGUAGE: int = int(os.getenv("DETECT_LANGUAGE", "1"))
-
-AUDIO_EXTENSIONS: set[str] = {
-    ext.strip().upper()
-    for ext in os.getenv("AUDIO_EXTENSIONS", "FLAC,MP3,AAC,M4A,WAV,OGG,WMA").split(",")
-    if ext.strip()
-}
-
-BOOK_EXTENSIONS: set[str] = {
-    ext.strip().upper()
-    for ext in os.getenv("BOOK_EXTENSIONS", "EPUB,MOBI,PDF,AZW3,CBZ,CBR").split(",")
-    if ext.strip()
-}
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
 # Base delay applied when database latency exceeds thresholds. Set to ``0`` to
@@ -136,39 +124,69 @@ VALIDATE_SEGMENTS: bool = os.getenv("VALIDATE_SEGMENTS", "").lower() in {
     "yes",
 }
 
-# Allowed video file extensions per category. Comma separated environment
-# variables override the defaults. The same default set applies to movies,
-# TV and adult releases.
-_DEFAULT_ALLOWED_EXTENSIONS = {
-    "mkv",
-    "mp4",
-    "mov",
-    "m4v",
-    "mpg",
-    "mpeg",
-    "avi",
-    "flv",
-    "webm",
-    "wmv",
-    "vob",
-    "evo",
-    "iso",
-    "m2ts",
-    "ts",
+
+MB = 1024 * 1024
+_DEFAULT_MIN_MB = 50
+_DEFAULT_MAX_MB = 100 * 1024
+
+
+def _size_range(
+    prefix: str, default_min: int = _DEFAULT_MIN_MB, default_max: int = _DEFAULT_MAX_MB
+) -> tuple[int, int]:
+    """Return ``(min_bytes, max_bytes)`` for the given category prefix."""
+
+    min_mb = int(os.getenv(f"{prefix}_MIN_SIZE_MB", str(default_min)))
+    max_mb = int(os.getenv(f"{prefix}_MAX_SIZE_MB", str(default_max)))
+    return min_mb * MB, max_mb * MB
+
+
+MOVIE_SIZE_RANGE = _size_range("MOVIE")
+TV_SIZE_RANGE = _size_range("TV")
+XXX_SIZE_RANGE = _size_range("XXX")
+
+from .main import CATEGORY_MAP  # noqa: E402
+
+MOVIE_CATEGORIES = {
+    CATEGORY_MAP["movies"],
+    CATEGORY_MAP["movies_foreign"],
+    CATEGORY_MAP["movies_other"],
+    CATEGORY_MAP["movies_sd"],
+    CATEGORY_MAP["movies_hd"],
+    CATEGORY_MAP["movies_bluray"],
+    CATEGORY_MAP["movies_3d"],
+}
+
+TV_CATEGORIES = {
+    CATEGORY_MAP["tv"],
+    CATEGORY_MAP["tv_foreign"],
+    CATEGORY_MAP["tv_sd"],
+    CATEGORY_MAP["tv_hd"],
+    CATEGORY_MAP["tv_other"],
+    CATEGORY_MAP["tv_sport"],
+}
+
+XXX_CATEGORIES = {
+    CATEGORY_MAP["xxx"],
+    CATEGORY_MAP["xxx_dvd"],
+    CATEGORY_MAP["xxx_wmv"],
+    CATEGORY_MAP["xxx_xvid"],
+    CATEGORY_MAP["xxx_x264"],
+    CATEGORY_MAP["xxx_uhd"],
+    CATEGORY_MAP["xxx_pack"],
+    CATEGORY_MAP["xxx_imageset"],
+    CATEGORY_MAP["xxx_other"],
+    CATEGORY_MAP["xxx_sd"],
+    CATEGORY_MAP["xxx_webdl"],
 }
 
 
-def _load_allowed_extensions(env_var: str) -> set[str]:
-    env = os.getenv(env_var)
-    if env:
-        return {ext.strip().lower() for ext in env.split(",") if ext.strip()}
-    return set(_DEFAULT_ALLOWED_EXTENSIONS)
+def category_size_range(category: str) -> tuple[int, int] | None:
+    """Return the configured size range for a category code."""
 
-
-ALLOWED_MOVIE_EXTENSIONS: set[str] = _load_allowed_extensions(
-    "ALLOWED_MOVIE_EXTENSIONS"
-)
-ALLOWED_TV_EXTENSIONS: set[str] = _load_allowed_extensions("ALLOWED_TV_EXTENSIONS")
-ALLOWED_ADULT_EXTENSIONS: set[str] = _load_allowed_extensions(
-    "ALLOWED_ADULT_EXTENSIONS"
-)
+    if category in MOVIE_CATEGORIES:
+        return MOVIE_SIZE_RANGE
+    if category in TV_CATEGORIES:
+        return TV_SIZE_RANGE
+    if category in XXX_CATEGORIES:
+        return XXX_SIZE_RANGE
+    return None

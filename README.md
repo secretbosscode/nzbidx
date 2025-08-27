@@ -30,10 +30,6 @@ Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper schedules `VACUUM (ANALYZE)`, `ANALYZE`,
 and `REINDEX` jobs via APScheduler.
 
-When adjusting the allowed file-type extensions, remove outdated rows:
-
-    make prune-filetypes
-
 ## Database Initialization
 
 Seed a fresh PostgreSQL instance before starting ingestion. Apply the schema
@@ -107,9 +103,12 @@ faster serializer once compatible.
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
-| `ALLOWED_MOVIE_EXTENSIONS` | Comma-separated video extensions allowed for movie releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
-| `ALLOWED_TV_EXTENSIONS` | Comma-separated video extensions allowed for TV releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
-| `ALLOWED_ADULT_EXTENSIONS` | Comma-separated video extensions allowed for adult releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
+| `MOVIE_MIN_SIZE_MB` | Minimum size in megabytes for movie releases | `50` |
+| `MOVIE_MAX_SIZE_MB` | Maximum size in megabytes for movie releases | `102400` |
+| `TV_MIN_SIZE_MB` | Minimum size in megabytes for TV releases | `50` |
+| `TV_MAX_SIZE_MB` | Maximum size in megabytes for TV releases | `102400` |
+| `XXX_MIN_SIZE_MB` | Minimum size in megabytes for adult releases | `50` |
+| `XXX_MAX_SIZE_MB` | Maximum size in megabytes for adult releases | `102400` |
 
 > **Note**: To avoid premature API timeouts during NZB generation, ensure
 > `NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT`.
