@@ -119,6 +119,11 @@ IDs such as `MOVIES_CAT_ID`). Review the configuration modules in
 `services/api` for the full list. Consider whether extra variables are
 necessary before adding them—defaults cover most cases.
 
+If `MIN_RELEASE_BYTES` or `MAX_RELEASE_BYTES` are adjusted, prune existing
+entries outside the new range to keep the database consistent:
+
+    docker compose exec nzbidx python scripts/prune_disallowed_sizes.py
+
 
     docker compose exec nzbidx python scripts/backfill_release_parts.py
 
