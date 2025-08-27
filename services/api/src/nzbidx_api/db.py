@@ -22,7 +22,6 @@ from typing import Any, Optional
 
 from . import migrations as migrations_pkg
 
-from nzbidx_ingest.db_migrations import migrate_release_adult_partitions
 from nzbidx_migrations import apply_async, _split_sql
 
 # Optional SQLAlchemy dependency
@@ -157,32 +156,6 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                     )
                 )
             )
-            if not partitioned:
-                try:
-                    raw = engine.sync_engine.raw_connection()
-                    try:
-                        migrate_release_adult_partitions(raw)
-                    finally:  # pragma: no cover - connection cleanup
-                        try:
-                            raw.close()
-                        except DB_CLOSE_ERRORS:
-                            pass
-                    partitioned = bool(
-                        await conn.scalar(
-                            text(
-                                "SELECT EXISTS ("
-                                "SELECT 1 FROM pg_partitioned_table "
-                                "WHERE partrelid = to_regclass('release_adult')"
-                                ")"
-                            )
-                        )
-                    )
-                except Exception as exc:  # pragma: no cover - best effort
-                    logger.warning(
-                        "release_adult_migration_failed",
-                        exc_info=True,
-                        extra={"error": str(exc)},
-                    )
         except Exception:  # pragma: no cover - system catalogs missing
             partitioned = False
 
