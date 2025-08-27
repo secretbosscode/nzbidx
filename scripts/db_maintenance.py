@@ -16,10 +16,10 @@ from prune_disallowed_sizes import prune_sizes
 
 async def main() -> None:
     scheduler = AsyncIOScheduler()
-    
+
     async def prune_disallowed() -> None:
         await asyncio.to_thread(prune_sizes)
-    
+
     # Run VACUUM daily at 03:00
     scheduler.add_job(vacuum_analyze, "cron", hour=3)
     # Refresh planner statistics daily at 02:00
