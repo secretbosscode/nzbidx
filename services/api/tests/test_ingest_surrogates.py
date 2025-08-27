@@ -50,13 +50,17 @@ def test_ingest_handles_surrogates(monkeypatch, tmp_path) -> None:
         return conn
 
     monkeypatch.setattr(loop, "connect_db", _connect)
-    monkeypatch.setattr(loop, "insert_release", lambda _db, releases: {r[0] for r in releases})
+    monkeypatch.setattr(
+        loop, "insert_release", lambda _db, releases: {r[0] for r in releases}
+    )
 
     # Should not raise despite surrogate characters
     loop.run_once()
 
     with sqlite3.connect(db_path) as check:
-        row = check.execute("SELECT segments FROM release WHERE norm_title = 'example'").fetchone()
+        row = check.execute(
+            "SELECT segments FROM release WHERE norm_title = 'example'"
+        ).fetchone()
     assert row is not None
     segments = orjson.loads(row[0])
     assert segments == [
