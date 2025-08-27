@@ -21,19 +21,27 @@ CREATE TABLE IF NOT EXISTS release (
 
 CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
     FOR VALUES FROM (2000) TO (3000);
+CREATE INDEX IF NOT EXISTS release_movies_posted_at_idx ON release_movies (posted_at);
 CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
     FOR VALUES FROM (3000) TO (4000);
+CREATE INDEX IF NOT EXISTS release_music_posted_at_idx ON release_music (posted_at);
 CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
     FOR VALUES FROM (5000) TO (6000);
+CREATE INDEX IF NOT EXISTS release_tv_posted_at_idx ON release_tv (posted_at);
 CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
     FOR VALUES FROM (6000) TO (7000)
     PARTITION BY RANGE (posted_at);
+CREATE INDEX IF NOT EXISTS release_adult_posted_at_idx ON release_adult (posted_at);
 CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult
     FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE INDEX IF NOT EXISTS release_adult_2024_posted_at_idx ON release_adult_2024 (posted_at);
 CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT;
+CREATE INDEX IF NOT EXISTS release_adult_default_posted_at_idx ON release_adult_default (posted_at);
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
     FOR VALUES FROM (7000) TO (8000);
+CREATE INDEX IF NOT EXISTS release_books_posted_at_idx ON release_books (posted_at);
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
+CREATE INDEX IF NOT EXISTS release_other_posted_at_idx ON release_other (posted_at);
 
 DROP INDEX IF EXISTS release_embedding_idx;
 ALTER TABLE IF EXISTS release DROP COLUMN IF EXISTS embedding;
