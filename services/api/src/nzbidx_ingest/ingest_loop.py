@@ -79,6 +79,17 @@ class _AggregateMetrics:
         return summary
 
 
+def _clean_text(s: str) -> str:
+    """Return ``s`` with surrogate code points removed.
+
+    Surrogate code points cannot be encoded in UTF-8 and will raise
+    ``UnicodeEncodeError`` when encountered. Encoding with ``errors='ignore'``
+    and decoding back to ``str`` drops any such characters.
+    """
+
+    return s.encode("utf-8", errors="ignore").decode("utf-8")
+
+
 def _process_groups(
     client: NNTPClient,
     db: object,
@@ -164,13 +175,14 @@ def _process_groups(
             metrics["processed"] += 1
             size = int(header.get("bytes") or header.get(":bytes") or 0)
             current = idx
-            message_id = str(header.get("message-id") or "").strip()
+            message_id = _clean_text(str(header.get("message-id") or "")).strip()
             if size <= 0 and message_id:
                 size = client.body_size(message_id)
             if size <= 0:
                 continue
-            subject = str(header.get("subject", ""))
+            subject = _clean_text(str(header.get("subject", "")))
             norm_title, tags = normalize_subject(subject, with_tags=True)
+            norm_title = _clean_text(norm_title)
             posted = header.get("date")
             day_bucket = ""
             posted_at = None
@@ -228,7 +240,8 @@ def _process_groups(
                 )
             if message_id:
                 seg_num = extract_segment_number(subject)
-                parts[dedupe_key].append((seg_num, message_id.strip("<>"), group, size))
+                clean_id = _clean_text(message_id.strip("<>"))
+                parts[dedupe_key].append((seg_num, clean_id, group, size))
         db_latency = 0.0
         inserted: set[str] = set()
         if releases:
