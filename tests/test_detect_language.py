@@ -20,6 +20,21 @@ def test_detect_language_noisy_english():
     assert detect_language(noisy) == "en"
 
 
+def test_detect_language_enabled(monkeypatch):
+    monkeypatch.setenv("DETECT_LANGUAGE", "true")
+    import importlib
+    import nzbidx_ingest.config as config
+    import nzbidx_ingest.parsers as parsers
+
+    importlib.reload(config)
+    importlib.reload(parsers)
+    assert parsers.detect_language("this is a test") == "en"
+
+    monkeypatch.delenv("DETECT_LANGUAGE", raising=False)
+    importlib.reload(config)
+    importlib.reload(parsers)
+
+
 def test_detect_language_disabled(monkeypatch):
     monkeypatch.setenv("DETECT_LANGUAGE", "0")
     import importlib

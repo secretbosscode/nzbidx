@@ -106,7 +106,51 @@ INGEST_BATCH_MIN: int = int(os.getenv("INGEST_BATCH_MIN", "100"))
 INGEST_BATCH_MAX: int = int(os.getenv("INGEST_BATCH_MAX", str(INGEST_BATCH)))
 INGEST_POLL_MIN_SECONDS: int = int(os.getenv("INGEST_POLL_MIN_SECONDS", "5"))
 INGEST_POLL_MAX_SECONDS: int = int(os.getenv("INGEST_POLL_MAX_SECONDS", "60"))
-DETECT_LANGUAGE: int = int(os.getenv("DETECT_LANGUAGE", "1"))
+DETECT_LANGUAGE: bool = os.getenv("DETECT_LANGUAGE", "1").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+AUDIO_EXTENSIONS: list[str] = [
+    ext.strip().upper()
+    for ext in os.getenv(
+        "AUDIO_EXTENSIONS",
+        "FLAC,MP3,AAC,M4A,WAV,OGG,WMA",
+    ).split(",")
+    if ext.strip()
+]
+BOOK_EXTENSIONS: list[str] = [
+    ext.strip().upper()
+    for ext in os.getenv(
+        "BOOK_EXTENSIONS",
+        "EPUB,MOBI,PDF,AZW3,CBZ,CBR",
+    ).split(",")
+    if ext.strip()
+]
+ALLOWED_MOVIE_EXTENSIONS: list[str] = [
+    ext.strip().lower()
+    for ext in os.getenv(
+        "ALLOWED_MOVIE_EXTENSIONS",
+        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts",
+    ).split(",")
+    if ext.strip()
+]
+ALLOWED_TV_EXTENSIONS: list[str] = [
+    ext.strip().lower()
+    for ext in os.getenv(
+        "ALLOWED_TV_EXTENSIONS",
+        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts",
+    ).split(",")
+    if ext.strip()
+]
+ALLOWED_ADULT_EXTENSIONS: list[str] = [
+    ext.strip().lower()
+    for ext in os.getenv(
+        "ALLOWED_ADULT_EXTENSIONS",
+        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts",
+    ).split(",")
+    if ext.strip()
+]
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
 # Base delay applied when database latency exceeds thresholds. Set to ``0`` to
