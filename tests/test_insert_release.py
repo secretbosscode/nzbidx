@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import logging
+import types
 from nzbidx_ingest.main import insert_release, CATEGORY_MAP  # type: ignore
 
 
@@ -117,3 +119,76 @@ def test_insert_release_updates_matching_category() -> None:
         (int(CATEGORY_MAP["movies"]), None),
         (int(CATEGORY_MAP["audio"]), "2024-02-01T00:00:00+00:00"),
     ]
+
+
+def test_insert_release_skips_data_error(monkeypatch, caplog) -> None:
+    from nzbidx_ingest import main
+
+    class FakeDataError(Exception):
+        pass
+
+    monkeypatch.setattr(
+        main,
+        "psycopg",
+        types.SimpleNamespace(DataError=FakeDataError),
+    )
+
+    class DummyCursor:
+        def __init__(self, conn):
+            self.conn = conn
+            self._results = []
+
+        def execute(self, sql, params=None):
+            if sql.startswith("SELECT"):
+                self._results = []
+            else:
+                title = params[0]
+                if title == "bad":
+                    raise FakeDataError("bad")
+                self.conn.rows.append(title)
+            return self
+
+        def executemany(self, sql, rows):
+            for row in rows:
+                title = row[0]
+                if title == "bad":
+                    raise FakeDataError("bad")
+            for row in rows:
+                title = row[0]
+                self.conn.rows.append(title)
+            return self
+
+        def fetchall(self):
+            return []
+
+        def fetchone(self):
+            return None
+
+    class DummyConn:
+        def __init__(self):
+            self.rows: list[str] = []
+
+        def cursor(self):
+            return DummyCursor(self)
+
+        def commit(self) -> None:
+            return None
+
+        def rollback(self) -> None:
+            return None
+
+    DummyConn.__module__ = "psycopg"
+
+    conn = DummyConn()
+    releases = [
+        ("good", "cat", "en", [], "group", 100, None),
+        ("bad", "cat", "en", [], "group", 100, None),
+    ]
+    with caplog.at_level(logging.WARNING):
+        inserted = main.insert_release(conn, releases=releases)
+    assert inserted == {"good"}
+    assert conn.rows == ["good"]
+    assert any(
+        record.message == "insert_release_data_error" and record.norm_title == "bad"
+        for record in caplog.records
+    )
