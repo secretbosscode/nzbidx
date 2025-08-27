@@ -81,7 +81,23 @@ def _load_groups() -> List[str]:
     return groups
 
 
-NNTP_GROUPS: List[str] = _load_groups()
+NNTP_GROUPS: List[str] | None = None
+
+
+def get_nntp_groups() -> List[str]:
+    """Return configured NNTP groups loading them on first use."""
+
+    global NNTP_GROUPS
+    if NNTP_GROUPS is None:
+        NNTP_GROUPS = _load_groups()
+    return NNTP_GROUPS
+
+
+def set_nntp_groups(groups: List[str] | None) -> None:
+    """Set cached NNTP groups."""
+
+    global NNTP_GROUPS
+    NNTP_GROUPS = groups
 
 
 def _load_ignore_groups() -> List[str]:
