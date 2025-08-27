@@ -143,6 +143,7 @@ def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
         "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT"
     )
     conn.commit()
+    create_release_posted_at_index(conn)
 
     # Copy rows in batches to new partitioned table.
     while True:
