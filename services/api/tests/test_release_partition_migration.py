@@ -43,7 +43,9 @@ def test_release_partitions_migrate_by_date(monkeypatch):
         migrate_release_partitions_by_date(conn, name)
 
     for name in categories:
-        cur.execute("SELECT 1 FROM pg_class WHERE relname=%s", (f"release_{name}_2024",))
+        cur.execute(
+            "SELECT 1 FROM pg_class WHERE relname=%s", (f"release_{name}_2024",)
+        )
         assert cur.fetchone() is not None
 
     cur.close()
