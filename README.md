@@ -100,6 +100,7 @@ faster serializer once compatible.
 | `NNTP_GROUP_WILDCARD` | Pattern used when discovering groups | `alt.binaries.*` |
 | `NNTP_GROUP_LIMIT` | Maximum groups to enumerate when using wildcards | _(unlimited)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
+| `RELEASE_MIN_SIZES` | Comma separated `pattern=bytes` overrides for minimum release size (see below) | _(none)_ |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
 | `DETECT_LANGUAGE` | `1` enables automatic language detection (`0` disables for faster ingest) | `1` |
@@ -118,6 +119,23 @@ Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 IDs such as `MOVIES_CAT_ID`). Review the configuration modules in
 `services/api` for the full list. Consider whether extra variables are
 necessary before adding them—defaults cover most cases.
+
+`RELEASE_MIN_SIZES` maps normalized release titles or regular expressions to
+minimum byte thresholds. Patterns are comma separated in the form
+`pattern=bytes`. Wrap a pattern in `/` characters to treat it as a regular
+expression; otherwise an exact match on the normalized title is used.
+
+```
+RELEASE_MIN_SIZES="tiny.release=1048576,/\\.sample$/=5242880"
+```
+
+The ingest worker skips insertion when a release's combined segment size is
+below the resolved threshold. Changing these overrides does not retroactively
+prune existing rows—remove stale entries manually, for example:
+
+```
+DELETE FROM release WHERE norm_title='tiny.release';
+```
 
 
     docker compose exec nzbidx python scripts/backfill_release_parts.py

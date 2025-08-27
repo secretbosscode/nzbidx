@@ -147,3 +147,78 @@ def test_same_title_different_groups(monkeypatch, tmp_path) -> None:
         ("example", int(CATEGORY_MAP["movies"])),
         ("example", int(CATEGORY_MAP["audio"])),
     ]
+
+
+def test_release_min_size_override(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
+    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
+    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(config, "RELEASE_MIN_EXACT", {"example": 1000}, raising=False)
+    monkeypatch.setattr(config, "RELEASE_MIN_REGEX", [], raising=False)
+
+    class DummyClient:
+        def high_water_mark(self, group: str) -> int:
+            return 1
+
+        def xover(self, group: str, start: int, end: int):
+            return [
+                {"subject": "Example", ":bytes": "500", "message-id": "<1@a>"}
+            ]
+
+    client = DummyClient()
+    db_path = tmp_path / "db.sqlite"
+
+    def _connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, UNIQUE (norm_title, category_id))"
+        )
+        return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
+
+    loop.run_once(client)
+
+    with sqlite3.connect(db_path) as check:
+        row = check.execute("SELECT * FROM release").fetchone()
+    assert row is None
+
+
+def test_category_min_size_fallback(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.movies"], raising=False)
+    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
+    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(config, "RELEASE_MIN_EXACT", {}, raising=False)
+    monkeypatch.setattr(config, "RELEASE_MIN_REGEX", [], raising=False)
+    monkeypatch.setitem(config.CATEGORY_MIN_SIZES, "2000", 1000)
+
+    class DummyClient:
+        def high_water_mark(self, group: str) -> int:
+            return 1
+
+        def xover(self, group: str, start: int, end: int):
+            return [
+                {"subject": "Example", ":bytes": "500", "message-id": "<1@a>"}
+            ]
+
+    client = DummyClient()
+    db_path = tmp_path / "db.sqlite"
+
+    def _connect() -> sqlite3.Connection:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS release (norm_title TEXT, category TEXT, category_id INT, language TEXT, tags TEXT, source_group TEXT, size_bytes BIGINT, posted_at TIMESTAMPTZ, has_parts INT NOT NULL DEFAULT 0, part_count INT NOT NULL DEFAULT 0, UNIQUE (norm_title, category_id))"
+        )
+        return conn
+
+    monkeypatch.setattr(loop, "connect_db", _connect)
+
+    loop.run_once(client)
+
+    with sqlite3.connect(db_path) as check:
+        row = check.execute("SELECT * FROM release").fetchone()
+    assert row is None

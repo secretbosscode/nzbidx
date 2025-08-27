@@ -123,3 +123,90 @@ VALIDATE_SEGMENTS: bool = os.getenv("VALIDATE_SEGMENTS", "").lower() in {
     "true",
     "yes",
 }
+
+
+def _load_category_min_sizes() -> dict[str, int]:
+    """Return per-category minimum size thresholds from the environment.
+
+    Values are configured via ``<CATEGORY>_MIN_SIZE`` variables where
+    ``CATEGORY`` is the upper-case Newznab style label (e.g. ``MOVIES``).
+    Only a handful of top level categories are supported; unspecified values
+    default to ``0`` which disables filtering for that category.
+    """
+
+    env_map = {
+        "1000": int(os.getenv("CONSOLE_MIN_SIZE", "0")),
+        "2000": int(os.getenv("MOVIES_MIN_SIZE", "0")),
+        "3000": int(os.getenv("AUDIO_MIN_SIZE", "0")),
+        "4000": int(os.getenv("PC_MIN_SIZE", "0")),
+        "5000": int(os.getenv("TV_MIN_SIZE", "0")),
+        "6000": int(os.getenv("XXX_MIN_SIZE", "0")),
+        "7000": int(
+            os.getenv("BOOKS_MIN_SIZE", os.getenv("OTHER_MIN_SIZE", "0"))
+        ),
+    }
+    return env_map
+
+
+CATEGORY_MIN_SIZES: dict[str, int] = _load_category_min_sizes()
+
+
+def _parse_release_min_sizes() -> tuple[dict[str, int], list[tuple[re.Pattern[str], int]]]:
+    """Parse ``RELEASE_MIN_SIZES`` into exact and regex mappings.
+
+    The environment variable accepts comma separated ``pattern=size`` pairs. A
+    pattern wrapped in forward slashes is treated as a regular expression;
+    otherwise an exact, normalized title match is used.
+    """
+
+    raw = os.getenv("RELEASE_MIN_SIZES", "").strip()
+    exact: dict[str, int] = {}
+    regex: list[tuple[re.Pattern[str], int]] = []
+    if not raw:
+        return exact, regex
+    for item in raw.split(","):
+        if not item.strip():
+            continue
+        try:
+            pattern, size_str = item.split("=", 1)
+            size = int(size_str.strip())
+        except ValueError:
+            logger.warning("invalid RELEASE_MIN_SIZES entry: %r", item)
+            continue
+        pattern = pattern.strip()
+        if pattern.startswith("/") and pattern.endswith("/"):
+            try:
+                regex.append((re.compile(pattern[1:-1]), size))
+            except re.error:
+                logger.warning("invalid RELEASE_MIN_SIZES regex: %s", pattern)
+        else:
+            exact[pattern] = size
+    return exact, regex
+
+
+RELEASE_MIN_EXACT, RELEASE_MIN_REGEX = _parse_release_min_sizes()
+
+
+def min_size_for_release(norm_title: str, category: str) -> int:
+    """Return the minimum size threshold for ``norm_title`` and ``category``.
+
+    ``category`` should be a numeric category ID string. Overrides defined via
+    ``RELEASE_MIN_SIZES`` take precedence; otherwise the base category's
+    configured default is used.
+    """
+
+    override = RELEASE_MIN_EXACT.get(norm_title)
+    if override is None:
+        for pattern, size in RELEASE_MIN_REGEX:
+            if pattern.search(norm_title):
+                override = size
+                break
+    if override is not None:
+        return override
+
+    try:
+        base_cat = str(int(category) // 1000 * 1000)
+    except Exception:
+        base_cat = "7000"  # fall back to "other"
+    return CATEGORY_MIN_SIZES.get(base_cat, 0)
+
