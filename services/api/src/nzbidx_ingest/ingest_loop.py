@@ -85,11 +85,13 @@ class _AggregateMetrics:
 
 
 def _clean_text(s: str) -> str:
-    """Return ``s`` with surrogate code points removed.
+    """Return ``s`` with surrogate code points and NUL bytes removed.
 
     Surrogate code points cannot be encoded in UTF-8 and will raise
     ``UnicodeEncodeError`` when encountered. Encoding with ``errors='ignore'``
-    and decoding back to ``str`` drops any such characters.
+    and decoding back to ``str`` drops any such characters.  NUL bytes are
+    stripped separately since they can cause issues with some databases and
+    tools.
     """
 
     return s.replace("\x00", "").encode("utf-8", errors="ignore").decode("utf-8")
