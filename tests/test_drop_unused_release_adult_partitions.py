@@ -54,4 +54,3 @@ def test_drop_unused_release_adult_partitions(monkeypatch):
     drop_unused_release_adult_partitions(conn)
 
     assert conn.dropped == ["release_adult_drop"]
-
