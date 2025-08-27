@@ -30,7 +30,13 @@ CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
     PARTITION BY RANGE (posted_at);
 CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult
     FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE IF NOT EXISTS release_adult_2025 PARTITION OF release_adult
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
 CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT;
+CREATE INDEX IF NOT EXISTS release_adult_2024_posted_at_idx
+    ON ONLY release_adult_2024 (posted_at);
+CREATE INDEX IF NOT EXISTS release_adult_2025_posted_at_idx
+    ON ONLY release_adult_2025 (posted_at);
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
     FOR VALUES FROM (7000) TO (8000);
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
