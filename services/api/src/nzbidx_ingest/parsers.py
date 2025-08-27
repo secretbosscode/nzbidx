@@ -24,15 +24,18 @@ _URL_RE = re.compile(r"http\S+|www\.\S+", re.IGNORECASE)
 _NON_LETTER_RE = re.compile(r"[^A-Za-z\s]+")
 
 # Precompiled regular expressions for tag extraction and subject normalization.
+_AUDIO_FORMATS = "|".join(AUDIO_EXTENSIONS)
+_BOOK_FORMATS = "|".join(BOOK_EXTENSIONS)
+
 MUSIC_TAG_RE = re.compile(
-    r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
-    r"(?P<format>FLAC|MP3|AAC|M4A|WAV|OGG|WMA)(?:-(?P<bitrate>\d{3}))?",
+    rf"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{{4}})-"
+    rf"(?P<format>{_AUDIO_FORMATS})(?:-(?P<bitrate>\d{{3}}))?",
     re.IGNORECASE,
 )
 
 BOOK_TAG_RE = re.compile(
-    r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
-    r"(?P<format>EPUB|MOBI|PDF|AZW3|CBZ|CBR)(?:-(?P<isbn>\d{10,13}))?",
+    rf"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{{4}})-"
+    rf"(?P<format>{_BOOK_FORMATS})(?:-(?P<isbn>\d{{10,13}}))?",
     re.IGNORECASE,
 )
 
