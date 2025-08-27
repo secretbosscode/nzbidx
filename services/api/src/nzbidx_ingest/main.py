@@ -34,6 +34,7 @@ from .db_migrations import (
     migrate_release_table,
     ensure_release_adult_year_partition,
     migrate_release_adult_partitions,
+    create_release_posted_at_index,
 )
 from nzbidx_migrations import apply_sync
 
@@ -242,10 +243,10 @@ def connect_db() -> Any:
             # Ensure the ``release`` table is partitioned before attempting any
             # migrations.  If the table exists but is not partitioned, attempt to
             # migrate it automatically and verify the result.
-            raw = None
+            conn = None
             try:
-                raw = engine.raw_connection()
-                cur = raw.cursor()
+                conn = engine.raw_connection()
+                cur = conn.cursor()
                 cur.execute(
                     "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release')"
                 )
@@ -259,10 +260,11 @@ def connect_db() -> Any:
                 if exists and not partitioned:
                     logger.info("release_table_migrating")
                     try:
-                        migrate_release_table(raw)
+                        migrate_release_table(conn)
+                        create_release_posted_at_index(conn)
                     except Exception:
                         pass
-                    cur = raw.cursor()
+                    cur = conn.cursor()
                     cur.execute(
                         "SELECT EXISTS ("
                         "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
@@ -272,7 +274,7 @@ def connect_db() -> Any:
                     if not partitioned:
                         logger.error("release_table_not_partitioned")
                         raise RuntimeError("release table must be partitioned")
-                cur = raw.cursor()
+                cur = conn.cursor()
                 cur.execute(
                     "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release_adult')"
                 )
@@ -292,10 +294,11 @@ def connect_db() -> Any:
                 if adult_exists and not adult_partitioned:
                     logger.info("release_adult_table_migrating")
                     try:
-                        migrate_release_adult_partitions(raw)
+                        migrate_release_adult_partitions(conn)
+                        create_release_posted_at_index(conn)
                     except Exception:
                         pass
-                    cur = raw.cursor()
+                    cur = conn.cursor()
                     cur.execute(
                         """
                             SELECT EXISTS(
@@ -322,17 +325,17 @@ def connect_db() -> Any:
                 # RuntimeError from the caller's perspective.
                 pass
             finally:
-                if raw is not None:
+                if conn is not None:
                     try:
-                        raw.close()
+                        conn.close()
                     except Exception:
                         pass
 
-            with engine.connect() as conn:  # type: ignore[call-arg]
-                exists = conn.execute(
+            with engine.connect() as conn_sync:  # type: ignore[call-arg]
+                exists = conn_sync.execute(
                     text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')")
                 ).fetchone()[0]
-                partitioned = conn.execute(
+                partitioned = conn_sync.execute(
                     text(
                         """
                             SELECT EXISTS(
@@ -344,12 +347,12 @@ def connect_db() -> Any:
                             """
                     )
                 ).fetchone()[0]
-                adult_exists = conn.execute(
+                adult_exists = conn_sync.execute(
                     text(
                         "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_adult')"
                     )
                 ).fetchone()[0]
-                adult_partitioned = conn.execute(
+                adult_partitioned = conn_sync.execute(
                     text(
                         """
                             SELECT EXISTS(
@@ -390,7 +393,7 @@ def connect_db() -> Any:
                     )
 
                 if not exists or partitioned:
-                    apply_sync(conn, text)
+                    apply_sync(conn_sync, text)
             return engine.raw_connection()
 
         try:
