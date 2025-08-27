@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 NNTP_GROUPS: list[str] = []
 
 
+def get_nntp_groups() -> list[str]:
+    """Return configured NNTP groups loading them if necessary."""
+
+    if not NNTP_GROUPS:
+        validate_nntp_config()
+    return NNTP_GROUPS
+
+
 def _int_env(name: str, default: int) -> int:
     value = os.getenv(name)
     if value is None:
@@ -152,9 +160,9 @@ def validate_nntp_config() -> list[str]:
     if env_groups:
         NNTP_GROUPS = [g.strip() for g in env_groups.split(",") if g.strip()]
     else:
-        from nzbidx_ingest.config import _load_groups
+        from nzbidx_ingest.config import get_nntp_groups as _get_groups
 
-        NNTP_GROUPS = _load_groups()
+        NNTP_GROUPS = _get_groups()
 
     if missing:
         logger.error("missing NNTP configuration: %s", ", ".join(missing))

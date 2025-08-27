@@ -138,7 +138,7 @@ def build_nzb_for_release(release_id: str) -> bytes:
     from . import newznab
 
     missing = config.validate_nntp_config()
-    _groups = config.NNTP_GROUPS  # ensure groups are loaded
+    _groups = config.get_nntp_groups()  # ensure groups are loaded
     if missing:
         raise newznab.NntpConfigError(
             f"missing NNTP configuration: {', '.join(missing)}"

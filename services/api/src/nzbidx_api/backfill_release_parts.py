@@ -26,7 +26,7 @@ def _fetch_segments(
 ) -> list[tuple[int, str, int]]:
     """Return ``(number, message_id, size)`` tuples for ``release_id``."""
     client = client or NNTPClient(ingest_config.NNTP_SETTINGS)
-    groups = [group] if group else config.NNTP_GROUPS
+    groups = [group] if group else config.get_nntp_groups()
     last_exc: Exception | None = None
     last_group = ""
     for grp in groups:
@@ -86,8 +86,9 @@ def backfill_release_parts(
     job to a specific set of releases.  When ``auto`` is ``True``, only releases
     marked with ``has_parts`` but missing ``segments`` are processed.
     """
-    if not config.NNTP_GROUPS:
+    if not config.get_nntp_groups():
         config.validate_nntp_config()
+        groups = [group] if group else config.get_nntp_groups()
     conn = connect_db()
     try:
         _cursor = conn.cursor()

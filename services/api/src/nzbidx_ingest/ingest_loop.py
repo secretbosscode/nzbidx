@@ -391,7 +391,7 @@ def run_once(client: NNTPClient | None = None) -> float:
     poll.
     """
     global last_run, last_run_wall
-    groups = config.NNTP_GROUPS or config._load_groups()
+    groups = config.get_nntp_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
         logger.info("ingest_ignore_groups", extra={"groups": list(ignored)})
@@ -409,7 +409,7 @@ def run_once(client: NNTPClient | None = None) -> float:
         last_run = time.monotonic()
         last_run_wall = time.time()
         return INGEST_POLL_MAX_SECONDS
-    config.NNTP_GROUPS = groups
+    config.set_nntp_groups(groups)
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
     created_client = False
