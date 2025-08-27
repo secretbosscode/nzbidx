@@ -44,4 +44,3 @@ def test_commit_failure_logged_and_propagated(monkeypatch, caplog) -> None:
             loop._process_groups(client, db, ["alt.test"], set())
 
     assert any("ingest_commit_error" in record.message for record in caplog.records)
-
