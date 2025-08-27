@@ -6,7 +6,7 @@ import re
 from functools import lru_cache
 from typing import Optional
 
-from .config import DETECT_LANGUAGE
+from .config import AUDIO_EXTENSIONS, BOOK_EXTENSIONS, DETECT_LANGUAGE
 
 # Language detection tokens found in many Usenet subjects
 LANGUAGE_TOKENS: dict[str, str] = {
@@ -26,13 +26,13 @@ _NON_LETTER_RE = re.compile(r"[^A-Za-z\s]+")
 # Precompiled regular expressions for tag extraction and subject normalization.
 MUSIC_TAG_RE = re.compile(
     r"(?P<artist>[^-]+)-(?P<album>[^-]+)-(?P<year>\d{4})-"
-    r"(?P<format>FLAC|MP3)(?:-(?P<bitrate>\d{3}))?",
+    r"(?P<format>FLAC|MP3|AAC|M4A|WAV|OGG|WMA)(?:-(?P<bitrate>\d{3}))?",
     re.IGNORECASE,
 )
 
 BOOK_TAG_RE = re.compile(
     r"(?P<author>[^-]+)-(?P<title>[^-]+)-(?P<year>\d{4})-"
-    r"(?P<format>EPUB|MOBI|PDF)(?:-(?P<isbn>\d{10,13}))?",
+    r"(?P<format>EPUB|MOBI|PDF|AZW3|CBZ|CBR)(?:-(?P<isbn>\d{10,13}))?",
     re.IGNORECASE,
 )
 
@@ -51,6 +51,7 @@ PART_SIZE_RE = re.compile(r"[\(\[]\s*\d+\s*/\s*\d+\s*[\)\]]")
 FILLER_RE = re.compile(r"\b(?:repost|sample)\b", re.IGNORECASE)
 PART_RE = re.compile(r"\bpart\s*\d+\b", re.IGNORECASE)
 ARCHIVE_RE = re.compile(r"\b(rar|par2|zip)\b", re.IGNORECASE)
+_FILE_EXT_RE = re.compile(r"\.([A-Za-z0-9]{2,4})\b")
 
 
 def extract_tags(subject: str) -> list[str]:
@@ -67,6 +68,14 @@ def extract_tags(subject: str) -> list[str]:
             if tag:
                 tags.append(tag)
     return tags
+
+
+def extract_file_extension(subject: str) -> str | None:
+    """Return the lowercased file extension from ``subject`` if present."""
+    match = _FILE_EXT_RE.search(subject)
+    if match:
+        return match.group(1).lower()
+    return None
 
 
 _SEGMENT_RE = re.compile(r"\((\d+)/")
@@ -246,10 +255,10 @@ def normalize_subject(
     lower_subject = subject.lower()
     tag_dict: dict[str, str] = {}
 
-    if "flac" in lower_subject or "mp3" in lower_subject:
+    if any(ext.lower() in lower_subject for ext in AUDIO_EXTENSIONS):
         tag_dict.update(extract_music_tags(subject))
 
-    if any(t in lower_subject for t in ("epub", "mobi", "pdf")):
+    if any(ext.lower() in lower_subject for ext in BOOK_EXTENSIONS):
         tag_dict.update(extract_book_tags(subject))
 
     if any(

@@ -34,7 +34,9 @@ from .db_migrations import (
     migrate_release_table,
     ensure_release_adult_year_partition,
     migrate_release_adult_partitions,
+    create_release_posted_at_index,
 )
+from .sql import sql_placeholder
 from nzbidx_migrations import apply_sync
 
 logger = logging.getLogger(__name__)
@@ -199,6 +201,68 @@ ADULT_KEYWORDS = tuple(
 )
 ADULT_KEYWORDS_RE = re.compile("|".join(map(re.escape, ADULT_KEYWORDS)))
 
+
+def _allowed_extensions() -> set[str]:
+    """Return the union of allowed file extensions from the environment."""
+    allowed: set[str] = set()
+    for key, value in os.environ.items():
+        if key.startswith("FILE_EXTENSIONS_") and value:
+            parts = [p.strip().lower() for p in value.split(",") if p.strip()]
+            allowed.update(parts)
+    return allowed
+
+
+def prune_disallowed_filetypes(
+    conn: Any | None = None, batch_size: int | None = None
+) -> int:
+    """Delete releases whose ``extension`` is not in the allowed list.
+
+    Returns the total number of rows removed. When ``conn`` is ``None`` a new
+    connection is established via :func:`connect_db`.
+    """
+
+    allowed = _allowed_extensions()
+    if not allowed:
+        logger.info("prune_filetypes_no_allowlist")
+        return 0
+    if conn is None:
+        conn = connect_db()
+    bs = batch_size or int(os.getenv("PRUNE_BATCH_SIZE", "1000"))
+    placeholder = sql_placeholder(conn)
+    total = 0
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT tablename FROM pg_tables WHERE tablename LIKE 'release_adult_%'"
+        )
+        tables = ["release"] + [row[0] for row in cur.fetchall()]
+    for table in tables:
+        while True:
+            placeholders = ",".join([placeholder] * len(allowed))
+            query = (
+                f"DELETE FROM {table} "
+                f"WHERE ctid IN ("
+                f"SELECT ctid FROM {table} "
+                f"WHERE extension IS NOT NULL AND LOWER(extension) NOT IN ({placeholders}) "
+                f"LIMIT {placeholder})"
+            )
+            with conn.cursor() as cur:
+                cur.execute(query, (*allowed, bs))
+                deleted = cur.rowcount
+            conn.commit()
+            total += deleted
+            logger.info(
+                "prune_filetypes_batch",
+                extra={
+                    "event": "prune_filetypes_batch",
+                    "table": table,
+                    "deleted": deleted,
+                },
+            )
+            if deleted < bs:
+                break
+    return total
+
+
 # Precompiled regular expression for matching TV episode identifiers like "S01E01".
 TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
 
@@ -242,10 +306,10 @@ def connect_db() -> Any:
             # Ensure the ``release`` table is partitioned before attempting any
             # migrations.  If the table exists but is not partitioned, attempt to
             # migrate it automatically and verify the result.
-            raw = None
+            conn = None
             try:
-                raw = engine.raw_connection()
-                cur = raw.cursor()
+                conn = engine.raw_connection()
+                cur = conn.cursor()
                 cur.execute(
                     "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release')"
                 )
@@ -259,10 +323,11 @@ def connect_db() -> Any:
                 if exists and not partitioned:
                     logger.info("release_table_migrating")
                     try:
-                        migrate_release_table(raw)
+                        migrate_release_table(conn)
+                        create_release_posted_at_index(conn)
                     except Exception:
                         pass
-                    cur = raw.cursor()
+                    cur = conn.cursor()
                     cur.execute(
                         "SELECT EXISTS ("
                         "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
@@ -272,7 +337,7 @@ def connect_db() -> Any:
                     if not partitioned:
                         logger.error("release_table_not_partitioned")
                         raise RuntimeError("release table must be partitioned")
-                cur = raw.cursor()
+                cur = conn.cursor()
                 cur.execute(
                     "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release_adult')"
                 )
@@ -292,10 +357,11 @@ def connect_db() -> Any:
                 if adult_exists and not adult_partitioned:
                     logger.info("release_adult_table_migrating")
                     try:
-                        migrate_release_adult_partitions(raw)
+                        migrate_release_adult_partitions(conn)
+                        create_release_posted_at_index(conn)
                     except Exception:
                         pass
-                    cur = raw.cursor()
+                    cur = conn.cursor()
                     cur.execute(
                         """
                             SELECT EXISTS(
@@ -322,17 +388,17 @@ def connect_db() -> Any:
                 # RuntimeError from the caller's perspective.
                 pass
             finally:
-                if raw is not None:
+                if conn is not None:
                     try:
-                        raw.close()
+                        conn.close()
                     except Exception:
                         pass
 
-            with engine.connect() as conn:  # type: ignore[call-arg]
-                exists = conn.execute(
+            with engine.connect() as conn_sync:  # type: ignore[call-arg]
+                exists = conn_sync.execute(
                     text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')")
                 ).fetchone()[0]
-                partitioned = conn.execute(
+                partitioned = conn_sync.execute(
                     text(
                         """
                             SELECT EXISTS(
@@ -344,12 +410,12 @@ def connect_db() -> Any:
                             """
                     )
                 ).fetchone()[0]
-                adult_exists = conn.execute(
+                adult_exists = conn_sync.execute(
                     text(
                         "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_adult')"
                     )
                 ).fetchone()[0]
-                adult_partitioned = conn.execute(
+                adult_partitioned = conn_sync.execute(
                     text(
                         """
                             SELECT EXISTS(
@@ -390,7 +456,7 @@ def connect_db() -> Any:
                     )
 
                 if not exists or partitioned:
-                    apply_sync(conn, text)
+                    apply_sync(conn_sync, text)
             return engine.raw_connection()
 
         try:
@@ -639,10 +705,13 @@ def insert_release(
                     other_rows.append(row)
             for year, rows in adult_rows.items():
                 ensure_release_adult_year_partition(conn, year)
-                cur.executemany(
-                    f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
-                    rows,
-                )
+            if adult_rows:
+                create_release_posted_at_index(conn)
+                for year, rows in adult_rows.items():
+                    cur.executemany(
+                        f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
+                        rows,
+                    )
             if other_rows:
                 cur.executemany(
                     "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
