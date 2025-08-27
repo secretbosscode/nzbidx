@@ -87,8 +87,9 @@ def backfill_release_parts(
     marked with ``has_parts`` but missing ``segments`` are processed.
     """
     if not config.get_nntp_groups():
+        # Validate NNTP configuration so ``_fetch_segments`` can obtain groups
+        # via ``config.get_nntp_groups()`` if none were preconfigured.
         config.validate_nntp_config()
-        groups = [group] if group else config.get_nntp_groups()
     conn = connect_db()
     try:
         _cursor = conn.cursor()
