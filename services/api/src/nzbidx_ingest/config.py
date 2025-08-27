@@ -107,6 +107,8 @@ INGEST_BATCH_MAX: int = int(os.getenv("INGEST_BATCH_MAX", str(INGEST_BATCH)))
 INGEST_POLL_MIN_SECONDS: int = int(os.getenv("INGEST_POLL_MIN_SECONDS", "5"))
 INGEST_POLL_MAX_SECONDS: int = int(os.getenv("INGEST_POLL_MAX_SECONDS", "60"))
 DETECT_LANGUAGE: int = int(os.getenv("DETECT_LANGUAGE", "1"))
+AUDIO_EXTENSIONS: tuple[str, ...] = ("FLAC", "MP3", "AAC", "M4A", "WAV", "OGG", "WMA")
+BOOK_EXTENSIONS: tuple[str, ...] = ("EPUB", "MOBI", "PDF", "AZW3", "CBZ", "CBR")
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
 # Base delay applied when database latency exceeds thresholds. Set to ``0`` to
