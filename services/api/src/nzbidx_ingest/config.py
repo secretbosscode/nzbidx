@@ -107,6 +107,18 @@ INGEST_BATCH_MAX: int = int(os.getenv("INGEST_BATCH_MAX", str(INGEST_BATCH)))
 INGEST_POLL_MIN_SECONDS: int = int(os.getenv("INGEST_POLL_MIN_SECONDS", "5"))
 INGEST_POLL_MAX_SECONDS: int = int(os.getenv("INGEST_POLL_MAX_SECONDS", "60"))
 DETECT_LANGUAGE: int = int(os.getenv("DETECT_LANGUAGE", "1"))
+
+AUDIO_EXTENSIONS: set[str] = {
+    ext.strip().upper()
+    for ext in os.getenv("AUDIO_EXTENSIONS", "FLAC,MP3,AAC,M4A,WAV,OGG,WMA").split(",")
+    if ext.strip()
+}
+
+BOOK_EXTENSIONS: set[str] = {
+    ext.strip().upper()
+    for ext in os.getenv("BOOK_EXTENSIONS", "EPUB,MOBI,PDF,AZW3,CBZ,CBR").split(",")
+    if ext.strip()
+}
 CURSOR_DB: str = os.getenv("CURSOR_DB") or os.getenv("DATABASE_URL", "./cursors.sqlite")
 CB_RESET_SECONDS: int = int(os.getenv("CB_RESET_SECONDS", "30"))
 # Base delay applied when database latency exceeds thresholds. Set to ``0`` to
@@ -123,3 +135,40 @@ VALIDATE_SEGMENTS: bool = os.getenv("VALIDATE_SEGMENTS", "").lower() in {
     "true",
     "yes",
 }
+
+# Allowed video file extensions per category. Comma separated environment
+# variables override the defaults. The same default set applies to movies,
+# TV and adult releases.
+_DEFAULT_ALLOWED_EXTENSIONS = {
+    "mkv",
+    "mp4",
+    "mov",
+    "m4v",
+    "mpg",
+    "mpeg",
+    "avi",
+    "flv",
+    "webm",
+    "wmv",
+    "vob",
+    "evo",
+    "iso",
+    "m2ts",
+    "ts",
+}
+
+
+def _load_allowed_extensions(env_var: str) -> set[str]:
+    env = os.getenv(env_var)
+    if env:
+        return {ext.strip().lower() for ext in env.split(",") if ext.strip()}
+    return set(_DEFAULT_ALLOWED_EXTENSIONS)
+
+
+ALLOWED_MOVIE_EXTENSIONS: set[str] = _load_allowed_extensions(
+    "ALLOWED_MOVIE_EXTENSIONS"
+)
+ALLOWED_TV_EXTENSIONS: set[str] = _load_allowed_extensions("ALLOWED_TV_EXTENSIONS")
+ALLOWED_ADULT_EXTENSIONS: set[str] = _load_allowed_extensions(
+    "ALLOWED_ADULT_EXTENSIONS"
+)

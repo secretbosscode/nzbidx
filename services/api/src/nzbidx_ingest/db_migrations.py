@@ -98,6 +98,8 @@ def migrate_release_table(conn: Any) -> None:
         "CREATE UNIQUE INDEX release_norm_title_category_id_key ON release (norm_title, category_id)",
     )
 
+    create_release_posted_at_index(conn)
+
     # Copy rows and drop the old table.
     cur.execute("INSERT INTO release SELECT * FROM release_old")
     cur.execute("DROP TABLE release_old")
@@ -174,13 +176,15 @@ def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
     if cur.fetchone()[0] is not None:
         return
     cur.execute(
-        f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')"
+        f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')",
+    )
+    cur.execute(
+        f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON ONLY {table} (posted_at)",
     )
     cur.execute(
         f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON {table} (posted_at)"
     )
     conn.commit()
-
 
 def add_release_has_parts_index(conn: Any) -> None:
     """Create partial index on ``release`` rows that have parts."""
