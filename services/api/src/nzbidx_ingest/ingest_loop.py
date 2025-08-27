@@ -37,6 +37,11 @@ from .main import (
 from email.utils import parsedate_to_datetime
 from datetime import timezone
 
+try:  # pragma: no cover - optional dependency
+    import psycopg
+except Exception:  # pragma: no cover - optional dependency
+    psycopg = None  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # Track consecutive failures per group to allow backoff or alerting.
@@ -97,6 +102,9 @@ def _process_groups(
     ignored: set[str],
 ) -> float:
     aggregate = _AggregateMetrics()
+    db_errors: tuple[type[BaseException], ...] = ()
+    if psycopg:
+        db_errors = (psycopg.DataError,)
 
     for ig in ignored:
         prune_group(db, ig)
@@ -269,12 +277,21 @@ def _process_groups(
                 for title, segs in parts.items():
                     if not segs:
                         continue
+                    cat = releases.get(title)
+                    group_name = cat[4] if cat else None
                     try:
                         cur.execute(
                             f"SELECT segments FROM release WHERE norm_title = {placeholder}",
                             (title,),
                         )
                         row = cur.fetchone()
+                    except db_errors:  # type: ignore[misc]
+                        logger.warning(
+                            "segment_update_data_error",
+                            extra={"norm_title": title, "group": group_name},
+                        )
+                        db.rollback()
+                        continue
                     except Exception:
                         row = None
                     existing_segments = []
@@ -318,23 +335,31 @@ def _process_groups(
                     cat = releases.get(title)
                     category_id = str(cat[1]) if cat else CATEGORY_MAP["other"]
                     min_bytes = min_size_for_release(title, category_id)
-                    if total_size < min_bytes:
+                    try:
+                        if total_size < min_bytes:
+                            cur.execute(
+                                f"DELETE FROM release WHERE norm_title = {placeholder} AND category_id = {placeholder}",
+                                (title, int(category_id)),
+                            )
+                            inserted.discard(title)
+                            continue
                         cur.execute(
-                            f"DELETE FROM release WHERE norm_title = {placeholder} AND category_id = {placeholder}",
-                            (title, int(category_id)),
+                            f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
+                            (
+                                json.dumps(combined_segments).decode(),
+                                has_parts,
+                                part_counts[title],
+                                total_size,
+                                title,
+                            ),
                         )
-                        inserted.discard(title)
+                    except db_errors:  # type: ignore[misc]
+                        logger.warning(
+                            "segment_update_data_error",
+                            extra={"norm_title": title, "group": group_name},
+                        )
+                        db.rollback()
                         continue
-                    cur.execute(
-                        f"UPDATE release SET segments = {placeholder}, has_parts = {placeholder}, part_count = {placeholder}, size_bytes = {placeholder} WHERE norm_title = {placeholder}",
-                        (
-                            json.dumps(combined_segments).decode(),
-                            has_parts,
-                            part_counts[title],
-                            total_size,
-                            title,
-                        ),
-                    )
                     has_parts_flags[title] = has_parts
                     changed.add(title)
 

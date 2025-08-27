@@ -19,6 +19,11 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - optional dependency
     dateutil_parser = None  # type: ignore
 
+try:  # pragma: no cover - optional dependency
+    import psycopg
+except Exception:  # pragma: no cover - optional dependency
+    psycopg = None  # type: ignore
+
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover - optional dependency
@@ -616,6 +621,9 @@ def insert_release(
         )
 
     cur = conn.cursor()
+    db_errors: tuple[type[BaseException], ...] = ()
+    if psycopg:
+        db_errors = (psycopg.DataError,)
 
     items: list[
         tuple[
@@ -762,15 +770,51 @@ def insert_release(
             if adult_rows:
                 create_release_posted_at_index(conn)
                 for year, rows in adult_rows.items():
-                    cur.executemany(
-                        f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
-                        rows,
+                    sql = (
+                        f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING"
                     )
+                    try:
+                        cur.executemany(sql, rows)
+                    except db_errors:  # type: ignore[misc]
+                        conn.rollback()
+                        cur = conn.cursor()
+                        for row in rows:
+                            try:
+                                cur.execute(sql, row)
+                            except db_errors:  # type: ignore[misc]
+                                title = row[0]
+                                group_name = row[5]
+                                logger.warning(
+                                    "insert_release_data_error",
+                                    extra={"norm_title": title, "group": group_name},
+                                )
+                                conn.rollback()
+                                cur = conn.cursor()
+                                inserted.discard(title)
             if other_rows:
-                cur.executemany(
-                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING",
-                    other_rows,
+                sql = (
+                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING"
                 )
+                try:
+                    cur.executemany(sql, other_rows)
+                except db_errors:  # type: ignore[misc]
+                    conn.rollback()
+                    cur = conn.cursor()
+                    for row in other_rows:
+                        try:
+                            cur.execute(sql, row)
+                        except db_errors:  # type: ignore[misc]
+                            title = row[0]
+                            group_name = row[5]
+                            logger.warning(
+                                "insert_release_data_error",
+                                extra={"norm_title": title, "group": group_name},
+                            )
+                            conn.rollback()
+                            cur = conn.cursor()
+                            inserted.discard(title)
     # Ensure posted_at is updated for existing rows
     if updates:
         placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
@@ -783,10 +827,23 @@ def insert_release(
                 sqlite_updates,
             )
         else:
-            cur.executemany(
-                f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}",
-                updates,
-            )
+            sql = f"UPDATE release SET posted_at = {placeholder} WHERE norm_title = {placeholder} AND category_id = {placeholder}"
+            try:
+                cur.executemany(sql, updates)
+            except db_errors:  # type: ignore[misc]
+                conn.rollback()
+                cur = conn.cursor()
+                for row in updates:
+                    try:
+                        cur.execute(sql, row)
+                    except db_errors:  # type: ignore[misc]
+                        title = row[1]
+                        logger.warning(
+                            "insert_release_data_error",
+                            extra={"norm_title": title, "group": None},
+                        )
+                        conn.rollback()
+                        cur = conn.cursor()
     conn.commit()
     return inserted
 
