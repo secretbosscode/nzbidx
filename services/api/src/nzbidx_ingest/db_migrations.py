@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+import os
+from typing import Any, Iterable
 
 
 def migrate_release_table(conn: Any) -> None:
@@ -184,6 +185,46 @@ def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
     cur.execute(
         f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON {table} (posted_at)"
     )
+    conn.commit()
+
+
+def drop_unused_release_adult_partitions(
+    conn: Any, retain: Iterable[str] | None = None
+) -> None:
+    """Drop empty ``release_adult`` partitions not in ``retain``.
+
+    Partitions are discovered via ``pg_inherits`` and ``pg_class``.  Any
+    partition with zero rows and not explicitly retained is dropped.  The
+    retention set may be provided via ``retain`` or configured through the
+    ``RELEASE_ADULT_PARTITIONS_RETAIN`` environment variable (comma separated
+    table names).  The ``release_adult_default`` partition is always retained.
+    """
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT c.relname
+        FROM pg_inherits i
+        JOIN pg_class c ON c.oid = i.inhrelid
+        JOIN pg_class p ON p.oid = i.inhparent
+        WHERE p.relname = 'release_adult'
+        """
+    )
+    partitions = [row[0] for row in cur.fetchall()]
+
+    if retain is None:
+        env = os.getenv("RELEASE_ADULT_PARTITIONS_RETAIN", "")
+        retain_set = {p.strip() for p in env.split(",") if p.strip()}
+    else:
+        retain_set = set(retain)
+    retain_set.add("release_adult_default")
+
+    for table in partitions:
+        if table in retain_set:
+            continue
+        cur.execute(f"SELECT 1 FROM {table} LIMIT 1")
+        if cur.fetchone() is None:
+            cur.execute(f"DROP TABLE {table}")
     conn.commit()
 
 
