@@ -27,8 +27,9 @@ to create databases is not enough; roles without superuser rights cannot install
 extensions.
 
 Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
-`scripts/db_maintenance.py` helper schedules `VACUUM (ANALYZE)`, `ANALYZE`,
-and `REINDEX` jobs via APScheduler.
+`scripts/db_maintenance.py` helper uses APScheduler to run `VACUUM (ANALYZE)`,
+`ANALYZE`, `REINDEX`, and automatic pruning of releases outside the configured
+size thresholds.
 
 When adjusting the allowed file-type extensions, remove outdated rows:
 
