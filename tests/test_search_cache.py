@@ -119,7 +119,9 @@ def test_search_logs_cache_hit(monkeypatch, caplog) -> None:
         ]
 
     monkeypatch.setattr(api_main, "search_releases_async", fake_search_releases_async)
-    req = SimpleNamespace(query_params={"t": "search"}, headers={})
+    req = SimpleNamespace(
+        query_params={"t": "search"}, headers={}, scope={"query_string": b""}
+    )
 
     with caplog.at_level(logging.INFO):
         resp1 = asyncio.run(api_main.api(req))
