@@ -21,7 +21,10 @@ class FakeCursor:
             cats = {row.get("category_id") for row in self.conn.rows}
             self._rows = [(c,) for c in cats]
             return
-        if query.startswith("DELETE FROM release WHERE category_id") and params is not None:
+        if (
+            query.startswith("DELETE FROM release WHERE category_id")
+            and params is not None
+        ):
             cat, limit = params
             removed: list[int] = []
             for idx, row in enumerate(self.conn.rows):
@@ -31,9 +34,16 @@ class FakeCursor:
                 del self.conn.rows[idx]
             self.rowcount = len(removed)
             return
-        if query.startswith("DELETE FROM release WHERE size_bytes >") and params is not None:
+        if (
+            query.startswith("DELETE FROM release WHERE size_bytes >")
+            and params is not None
+        ):
             limit = params[0]
-            removed = [i for i, r in enumerate(self.conn.rows) if r.get("size_bytes", 0) > limit]
+            removed = [
+                i
+                for i, r in enumerate(self.conn.rows)
+                if r.get("size_bytes", 0) > limit
+            ]
             for idx in reversed(removed):
                 del self.conn.rows[idx]
             self.rowcount = len(removed)
@@ -85,4 +95,3 @@ def test_prune_disallowed_sizes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert deleted == 2
     remaining = sorted((r["category_id"], r["size_bytes"]) for r in conn.rows)
     assert remaining == [(3000, 60), (5000, 110)]
-
