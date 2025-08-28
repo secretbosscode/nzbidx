@@ -39,19 +39,11 @@ services:
       NNTP_TOTAL_TIMEOUT: 600
       NZB_TIMEOUT_SECONDS: 600 # should be ≥ NNTP_TOTAL_TIMEOUT
       SEARCH_TTL_SECONDS: 60
-  maintenance:
-    image: nzbidx:latest
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["python", "scripts/db_maintenance.py"]
-    environment:
-      <<: *db_env
+      ENABLE_DB_MAINTENANCE: ${ENABLE_DB_MAINTENANCE:-1}
       MAX_RELEASE_BYTES: ${MAX_RELEASE_BYTES:-0}
       CATEGORY_MIN_SIZES: ${CATEGORY_MIN_SIZES:-}
       RELEASE_MIN_SIZES: ${RELEASE_MIN_SIZES:-}
       RELEASE_RETENTION_DAYS: ${RELEASE_RETENTION_DAYS:-0}
-    restart: unless-stopped
   postgres:
     image: pgvector/pgvector:pg17
     environment:
