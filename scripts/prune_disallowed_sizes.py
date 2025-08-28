@@ -11,6 +11,7 @@ covered.
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -35,6 +36,9 @@ def prune_sizes() -> int:
     """Delete releases with ``size_bytes`` outside the configured range."""
 
     if MIN_BYTES <= 0 and MAX_BYTES <= 0:
+        logging.warning(
+            "MIN_RELEASE_BYTES and MAX_RELEASE_BYTES are not set; skipping prune"
+        )
         return 0
 
     conn = connect_db()
