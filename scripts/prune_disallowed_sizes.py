@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 import logging
+from pathlib import Path
 
 # Ensure local packages are importable when running from the repo root.
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,8 +37,7 @@ def prune_sizes() -> int:
 
     if MIN_BYTES <= 0 and MAX_BYTES <= 0:
         logging.warning(
-            "No release size thresholds configured; using built-in defaults for pruning;"
-            " 0 rows considered."
+            "No size thresholds configured; skipping pruning of disallowed sizes."
         )
         return 0
 
