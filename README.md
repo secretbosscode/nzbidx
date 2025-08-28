@@ -145,12 +145,18 @@ RELEASE_MIN_SIZES="tiny.release=1048576,/\\.sample$/=5242880"
 ```
 
 The ingest worker skips insertion when a release's combined segment size is
-below the resolved threshold. Changing these overrides does not retroactively
-prune existing rows—remove stale entries manually, for example:
+below the resolved threshold. To retroactively remove releases that no longer
+meet the configured limits, run the pruning helper:
 
-```
-DELETE FROM release WHERE norm_title='tiny.release';
-```
+    docker compose exec nzbidx python scripts/prune_disallowed_sizes.py
+
+For scheduled pruning (along with regular VACUUM/ANALYZE maintenance), start
+the maintenance scheduler instead:
+
+    docker compose exec nzbidx python scripts/db_maintenance.py
+
+Manual SQL remains an option for bespoke cases, but the helpers above cover
+common scenarios without hand-crafted queries.
 
 
     docker compose exec nzbidx python scripts/backfill_release_parts.py
