@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+import logging
 from pathlib import Path
 
 # Ensure local packages are importable when running from the repo root.
@@ -35,6 +36,9 @@ def prune_sizes() -> int:
     """Delete releases with ``size_bytes`` outside the configured range."""
 
     if MIN_BYTES <= 0 and MAX_BYTES <= 0:
+        logging.warning(
+            "No size thresholds configured; skipping pruning of disallowed sizes."
+        )
         return 0
 
     conn = connect_db()
