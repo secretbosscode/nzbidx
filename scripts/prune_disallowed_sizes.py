@@ -11,6 +11,7 @@ covered.
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -35,6 +36,7 @@ def prune_sizes() -> int:
     """Delete releases with ``size_bytes`` outside the configured range."""
 
     if MIN_BYTES <= 0 and MAX_BYTES <= 0:
+        logging.warning("No size thresholds configured; skipping pruning.")
         return 0
 
     conn = connect_db()
