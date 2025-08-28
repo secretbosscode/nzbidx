@@ -2,9 +2,10 @@
 # ruff: noqa: E402
 """Prune releases outside configured size thresholds.
 
-This helper reads the same ``MIN_RELEASE_BYTES`` and ``MAX_RELEASE_BYTES``
-environment variables used during ingest and removes any rows where the
-``size_bytes`` column falls outside the configured range. It iterates over the
+This helper deletes any rows where the ``size_bytes`` column falls outside the
+configured range. A global ``MAX_RELEASE_BYTES`` environment variable removes
+oversized releases while category specific minimum thresholds are computed via
+``nzbidx_ingest.config.min_size_for_release``. The script iterates over the
 ``release`` table and any partitioned tables to ensure all categories are
 covered.
 """
@@ -20,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import connect_db  # type: ignore
+from nzbidx_ingest.config import min_size_for_release  # type: ignore
 
 try:  # Prefer ingest helper but fall back to API helper if unavailable.
     from nzbidx_ingest.sql import sql_placeholder  # type: ignore
@@ -34,9 +36,6 @@ MAX_BYTES = int(os.getenv("MAX_RELEASE_BYTES", "0") or 0)
 def prune_sizes() -> int:
     """Delete releases with ``size_bytes`` outside the configured range."""
 
-    if MIN_BYTES <= 0 and MAX_BYTES <= 0:
-        return 0
-
     conn = connect_db()
     cur = conn.cursor()
     placeholder = sql_placeholder(conn)
@@ -50,19 +49,28 @@ def prune_sizes() -> int:
 
     total = 0
     for table in tables:
-        conditions: list[str] = []
-        params: list[int] = []
-        if MIN_BYTES > 0:
-            conditions.append(f"size_bytes < {placeholder}")
-            params.append(MIN_BYTES)
+        # Remove releases exceeding the global maximum size first.
         if MAX_BYTES > 0:
-            conditions.append(f"size_bytes > {placeholder}")
-            params.append(MAX_BYTES)
-        if not conditions:
-            continue
-        where = " OR ".join(conditions)
-        cur.execute(f"DELETE FROM {table} WHERE {where}", params)
-        total += cur.rowcount
+            cur.execute(
+                f"DELETE FROM {table} WHERE size_bytes > {placeholder}",
+                [MAX_BYTES],
+            )
+            total += cur.rowcount
+
+        # Apply category specific minimum thresholds.
+        cur.execute(f"SELECT DISTINCT category_id FROM {table}")
+        for (cat_id,) in cur.fetchall():
+            if cat_id is None:
+                continue
+            min_bytes = max(MIN_BYTES, min_size_for_release("", str(cat_id)))
+            if min_bytes <= 0:
+                continue
+            cur.execute(
+                f"DELETE FROM {table} WHERE category_id = {placeholder} AND size_bytes < {placeholder}",
+                [cat_id, min_bytes],
+            )
+            total += cur.rowcount
+
     conn.commit()
     conn.close()
     return total
