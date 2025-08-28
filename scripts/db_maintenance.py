@@ -18,7 +18,8 @@ async def main() -> None:
     scheduler = AsyncIOScheduler()
 
     async def prune_disallowed() -> None:
-        await asyncio.to_thread(prune_sizes)
+        removed = await asyncio.to_thread(prune_sizes)
+        print(f"pruned {removed} releases")
 
     # Run VACUUM daily at 03:00
     scheduler.add_job(vacuum_analyze, "cron", hour=3)
