@@ -2,12 +2,12 @@
 # ruff: noqa: E402
 """Prune releases outside configured size thresholds.
 
-This helper reads the same ``MIN_RELEASE_BYTES`` and ``MAX_RELEASE_BYTES``
-environment variables used during ingest. When a minimum size is not explicitly
-provided, the default threshold for each release's category is loaded via
-``min_size_for_release`` and any rows smaller than that value are removed. It
-iterates over the ``release`` table and any partitioned tables to ensure all
-categories are covered.
+This helper deletes any rows where the ``size_bytes`` column falls outside the
+configured range. A global ``MAX_RELEASE_BYTES`` environment variable removes
+oversized releases while category specific minimum thresholds are computed via
+``nzbidx_ingest.config.min_size_for_release``. The script iterates over the
+``release`` table and any partitioned tables to ensure all categories are
+covered.
 """
 
 from __future__ import annotations
@@ -49,28 +49,25 @@ def prune_sizes() -> int:
 
     total = 0
     for table in tables:
+        # Remove releases exceeding the global maximum size first.
         if MAX_BYTES > 0:
             cur.execute(
-                f"DELETE FROM {table} WHERE size_bytes > {placeholder}", (MAX_BYTES,)
+                f"DELETE FROM {table} WHERE size_bytes > {placeholder}",
+                [MAX_BYTES],
             )
             total += cur.rowcount
 
-        if MIN_BYTES > 0:
-            cur.execute(
-                f"DELETE FROM {table} WHERE size_bytes < {placeholder}", (MIN_BYTES,)
-            )
-            total += cur.rowcount
-            continue
-
+        # Apply category specific minimum thresholds.
         cur.execute(f"SELECT DISTINCT category_id FROM {table}")
-        categories = [row[0] for row in cur.fetchall()]
-        for cat in categories:
-            min_bytes = min_size_for_release("", str(cat))
+        for (cat_id,) in cur.fetchall():
+            if cat_id is None:
+                continue
+            min_bytes = max(MIN_BYTES, min_size_for_release("", str(cat_id)))
             if min_bytes <= 0:
                 continue
             cur.execute(
                 f"DELETE FROM {table} WHERE category_id = {placeholder} AND size_bytes < {placeholder}",
-                (cat, min_bytes),
+                [cat_id, min_bytes],
             )
             total += cur.rowcount
 
