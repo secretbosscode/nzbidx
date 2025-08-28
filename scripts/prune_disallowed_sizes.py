@@ -2,18 +2,18 @@
 # ruff: noqa: E402
 """Prune releases outside configured size thresholds.
 
-This helper reads the same ``MIN_RELEASE_BYTES`` and ``MAX_RELEASE_BYTES``
-environment variables used during ingest and removes any rows where the
-``size_bytes`` column falls outside the configured range. It iterates over the
-``release`` table and any partitioned tables to ensure all categories are
-covered.
+This helper removes rows whose ``size_bytes`` fall outside the range
+configured for their category. The maximum allowed size is still controlled by
+the ``MAX_RELEASE_BYTES`` environment variable, but the minimum threshold is
+determined per category using :func:`nzbidx_ingest.config.min_size_for_release`.
+It iterates over the ``release`` table and any partitioned tables to ensure all
+categories are covered.
 """
 
 from __future__ import annotations
 
 import os
 import sys
-import logging
 from pathlib import Path
 
 # Ensure local packages are importable when running from the repo root.
@@ -21,25 +21,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
 from nzbidx_ingest.main import connect_db  # type: ignore
+from nzbidx_ingest.config import min_size_for_release  # type: ignore
 
 try:  # Prefer ingest helper but fall back to API helper if unavailable.
     from nzbidx_ingest.sql import sql_placeholder  # type: ignore
 except Exception:  # pragma: no cover - fallback
     from nzbidx_api.db import sql_placeholder  # type: ignore
 
-
-MIN_BYTES = int(os.getenv("MIN_RELEASE_BYTES", "0") or 0)
 MAX_BYTES = int(os.getenv("MAX_RELEASE_BYTES", "0") or 0)
 
 
 def prune_sizes() -> int:
     """Delete releases with ``size_bytes`` outside the configured range."""
-
-    if MIN_BYTES <= 0 and MAX_BYTES <= 0:
-        logging.warning(
-            "No size thresholds configured; skipping pruning of disallowed sizes."
-        )
-        return 0
 
     conn = connect_db()
     cur = conn.cursor()
@@ -49,24 +42,32 @@ def prune_sizes() -> int:
     try:
         cur.execute("SELECT tablename FROM pg_tables WHERE tablename LIKE 'release_%'")
         tables.extend(row[0] for row in cur.fetchall())
-    except Exception:
+    except Exception:  # pragma: no cover - best effort
         pass
 
     total = 0
     for table in tables:
-        conditions: list[str] = []
-        params: list[int] = []
-        if MIN_BYTES > 0:
-            conditions.append(f"size_bytes < {placeholder}")
-            params.append(MIN_BYTES)
+        # Prune releases smaller than the category's configured minimum size.
+        cur.execute(f"SELECT DISTINCT category_id FROM {table}")
+        categories = [row[0] for row in cur.fetchall() if row[0] is not None]
+        for category_id in categories:
+            min_bytes = min_size_for_release("", str(category_id))
+            if min_bytes <= 0:
+                continue
+            cur.execute(
+                f"DELETE FROM {table} WHERE category_id = {placeholder} AND size_bytes < {placeholder}",
+                (category_id, min_bytes),
+            )
+            total += cur.rowcount
+
+        # Prune releases larger than the globally configured maximum.
         if MAX_BYTES > 0:
-            conditions.append(f"size_bytes > {placeholder}")
-            params.append(MAX_BYTES)
-        if not conditions:
-            continue
-        where = " OR ".join(conditions)
-        cur.execute(f"DELETE FROM {table} WHERE {where}", params)
-        total += cur.rowcount
+            cur.execute(
+                f"DELETE FROM {table} WHERE size_bytes > {placeholder}",
+                (MAX_BYTES,),
+            )
+            total += cur.rowcount
+
     conn.commit()
     conn.close()
     return total
