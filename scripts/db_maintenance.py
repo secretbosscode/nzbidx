@@ -7,6 +7,7 @@ up to date.
 """
 
 import asyncio
+import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -15,10 +16,14 @@ from prune_disallowed_sizes import prune_sizes
 
 
 async def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     scheduler = AsyncIOScheduler()
 
     async def prune_disallowed() -> None:
-        await asyncio.to_thread(prune_sizes)
+        deleted = await asyncio.to_thread(prune_sizes)
+        logging.info("prune_disallowed_sizes_complete", extra={"deleted": deleted})
 
     # Run VACUUM daily at 03:00
     scheduler.add_job(vacuum_analyze, "cron", hour=3)
