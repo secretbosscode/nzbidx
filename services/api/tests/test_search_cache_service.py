@@ -21,7 +21,7 @@ def test_cache_rss_stores_xml_when_item_present() -> None:
 
     asyncio.run(search_cache.cache_rss("k", xml))
 
-    assert asyncio.run(search_cache.get_cached_rss("k")) == xml
+    assert asyncio.run(search_cache.get_cached_rss("k")) == xml.encode()
 
 
 def test_cache_rss_skips_when_no_items() -> None:
