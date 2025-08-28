@@ -1,3 +1,10 @@
+x-db-env: &db_env
+  DATABASE_URL: postgres://nzbidx:nzbidx@postgres:5432/nzbidx
+  PGDATABASE: nzbidx
+  PGUSER: nzbidx
+  PGPASSWORD: nzbidx
+  POSTGRES_PORT: 5432
+
 services:
   nzbidx:
     image: nzbidx:latest
@@ -19,11 +26,7 @@ services:
         condition: service_healthy
     environment:
       NZBIDX_USE_STD_JSON: ${NZBIDX_USE_STD_JSON:-1} # set to 0 to enable orjson
-      DATABASE_URL: postgres://nzbidx:nzbidx@postgres:5432/nzbidx
-      PGDATABASE: nzbidx
-      PGUSER: nzbidx
-      PGPASSWORD: nzbidx
-      POSTGRES_PORT: 5432
+      <<: *db_env
       API_KEYS: dev
       RATE_LIMIT: 60
       RATE_WINDOW: 60
@@ -36,6 +39,19 @@ services:
       NNTP_TOTAL_TIMEOUT: 600
       NZB_TIMEOUT_SECONDS: 600 # should be ≥ NNTP_TOTAL_TIMEOUT
       SEARCH_TTL_SECONDS: 60
+  maintenance:
+    image: nzbidx:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "scripts/db_maintenance.py"]
+    environment:
+      <<: *db_env
+      MAX_RELEASE_BYTES: ${MAX_RELEASE_BYTES:-0}
+      CATEGORY_MIN_SIZES: ${CATEGORY_MIN_SIZES:-}
+      RELEASE_MIN_SIZES: ${RELEASE_MIN_SIZES:-}
+      RELEASE_RETENTION_DAYS: ${RELEASE_RETENTION_DAYS:-0}
+    restart: unless-stopped
   postgres:
     image: pgvector/pgvector:pg17
     environment:
