@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlencode
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from nzbidx_ingest import ingest_loop
 
 from .starlette_compat import (
@@ -32,6 +34,9 @@ from .db import (
     get_engine,
     init_engine,
     ping,
+    analyze,
+    reindex,
+    vacuum_analyze,
 )
 
 try:  # pragma: no cover - optional dependency
@@ -83,6 +88,16 @@ from .metrics_log import start as start_metrics, inc_api_5xx, get_counters
 from .access_log import AccessLogMiddleware
 from .backfill_release_parts import backfill_release_parts
 
+try:  # pragma: no cover - optional prune helper
+    from prune_disallowed_sizes import prune_sizes  # type: ignore
+except Exception:  # pragma: no cover - fallback for non-package layout
+    try:
+        ROOT = Path(__file__).resolve().parents[4]
+        sys.path.append(str(ROOT / "scripts"))
+        from prune_disallowed_sizes import prune_sizes  # type: ignore
+    except Exception:  # pragma: no cover - unavailable
+        prune_sizes = None  # type: ignore
+
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "nzbidx-api")
 
 _stop_metrics: Callable[[], None] | None = None
@@ -91,6 +106,7 @@ _ingest_thread: threading.Thread | None = None
 _backfill_thread: threading.Thread | None = None
 _backfill_status: dict[str, object] = {"status": "idle", "processed": 0}
 _backfill_scheduler_task: asyncio.Task | None = None
+_db_maintenance_scheduler: AsyncIOScheduler | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -282,6 +298,39 @@ async def stop_backfill_scheduler() -> None:
         except Exception:  # pragma: no cover - cancellation/cleanup
             pass
         _backfill_scheduler_task = None
+
+
+async def start_db_maintenance() -> None:
+    """Start periodic database maintenance tasks."""
+    global _db_maintenance_scheduler
+    enabled = os.getenv("ENABLE_DB_MAINTENANCE", "").lower()
+    if enabled not in {"1", "true", "yes"}:
+        logger.info("db_maintenance_disabled")
+        return
+
+    scheduler = AsyncIOScheduler()
+
+    async def prune_disallowed() -> None:
+        if prune_sizes is None:
+            logger.info("prune_sizes_unavailable")
+            return
+        removed = await asyncio.to_thread(prune_sizes)
+        logger.info("prune_disallowed_complete", extra={"removed": removed})
+
+    scheduler.add_job(vacuum_analyze, "cron", hour=3)
+    scheduler.add_job(analyze, "cron", hour=2)
+    scheduler.add_job(reindex, "cron", day_of_week="sun", hour=4)
+    scheduler.add_job(prune_disallowed, "cron", hour=1)
+    scheduler.start()
+    _db_maintenance_scheduler = scheduler
+
+
+async def stop_db_maintenance() -> None:
+    """Stop the maintenance scheduler if running."""
+    global _db_maintenance_scheduler
+    if _db_maintenance_scheduler:
+        _db_maintenance_scheduler.shutdown()
+        _db_maintenance_scheduler = None
 
 
 def stop_ingest() -> None:
@@ -791,11 +840,13 @@ app = Starlette(
         ensure_search_vector,
         start_ingest,
         start_auto_backfill,
+        start_db_maintenance,
         lambda: _set_stop(start_metrics()),
     ],
     on_shutdown=[
         stop_ingest,
         lambda: _stop_metrics() if _stop_metrics else None,
+        stop_db_maintenance,
         dispose_engine,
         close_connection,
     ],
