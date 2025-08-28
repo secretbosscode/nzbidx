@@ -29,7 +29,17 @@ extensions.
 Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper uses APScheduler to run `VACUUM (ANALYZE)`,
 `ANALYZE`, `REINDEX`, and automatic pruning of releases outside the configured
-size thresholds.
+size thresholds. The compose file includes a long-running `maintenance` service
+that executes this script and shares its database connection settings with the
+main `nzbidx` container:
+
+```yaml
+maintenance:
+  command: ["python", "scripts/db_maintenance.py"]
+```
+
+The job respects `MAX_RELEASE_BYTES`, `CATEGORY_MIN_SIZES`,
+`RELEASE_MIN_SIZES`, and `RELEASE_RETENTION_DAYS` when pruning releases.
 
 When adjusting the allowed file-type extensions, remove outdated rows:
 
@@ -105,7 +115,10 @@ faster serializer once compatible.
 | `NNTP_GROUP_WILDCARD` | Pattern used when discovering groups | `alt.binaries.*` |
 | `NNTP_GROUP_LIMIT` | Maximum groups to enumerate when using wildcards | _(unlimited)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
+| `MAX_RELEASE_BYTES` | Maximum allowed release size in bytes; larger releases are pruned | `0` |
+| `CATEGORY_MIN_SIZES` | Comma separated `category=bytes` overrides for minimum release size | _(none)_ |
 | `RELEASE_MIN_SIZES` | Comma separated `pattern=bytes` overrides for minimum release size (see below) | _(none)_ |
+| `RELEASE_RETENTION_DAYS` | Prune releases older than this many days | `0` |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
 | `DETECT_LANGUAGE` | `1`, `true`, or `yes` enables automatic language detection (any other value disables for faster ingest) | `1` |
