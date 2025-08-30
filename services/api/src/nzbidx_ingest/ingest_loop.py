@@ -112,58 +112,82 @@ def _process_groups(
         prune_group(db, ig)
 
     for group in groups:
-        last = cursors.get_cursor(group) or 0
-        start = last + 1
-        high = 0
-        if hasattr(client, "group"):
-            try:
-                _resp, _count, _low, high_s, _name = client.group(group)
-                high = int(high_s)
-            except Exception:
-                high = 0
-        else:
-            try:
-                high = int(client.high_water_mark(group))
-            except Exception:
-                high = 0
-        remaining = max(high - last, 0)
-        if remaining <= 0:
+        for attempt in range(2):
+            last = cursors.get_cursor(group) or 0
+            start = last + 1
+            high = 0
+            if hasattr(client, "group"):
+                try:
+                    _resp, _count, _low, high_s, _name = client.group(group)
+                    high = int(high_s)
+                except Exception:
+                    high = 0
+            else:
+                try:
+                    high = int(client.high_water_mark(group))
+                except Exception:
+                    high = 0
+            remaining = max(high - last, 0)
             headers: list[dict[str, object]] = []
-        else:
-            batch = min(remaining, INGEST_BATCH_MAX)
-            batch = max(batch, min(remaining, INGEST_BATCH_MIN))
-            end = start + batch - 1
-            try:
-                headers = client.xover(group, start, end)
-                _group_failures[group] = 0
-            except Exception:
-                failures = _group_failures.get(group, 0) + 1
-                _group_failures[group] = failures
-                logger.exception(
-                    "ingest_xover_error",
-                    extra={
-                        "group": group,
-                        "start": start,
-                        "end": end,
-                        "failures": failures,
-                    },
-                )
-                if failures >= 3:
-                    logger.warning(
-                        "ingest_xover_consecutive_failures",
-                        extra={"group": group, "failures": failures},
+            if remaining > 0:
+                batch = min(remaining, INGEST_BATCH_MAX)
+                batch = max(batch, min(remaining, INGEST_BATCH_MIN))
+                end = start + batch - 1
+                try:
+                    headers = client.xover(group, start, end)
+                    _group_failures[group] = 0
+                except Exception:
+                    failures = _group_failures.get(group, 0) + 1
+                    _group_failures[group] = failures
+                    logger.exception(
+                        "ingest_xover_error",
+                        extra={
+                            "group": group,
+                            "start": start,
+                            "end": end,
+                            "failures": failures,
+                        },
                     )
-                continue
+                    if failures >= 3:
+                        logger.warning(
+                            "ingest_xover_consecutive_failures",
+                            extra={"group": group, "failures": failures},
+                        )
+                    break
+            if not headers:
+                logger.info(
+                    "ingest_idle",
+                    extra={"group": group, "cursor": last, "high_water": high},
+                )
+                # ``high`` is ``0`` when the NNTP server is unreachable.
+                # Attempt to reconnect before giving up so the group will be
+                # processed once connectivity is restored.
+                if high == 0 and attempt == 0:
+                    failures = _group_failures.get(group, 0) + 1
+                    _group_failures[group] = failures
+                    delay = min(INGEST_POLL_MAX_SECONDS, 2 ** (failures - 1))
+                    logger.warning(
+                        "ingest_reconnect",
+                        extra={
+                            "group": group,
+                            "failures": failures,
+                            "delay": delay,
+                        },
+                    )
+                    try:
+                        client.connect()
+                    except Exception:
+                        logger.exception(
+                            "ingest_reconnect_failed",
+                            extra={"group": group},
+                        )
+                    if delay > 0:
+                        time.sleep(delay)
+                    continue
+                if high > 0:
+                    cursors.mark_irrelevant(group)
+                break
         if not headers:
-            logger.info(
-                "ingest_idle",
-                extra={"group": group, "cursor": last, "high_water": high},
-            )
-            # ``high`` is ``0`` when the NNTP server is unreachable.  Avoid
-            # marking the group as irrelevant in that case so it will be
-            # retried once connectivity is restored.
-            if high > 0:
-                cursors.mark_irrelevant(group)
             continue
         metrics = {"processed": 0, "inserted": 0}
         batch_start = time.monotonic()
