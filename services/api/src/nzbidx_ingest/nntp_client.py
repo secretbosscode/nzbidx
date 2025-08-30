@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Optional, TYPE_CHECKING
 
 from nzbidx_api import config
@@ -27,6 +28,8 @@ class NNTPClient:
         self.use_ssl = settings.use_ssl
         self.user = settings.user
         self.password = settings.password
+        self.connect_attempts = getattr(settings, "connect_attempts", 3)
+        self.connect_delay = getattr(settings, "connect_delay", 1.0)
         # Default to a generous timeout to handle slow or flaky providers
         self.timeout = float(config.nntp_timeout_seconds())
         self._server: Optional[nntplib.NNTP] = None
@@ -66,6 +69,28 @@ class NNTPClient:
             self._server = None
             self._current_group = None
 
+    def _connect_with_retry(self) -> Optional[nntplib.NNTP]:
+        if not self.host:
+            return None
+        last_exc: Exception | None = None
+        for attempt in range(1, self.connect_attempts + 1):
+            logger.info(
+                "connection_attempt", extra={"host": self.host, "attempt": attempt}
+            )
+            try:
+                return self._ensure_connection()
+            except Exception as exc:  # pragma: no cover - network failure
+                last_exc = exc
+                logger.warning(
+                    "connection_attempt_failed",
+                    extra={"host": self.host, "attempt": attempt, "error": str(exc)},
+                )
+                if attempt < self.connect_attempts:
+                    time.sleep(self.connect_delay * attempt)
+        if last_exc:
+            raise last_exc
+        return None
+
     def connect(self) -> None:
         """Establish the persistent NNTP connection."""
         if not self.host:
@@ -73,7 +98,7 @@ class NNTPClient:
             return
         try:
             self._close()
-            self._ensure_connection()
+            self._connect_with_retry()
         except Exception as exc:  # pragma: no cover - network failure
             logger.warning(
                 "connection_failed", extra={"host": self.host, "error": str(exc)}
@@ -85,7 +110,7 @@ class NNTPClient:
 
     def _reconnect(self) -> None:
         self._close()
-        self._ensure_connection()
+        self._connect_with_retry()
 
     # ------------------------------------------------------------------
     # NNTP commands

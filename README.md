@@ -121,6 +121,8 @@ faster serializer once compatible.
 | `RELEASE_RETENTION_DAYS` | Prune releases older than this many days | `0` |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
+| `NNTP_CONNECT_ATTEMPTS` | Total attempts when establishing a connection before giving up | `3` |
+| `NNTP_CONNECT_DELAY` | Base seconds to sleep between connection attempts (multiplied by attempt number) | `1` |
 | `DETECT_LANGUAGE` | `1`, `true`, or `yes` enables automatic language detection (any other value disables for faster ingest) | `1` |
 | `ALLOWED_MOVIE_EXTENSIONS` | Comma-separated video extensions allowed for movie releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
 | `ALLOWED_TV_EXTENSIONS` | Comma-separated video extensions allowed for TV releases | `mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts` |
@@ -206,7 +208,9 @@ performance. Wildcard patterns like `alt.binaries.*` (controlled by
 `NNTP_GROUP_WILDCARD`) are expanded via `server.list`; set `NNTP_GROUP_LIMIT` to
 cap enumeration. Use `NNTP_TIMEOUT` to
 adjust the socket timeout for slow or flaky providers and `NNTP_TOTAL_TIMEOUT`
-to cap overall retry time. To invoke a one-off ingest loop manually:
+to cap overall retry time. `NNTP_CONNECT_ATTEMPTS` and `NNTP_CONNECT_DELAY`
+control how often the worker retries initial connections. To invoke a one-off
+ingest loop manually:
 
     export NNTP_HOST=news.example.net
     export NNTP_USER=username
