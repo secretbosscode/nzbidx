@@ -75,3 +75,32 @@ def test_group_recovers_after_outage(monkeypatch):
     assert "alt.test" not in loop._group_probes
     assert client.xover_calls > 0
     assert loop._group_failures.get("alt.test", 0) == 0
+
+
+def test_run_once_returns_probe_delay(monkeypatch):
+    loop._group_failures.clear()
+    loop._group_probes.clear()
+
+    now = [0.0]
+
+    def monotonic() -> float:
+        return now[0]
+
+    monkeypatch.setattr(loop.time, "monotonic", monotonic)
+    monkeypatch.setattr(loop.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(config, "NNTP_GROUPS", ["alt.test"], raising=False)
+    monkeypatch.setattr(cursors, "get_cursor", lambda _g: 0)
+    monkeypatch.setattr(cursors, "set_cursor", lambda _g, _c: None)
+    monkeypatch.setattr(cursors, "mark_irrelevant", lambda _g: None)
+    monkeypatch.setattr(cursors, "get_irrelevant_groups", lambda: set())
+    monkeypatch.setattr(loop, "connect_db", lambda: None)
+
+    def fake_process(_client, _db, _groups, _ignored):
+        loop._group_probes["alt.test"] = now[0] + 1
+        return loop.INGEST_POLL_MAX_SECONDS
+
+    monkeypatch.setattr(loop, "_process_groups", fake_process)
+
+    delay = loop.run_once(object())
+    assert delay == loop.INGEST_POLL_MIN_SECONDS
+    assert delay < loop.INGEST_POLL_MAX_SECONDS
