@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from typing import Optional, TYPE_CHECKING
 
 from nzbidx_api import config
@@ -36,6 +35,7 @@ class NNTPClient:
         self._server: Optional[nntplib.NNTP] = None
         self._current_group: Optional[str] = None
         self._connect_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
 
     # ------------------------------------------------------------------
     # Connection helpers
@@ -75,7 +75,7 @@ class NNTPClient:
         if not self.host:
             return None
         attempt = 0
-        while True:
+        while not self._stop_event.is_set():
             attempt += 1
             logger.info(
                 "connection_attempt", extra={"host": self.host, "attempt": attempt}
@@ -95,7 +95,11 @@ class NNTPClient:
                         "delay": delay,
                     },
                 )
-                time.sleep(delay)
+                if self._stop_event.wait(delay):
+                    break
+
+        self._connect_thread = None
+        return None
 
     def connect(self) -> bool:
         """Establish the persistent NNTP connection.
@@ -117,6 +121,7 @@ class NNTPClient:
             logger.warning(
                 "connection_failed", extra={"host": self.host, "error": str(exc)}
             )
+            self._stop_event.clear()
             self._connect_thread = threading.Thread(
                 target=self._connect_with_retry, daemon=True
             )
@@ -125,6 +130,10 @@ class NNTPClient:
 
     def quit(self) -> None:
         """Terminate the connection gracefully."""
+        self._stop_event.set()
+        if self._connect_thread is not None and self._connect_thread.is_alive():
+            self._connect_thread.join()
+            self._connect_thread = None
         self._close()
 
     def _reconnect(self) -> None:
