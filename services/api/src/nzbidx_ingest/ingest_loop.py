@@ -547,6 +547,15 @@ def run_once(client: NNTPClient | None = None) -> float:
             client.connect()
         db = connect_db()
         delay = _process_groups(client, db, groups, ignored)
+        if _group_probes:
+            now = time.monotonic()
+            next_probe = min(_group_probes.values())
+            probe_delay = max(0.0, next_probe - now)
+            probe_delay = max(
+                INGEST_POLL_MIN_SECONDS,
+                min(INGEST_POLL_MAX_SECONDS, probe_delay),
+            )
+            delay = min(delay, probe_delay)
         last_run = time.monotonic()
         last_run_wall = time.time()
         return delay
