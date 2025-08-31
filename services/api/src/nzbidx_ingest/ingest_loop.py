@@ -48,6 +48,10 @@ logger = logging.getLogger(__name__)
 # This is reset on successful xover calls.
 _group_failures: dict[str, int] = {}
 
+# Track groups that failed to reconnect and when they should be probed next.
+# The value is a monotonic timestamp after which the group should be retried.
+_group_probes: dict[str, float] = {}
+
 # Counter used to throttle how often batch metrics are logged at INFO level.
 _log_counter = 0
 
@@ -136,6 +140,7 @@ def _process_groups(
                 try:
                     headers = client.xover(group, start, end)
                     _group_failures[group] = 0
+                    _group_probes.pop(group, None)
                 except Exception:
                     failures = _group_failures.get(group, 0) + 1
                     _group_failures[group] = failures
@@ -160,31 +165,38 @@ def _process_groups(
                     extra={"group": group, "cursor": last, "high_water": high},
                 )
                 # ``high`` is ``0`` when the NNTP server is unreachable.
-                # Attempt to reconnect before giving up so the group will be
-                # processed once connectivity is restored.
-                if high == 0 and attempt == 0:
-                    failures = _group_failures.get(group, 0) + 1
-                    _group_failures[group] = failures
-                    delay = min(INGEST_POLL_MAX_SECONDS, 2 ** (failures - 1))
-                    logger.warning(
-                        "ingest_reconnect",
-                        extra={
-                            "group": group,
-                            "failures": failures,
-                            "delay": delay,
-                        },
-                    )
-                    try:
-                        client.connect()
-                    except Exception:
-                        logger.exception(
-                            "ingest_reconnect_failed",
-                            extra={"group": group},
+                # Attempt to reconnect once; if still unreachable schedule a
+                # probe for a future run instead of blocking the loop.
+                if high == 0:
+                    if attempt == 0:
+                        failures = _group_failures.get(group, 0) + 1
+                        _group_failures[group] = failures
+                        delay = min(INGEST_POLL_MAX_SECONDS, 2 ** (failures - 1))
+                        logger.warning(
+                            "ingest_reconnect",
+                            extra={
+                                "group": group,
+                                "failures": failures,
+                                "delay": delay,
+                            },
                         )
-                    if delay > 0:
-                        time.sleep(delay)
-                    continue
+                        try:
+                            client.connect()
+                        except Exception:
+                            logger.exception(
+                                "ingest_reconnect_failed",
+                                extra={"group": group},
+                            )
+                        continue
+                    probe_delay = min(
+                        INGEST_POLL_MAX_SECONDS,
+                        2 ** max(_group_failures.get(group, 1) - 1, 0),
+                    )
+                    _group_probes[group] = time.monotonic() + probe_delay
+                    break
                 if high > 0:
+                    _group_failures[group] = 0
+                    _group_probes.pop(group, None)
                     cursors.mark_irrelevant(group)
                 break
         if not headers:
@@ -482,25 +494,47 @@ def run_once(client: NNTPClient | None = None) -> float:
     poll.
     """
     global last_run, last_run_wall
-    groups = config.get_nntp_groups()
+    groups_all = config.get_nntp_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
         logger.info("ingest_ignore_groups", extra={"groups": list(ignored)})
-    groups = [g for g in groups if g not in ignored]
-    if not groups:
+    groups_all = [g for g in groups_all if g not in ignored]
+    if not groups_all:
         logger.info("ingest_no_groups")
         last_run = time.monotonic()
         last_run_wall = time.time()
         return INGEST_POLL_MAX_SECONDS
     skip = set(cursors.get_irrelevant_groups())
     if skip:
-        groups = [g for g in groups if g not in skip]
-    if not groups:
+        groups_all = [g for g in groups_all if g not in skip]
+    if not groups_all:
         logger.info("ingest_no_groups")
         last_run = time.monotonic()
         last_run_wall = time.time()
         return INGEST_POLL_MAX_SECONDS
-    config.set_nntp_groups(groups)
+    now = time.monotonic()
+    groups: list[str] = []
+    for g in groups_all:
+        probe = _group_probes.get(g)
+        if probe is not None and probe > now:
+            logger.debug(
+                "ingest_probe_pending", extra={"group": g, "next_probe": probe}
+            )
+            continue
+        groups.append(g)
+    config.set_nntp_groups(groups_all)
+    if not groups:
+        logger.info("ingest_no_groups")
+        last_run = now
+        last_run_wall = time.time()
+        delay = INGEST_POLL_MAX_SECONDS
+        if _group_probes:
+            next_probe = min(_group_probes.values())
+            delay = max(
+                INGEST_POLL_MIN_SECONDS,
+                min(INGEST_POLL_MAX_SECONDS, max(0.0, next_probe - now)),
+            )
+        return delay
     logger.info("ingest_groups", extra={"count": len(groups), "groups": groups})
 
     created_client = False
