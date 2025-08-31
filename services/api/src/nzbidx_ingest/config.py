@@ -21,8 +21,8 @@ class NNTPSettings:
     use_ssl: bool
     user: str | None
     password: str | None
-    connect_attempts: int = 3
-    connect_delay: float = 1.0
+    base: float = 1.0
+    max_delay: float = 60.0
 
 
 def nntp_settings() -> NNTPSettings:
@@ -32,16 +32,16 @@ def nntp_settings() -> NNTPSettings:
     port = int(os.getenv("NNTP_PORT_1") or os.getenv("NNTP_PORT") or "119")
     ssl_env = os.getenv("NNTP_SSL_1") or os.getenv("NNTP_SSL")
     use_ssl = (ssl_env == "1") if ssl_env is not None else port == 563
-    connect_attempts = int(os.getenv("NNTP_CONNECT_ATTEMPTS", "3"))
-    connect_delay = float(os.getenv("NNTP_CONNECT_DELAY", "1"))
+    base = float(os.getenv("NNTP_CONNECT_BASE", "1"))
+    max_delay = float(os.getenv("NNTP_CONNECT_MAX_DELAY", "60"))
     return NNTPSettings(
         host=host,
         port=port,
         use_ssl=use_ssl,
         user=os.getenv("NNTP_USER"),
         password=os.getenv("NNTP_PASS"),
-        connect_attempts=connect_attempts,
-        connect_delay=connect_delay,
+        base=base,
+        max_delay=max_delay,
     )
 
 
