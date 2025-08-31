@@ -106,13 +106,17 @@ def call_with_retry(
     dep: str,
     func: Callable[..., T],
     *args,
+    retry_forever: bool | None = None,
     **kwargs,
 ) -> T:
     """Call ``func`` with jittered retries and circuit breaker tracking."""
 
     retries = settings.retry_max
     delay = settings.retry_base_ms / 1000
+    max_delay = settings.retry_forever_max_ms / 1000
     attempt = 0
+    if retry_forever is None:
+        retry_forever = dep in settings.retry_forever_deps
     while True:
         try:
             with start_span("dep_call"):
@@ -136,20 +140,21 @@ def call_with_retry(
                 extra={"dep": dep, "retries": attempt, "breaker_state": "open"},
             )
             inc_breaker_open(dep)
-            raise
+            if not retry_forever:
+                raise
         except Exception:
             state = "half-open" if breaker.is_open() else "closed"
             set_span_attr("breaker_state", state)
-            if breaker.is_open() or attempt >= retries:
+            if not retry_forever and (breaker.is_open() or attempt >= retries):
                 logger.warning(
                     "dep_fail",
                     extra={"dep": dep, "retries": attempt, "breaker_state": state},
                 )
                 raise
-            jitter = random.uniform(0, settings.retry_jitter_ms / 1000)
-            time.sleep(delay + jitter)
-            delay *= 2
-            attempt += 1
+        jitter = random.uniform(0, settings.retry_jitter_ms / 1000)
+        time.sleep(delay + jitter)
+        delay = min(delay * 2, max_delay)
+        attempt += 1
 
 
 async def call_with_retry_async(
@@ -157,13 +162,17 @@ async def call_with_retry_async(
     dep: str,
     func: Callable[..., Awaitable[T] | T],
     *args,
+    retry_forever: bool | None = None,
     **kwargs,
 ) -> T:
     """Async wrapper around ``func`` with retries and circuit breaker."""
 
     retries = settings.retry_max
     delay = settings.retry_base_ms / 1000
+    max_delay = settings.retry_forever_max_ms / 1000
     attempt = 0
+    if retry_forever is None:
+        retry_forever = dep in settings.retry_forever_deps
     while True:
         try:
             with start_span("dep_call"):
@@ -192,21 +201,22 @@ async def call_with_retry_async(
                 extra={"dep": dep, "retries": attempt, "breaker_state": "open"},
             )
             inc_breaker_open(dep)
-            raise
+            if not retry_forever:
+                raise
         except Exception:
             breaker.record_failure()
             state = "half-open" if breaker.is_open() else "closed"
             set_span_attr("breaker_state", state)
-            if breaker.is_open() or attempt >= retries:
+            if not retry_forever and (breaker.is_open() or attempt >= retries):
                 logger.warning(
                     "dep_fail",
                     extra={"dep": dep, "retries": attempt, "breaker_state": state},
                 )
                 raise
-            jitter = random.uniform(0, settings.retry_jitter_ms / 1000)
-            await asyncio.sleep(delay + jitter)
-            delay *= 2
-            attempt += 1
+        jitter = random.uniform(0, settings.retry_jitter_ms / 1000)
+        await asyncio.sleep(delay + jitter)
+        delay = min(delay * 2, max_delay)
+        attempt += 1
 
 
 os_breaker: CircuitBreaker[object] = CircuitBreaker(
