@@ -242,11 +242,6 @@ DEFAULT_ALLOWED_EXTENSIONS: set[str] = {
     "wav",
     "ogg",
     "wma",
-    # Images
-    "jpg",
-    "jpeg",
-    "png",
-    "gif",
     # Books and comics
     "epub",
     "mobi",
