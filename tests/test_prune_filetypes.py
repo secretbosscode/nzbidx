@@ -88,3 +88,16 @@ def test_prune_disallowed_filetypes_env_extends(
     deleted = prune_disallowed_filetypes(conn)
     assert deleted == 0
     assert [r["extension"] for r in conn.rows] == ["rar", "foo"]
+
+
+@pytest.mark.parametrize("ext", ["jpg", "jpeg", "png", "gif"])
+def test_prune_disallowed_filetypes_images(
+    ext: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_file_extension_env(monkeypatch)
+    conn = FakeConnection([
+        {"extension": ext},
+    ])
+    deleted = prune_disallowed_filetypes(conn)
+    assert deleted == 1
+    assert conn.rows == []
