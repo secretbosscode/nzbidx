@@ -23,10 +23,7 @@ class FakeCursor:
                 for i, r in enumerate(self.conn.rows)
             ]
             return
-        if (
-            query.startswith("DELETE FROM release WHERE id IN")
-            and params is not None
-        ):
+        if query.startswith("DELETE FROM release WHERE id IN") and params is not None:
             ids = list(params)
             for idx in sorted(ids, reverse=True):
                 del self.conn.rows[idx]
@@ -49,7 +46,9 @@ class FakeCursor:
     def fetchall(self) -> list[tuple[int | None]]:  # pragma: no cover - trivial
         return self._rows
 
-    def fetchmany(self, size: int) -> list[tuple[int | None]]:  # pragma: no cover - trivial
+    def fetchmany(
+        self, size: int
+    ) -> list[tuple[int | None]]:  # pragma: no cover - trivial
         rows, self._rows = self._rows[:size], self._rows[size:]
         return rows
 
