@@ -92,6 +92,16 @@ class Settings:
     retry_jitter_ms: int = field(
         default_factory=lambda: _int_env("RETRY_JITTER_MS", 200)
     )
+    retry_forever_deps: set[str] = field(
+        default_factory=lambda: {
+            v.strip()
+            for v in os.getenv("RETRY_FOREVER_DEPS", "").split(",")
+            if v.strip()
+        }
+    )
+    retry_forever_max_ms: int = field(
+        default_factory=lambda: _int_env("RETRY_FOREVER_MAX_MS", 1000)
+    )
     max_limit: int = field(default_factory=lambda: _int_env("MAX_LIMIT", 100))
     max_offset: int = field(default_factory=lambda: _int_env("MAX_OFFSET", 10_000))
 
