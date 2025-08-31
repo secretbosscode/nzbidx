@@ -52,6 +52,7 @@ src/nzbidx_ingest/sql.py
 tests/test_ingest_commit_failure.py
 tests/test_ingest_nul_bytes.py
 tests/test_ingest_surrogates.py
+tests/test_nntp_client_reconnect.py
 tests/test_nzb_builder_segments.py
 tests/test_parsers_extensions.py
 tests/test_parsers_segments.py
