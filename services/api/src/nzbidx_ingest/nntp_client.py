@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Optional, TYPE_CHECKING
 
@@ -28,12 +29,13 @@ class NNTPClient:
         self.use_ssl = settings.use_ssl
         self.user = settings.user
         self.password = settings.password
-        self.connect_attempts = getattr(settings, "connect_attempts", 3)
-        self.connect_delay = getattr(settings, "connect_delay", 1.0)
+        self.base = getattr(settings, "base", 1.0)
+        self.max_delay = getattr(settings, "max_delay", 60.0)
         # Default to a generous timeout to handle slow or flaky providers
         self.timeout = float(config.nntp_timeout_seconds())
         self._server: Optional[nntplib.NNTP] = None
         self._current_group: Optional[str] = None
+        self._connect_thread: threading.Thread | None = None
 
     # ------------------------------------------------------------------
     # Connection helpers
@@ -72,45 +74,61 @@ class NNTPClient:
     def _connect_with_retry(self) -> Optional[nntplib.NNTP]:
         if not self.host:
             return None
-        last_exc: Exception | None = None
-        for attempt in range(1, self.connect_attempts + 1):
+        attempt = 0
+        while True:
+            attempt += 1
             logger.info(
                 "connection_attempt", extra={"host": self.host, "attempt": attempt}
             )
             try:
-                return self._ensure_connection()
+                server = self._ensure_connection()
+                self._connect_thread = None
+                return server
             except Exception as exc:  # pragma: no cover - network failure
-                last_exc = exc
+                delay = min(self.max_delay, self.base * 2 ** (attempt - 1))
                 logger.warning(
                     "connection_attempt_failed",
-                    extra={"host": self.host, "attempt": attempt, "error": str(exc)},
+                    extra={
+                        "host": self.host,
+                        "attempt": attempt,
+                        "error": str(exc),
+                        "delay": delay,
+                    },
                 )
-                if attempt < self.connect_attempts:
-                    time.sleep(self.connect_delay * attempt)
-        if last_exc:
-            raise last_exc
-        return None
+                time.sleep(delay)
 
-    def connect(self) -> None:
-        """Establish the persistent NNTP connection."""
+    def connect(self) -> bool:
+        """Establish the persistent NNTP connection.
+
+        Returns ``True`` when the connection was established immediately. If
+        the initial attempt fails, a background thread is started to retry and
+        ``False`` is returned.
+        """
         if not self.host:
             logger.info("dry-run: no NNTP providers configured")
-            return
+            return True
+        if self._connect_thread is not None and self._connect_thread.is_alive():
+            return False
+        self._close()
         try:
-            self._close()
-            self._connect_with_retry()
+            self._ensure_connection()
+            return True
         except Exception as exc:  # pragma: no cover - network failure
             logger.warning(
                 "connection_failed", extra={"host": self.host, "error": str(exc)}
             )
+            self._connect_thread = threading.Thread(
+                target=self._connect_with_retry, daemon=True
+            )
+            self._connect_thread.start()
+            return False
 
     def quit(self) -> None:
         """Terminate the connection gracefully."""
         self._close()
 
     def _reconnect(self) -> None:
-        self._close()
-        self._connect_with_retry()
+        self.connect()
 
     # ------------------------------------------------------------------
     # NNTP commands
