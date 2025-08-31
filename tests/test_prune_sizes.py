@@ -13,26 +13,24 @@ class FakeCursor:
         self.rowcount = 0
         self._rows: list[tuple[int | None]] = []
 
-    def execute(self, query: str, params: tuple | None = None) -> None:
+    def execute(self, query: str, params: tuple | list | None = None) -> None:
         if query.startswith("SELECT tablename FROM pg_tables"):
             self._rows = []
             return
-        if query.startswith("SELECT DISTINCT category_id FROM"):
-            cats = {row.get("category_id") for row in self.conn.rows}
-            self._rows = [(c,) for c in cats]
+        if query.startswith("SELECT id, norm_title, category_id, size_bytes FROM"):
+            self._rows = [
+                (i, None, r.get("category_id"), r.get("size_bytes"))
+                for i, r in enumerate(self.conn.rows)
+            ]
             return
         if (
-            query.startswith("DELETE FROM release WHERE category_id")
+            query.startswith("DELETE FROM release WHERE id IN")
             and params is not None
         ):
-            cat, limit = params
-            removed: list[int] = []
-            for idx, row in enumerate(self.conn.rows):
-                if row.get("category_id") == cat and row.get("size_bytes", 0) < limit:
-                    removed.append(idx)
-            for idx in reversed(removed):
+            ids = list(params)
+            for idx in sorted(ids, reverse=True):
                 del self.conn.rows[idx]
-            self.rowcount = len(removed)
+            self.rowcount = len(ids)
             return
         if (
             query.startswith("DELETE FROM release WHERE size_bytes >")
@@ -50,6 +48,10 @@ class FakeCursor:
 
     def fetchall(self) -> list[tuple[int | None]]:  # pragma: no cover - trivial
         return self._rows
+
+    def fetchmany(self, size: int) -> list[tuple[int | None]]:  # pragma: no cover - trivial
+        rows, self._rows = self._rows[:size], self._rows[size:]
+        return rows
 
 
 class FakeConnection:

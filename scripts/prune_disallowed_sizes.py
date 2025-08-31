@@ -61,25 +61,27 @@ def prune_sizes() -> int:
 
     total = 0
     for table in tables:
-        ids: list[int] = []
-        cur.execute(f"SELECT id, norm_title, category_id, size_bytes FROM {table}")
-        for rid, norm_title, category_id, size_bytes in cur.fetchall():
-            cat = str(category_id) if category_id is not None else ""
-            min_bytes = min_size_for_release(norm_title or "", cat)
-            if min_bytes > 0 and (size_bytes or 0) < min_bytes:
-                ids.append(rid)
-                if len(ids) >= 1000:
-                    ph = ", ".join(placeholder for _ in ids)
-                    cur.execute(
-                        f"DELETE FROM {table} WHERE id IN ({ph})",
-                        ids,
-                    )
-                    total += cur.rowcount
-                    ids.clear()
-        if ids:
-            ph = ", ".join(placeholder for _ in ids)
-            cur.execute(f"DELETE FROM {table} WHERE id IN ({ph})", ids)
-            total += cur.rowcount
+        try:
+            stream = conn.cursor(name=f"prune_{table}")
+        except Exception:  # pragma: no cover - driver may not support named cursors
+            stream = conn.cursor()
+        stream.itersize = 1000
+        stream.execute(f"SELECT id, norm_title, category_id, size_bytes FROM {table}")
+
+        while True:
+            rows = stream.fetchmany(1000)
+            if not rows:
+                break
+            ids: list[int] = []
+            for rid, norm_title, category_id, size_bytes in rows:
+                cat = str(category_id) if category_id is not None else ""
+                min_bytes = min_size_for_release(norm_title or "", cat)
+                if min_bytes > 0 and (size_bytes or 0) < min_bytes:
+                    ids.append(rid)
+            if ids:
+                ph = ", ".join(placeholder for _ in ids)
+                cur.execute(f"DELETE FROM {table} WHERE id IN ({ph})", ids)
+                total += cur.rowcount
 
         if MAX_BYTES > 0:
             cur.execute(
@@ -88,7 +90,12 @@ def prune_sizes() -> int:
             )
             total += cur.rowcount
 
-    conn.commit()
+        conn.commit()
+        try:
+            stream.close()
+        except Exception:  # pragma: no cover - safety
+            pass
+
     conn.close()
     return total
 
