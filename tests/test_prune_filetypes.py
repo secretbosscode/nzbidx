@@ -23,30 +23,40 @@ class FakeCursor:
 
     def execute(self, query: str, params: tuple | None = None) -> None:
         if query.startswith("SELECT tablename FROM pg_tables"):
-            # No partition tables in tests.
-            self._rows = []
+            if "release_%'" in query:
+                self._rows = [
+                    (t,)
+                    for t in sorted(self.conn.rows_by_table.keys())
+                    if t != "release"
+                ]
+            else:
+                self._rows = []
             return
-        if query.startswith("DELETE FROM release") and params is not None:
+        if query.startswith("DELETE FROM") and params is not None:
+            table = query.split()[2]
             allowed = set(params[:-1])
             limit = params[-1]
+            rows = self.conn.rows_by_table[table]
             removed: list[int] = []
-            for idx, row in enumerate(self.conn.rows):
+            for idx, row in enumerate(rows):
                 ext = row.get("extension")
                 if ext is not None and ext.lower() not in allowed:
                     removed.append(idx)
                     if len(removed) >= limit:
                         break
             for idx in reversed(removed):
-                del self.conn.rows[idx]
+                del rows[idx]
             self.rowcount = len(removed)
+            self.conn.calls.append(table)
 
     def fetchall(self) -> list[tuple[str]]:  # pragma: no cover - trivial
         return self._rows
 
 
 class FakeConnection:
-    def __init__(self, rows: list[dict[str, str | None]]) -> None:
-        self.rows = rows
+    def __init__(self, rows_by_table: dict[str, list[dict[str, str | None]]]) -> None:
+        self.rows_by_table = rows_by_table
+        self.calls: list[str] = []
 
     def cursor(self) -> FakeCursor:  # pragma: no cover - trivial
         return FakeCursor(self)
@@ -64,14 +74,17 @@ def _clear_file_extension_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_prune_disallowed_filetypes_default(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_file_extension_env(monkeypatch)
     conn = FakeConnection(
-        [
-            {"extension": "rar"},
-            {"extension": "foo"},
-        ]
+        {
+            "release": [{"extension": "rar"}, {"extension": "foo"}],
+            "release_tv": [{"extension": "rar"}, {"extension": "foo"}],
+            "release_music": [{"extension": "rar"}, {"extension": "foo"}],
+        }
     )
     deleted = prune_disallowed_filetypes(conn)
-    assert deleted == 1
-    assert [r["extension"] for r in conn.rows] == ["rar"]
+    assert deleted == 3
+    for table in conn.rows_by_table:
+        assert [r["extension"] for r in conn.rows_by_table[table]] == ["rar"]
+    assert set(conn.calls) == {"release", "release_tv", "release_music"}
 
 
 def test_prune_disallowed_filetypes_env_extends(
@@ -80,11 +93,14 @@ def test_prune_disallowed_filetypes_env_extends(
     _clear_file_extension_env(monkeypatch)
     monkeypatch.setenv("FILE_EXTENSIONS_EXTRA", "foo")
     conn = FakeConnection(
-        [
-            {"extension": "rar"},
-            {"extension": "foo"},
-        ]
+        {
+            "release": [{"extension": "rar"}, {"extension": "foo"}],
+            "release_tv": [{"extension": "rar"}, {"extension": "foo"}],
+            "release_music": [{"extension": "rar"}, {"extension": "foo"}],
+        }
     )
     deleted = prune_disallowed_filetypes(conn)
     assert deleted == 0
-    assert [r["extension"] for r in conn.rows] == ["rar", "foo"]
+    for table in conn.rows_by_table:
+        assert [r["extension"] for r in conn.rows_by_table[table]] == ["rar", "foo"]
+    assert set(conn.calls) == {"release", "release_tv", "release_music"}
