@@ -282,7 +282,7 @@ def prune_disallowed_filetypes(
     total = 0
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT tablename FROM pg_tables WHERE tablename LIKE 'release_adult_%'"
+            "SELECT tablename FROM pg_tables WHERE tablename LIKE 'release_%'"
         )
         tables = ["release"] + [row[0] for row in cur.fetchall()]
     for table in tables:
