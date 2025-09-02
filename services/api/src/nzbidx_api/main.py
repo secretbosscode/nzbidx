@@ -303,9 +303,9 @@ async def stop_backfill_scheduler() -> None:
 async def start_db_maintenance() -> None:
     """Start periodic database maintenance tasks."""
     global _db_maintenance_scheduler
-    enabled = os.getenv("ENABLE_DB_MAINTENANCE", "").lower()
-    if enabled not in {"1", "true", "yes"}:
-        logger.info("db_maintenance_disabled")
+    enabled = os.getenv("ENABLE_DB_MAINTENANCE", "1").lower()
+    if enabled in {"0", "false", "no"}:
+        logger.info("db_maintenance_disabled", extra={"value": enabled})
         return
 
     scheduler = AsyncIOScheduler()
