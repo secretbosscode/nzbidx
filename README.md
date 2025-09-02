@@ -39,7 +39,8 @@ maintenance:
 ```
 
 The job respects `MAX_RELEASE_BYTES`, `CATEGORY_MIN_SIZES`,
-`RELEASE_MIN_SIZES`, and `RELEASE_RETENTION_DAYS` when pruning releases.
+`RELEASE_MIN_SIZES`, and `RELEASE_RETENTION_DAYS` (default: `30`; set to `0`
+to disable) when pruning releases.
 
 When adjusting the allowed file-type extensions, remove outdated rows:
 
@@ -118,7 +119,7 @@ faster serializer once compatible.
 | `MAX_RELEASE_BYTES` | Maximum allowed release size in bytes; larger releases are pruned | `0` |
 | `CATEGORY_MIN_SIZES` | Comma separated `category=bytes` overrides for minimum release size | _(none)_ |
 | `RELEASE_MIN_SIZES` | Comma separated `pattern=bytes` overrides for minimum release size (see below) | _(none)_ |
-| `RELEASE_RETENTION_DAYS` | Prune releases older than this many days | `0` |
+| `RELEASE_RETENTION_DAYS` | Prune releases older than this many days (0 disables pruning) | `30` |
 | `NNTP_TIMEOUT` | Socket timeout for NNTP connections in seconds (increase for slow or flaky providers) | `30` |
 | `NNTP_TOTAL_TIMEOUT` | Maximum total seconds for NNTP attempts across retries (API timeout should be ≥ this) | `600` |
 | `NNTP_CONNECT_ATTEMPTS` | Total attempts when establishing a connection before giving up | `3` |

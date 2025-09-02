@@ -20,7 +20,8 @@ try:  # Prefer ingest helper but fall back to API helper if unavailable.
 except Exception:  # pragma: no cover - fallback
     from nzbidx_api.db import sql_placeholder  # type: ignore
 
-RETENTION_DAYS = int(os.getenv("RELEASE_RETENTION_DAYS", "0") or 0)
+# Default to 30 days when the variable is unset; "0" disables pruning.
+RETENTION_DAYS = int(os.getenv("RELEASE_RETENTION_DAYS", "30") or 0)
 
 
 def prune_old_releases() -> int:
