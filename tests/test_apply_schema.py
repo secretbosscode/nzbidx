@@ -290,7 +290,7 @@ def test_create_database_executes_parameterized(monkeypatch, url):
 
     asyncio.run(db._create_database(url))
 
-    assert executed == [("CREATE DATABASE \"db\"", None)]
+    assert executed == [('CREATE DATABASE "db"', None)]
 
 
 def test_apply_schema_after_migrate_release_adult_partitions(monkeypatch):
