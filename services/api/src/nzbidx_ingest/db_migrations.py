@@ -254,6 +254,7 @@ def drop_unused_release_partitions(
 
 # Backward-compatible aliases -------------------------------------------------
 
+
 def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
     migrate_release_partitions_by_date(conn, "adult", batch_size=batch_size)
 
