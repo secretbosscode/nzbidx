@@ -161,7 +161,7 @@ def migrate_release_partitions_by_date(
 
     # Skip if already partitioned by ``posted_at``
     cur.execute(
-        "SELECT partrelid FROM pg_partitioned_table WHERE partrelid = %s::regclass",
+        "SELECT partrelid FROM pg_partitioned_table WHERE partrelid = $1::regclass",
         (table,),
     )
     if cur.fetchone() is not None:
@@ -179,7 +179,7 @@ def migrate_release_partitions_by_date(
     else:
         start, end = ranges
         cur.execute(
-            f"CREATE TABLE {table} PARTITION OF release FOR VALUES FROM (%s) TO (%s) PARTITION BY RANGE (posted_at)",
+            f"CREATE TABLE {table} PARTITION OF release FOR VALUES FROM ($1) TO ($2) PARTITION BY RANGE (posted_at)",
             (start, end),
         )
 
@@ -211,7 +211,7 @@ def migrate_release_partitions_by_date(
         ids = [row[0] for row in cur.fetchall()]
         if not ids:
             break
-        cur.execute(f"DELETE FROM {table}_old WHERE id = ANY(%s)", (ids,))
+        cur.execute(f"DELETE FROM {table}_old WHERE id = ANY($1)", (ids,))
         conn.commit()
 
     cur.execute(f"DROP TABLE {table}_old")
@@ -224,7 +224,7 @@ def ensure_release_year_partition(conn: Any, category: str, year: int) -> None:
     table = f"release_{category}_{year}"
     parent = f"release_{category}"
     cur = conn.cursor()
-    cur.execute("SELECT to_regclass(%s)", (table,))
+    cur.execute("SELECT to_regclass($1)", (table,))
     if cur.fetchone()[0] is not None:
         return
     cur.execute(
@@ -260,7 +260,7 @@ def drop_unused_release_partitions(
         FROM pg_inherits i
         JOIN pg_class c ON c.oid = i.inhrelid
         JOIN pg_class p ON p.oid = i.inhparent
-        WHERE p.relname = %s
+        WHERE p.relname = $1
         """,
         (parent,),
     )
@@ -328,7 +328,7 @@ def create_release_posted_at_index(conn: Any) -> None:
                 """
                 SELECT inhrelid::regclass::text
                 FROM pg_inherits
-                WHERE inhparent = %s::regclass
+                WHERE inhparent = $1::regclass
                 """,
                 (table,),
             )
