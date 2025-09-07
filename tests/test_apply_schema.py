@@ -395,6 +395,9 @@ def test_apply_schema_migrates_unpartitioned_release_adult(monkeypatch):
         def close(self):
             return None
 
+        def commit(self):
+            return None
+
     class DummyEngine:
         def __init__(self, state):
             self.state = state

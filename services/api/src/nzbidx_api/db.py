@@ -148,39 +148,46 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
     statements = load_schema_statements()
 
-    # Ensure category partitions are partitioned by posted_at
-    try:
-        raw = get_engine().sync_engine.raw_connection()  # type: ignore[union-attr]
-        cur = raw.cursor()
-        for cat in [c for c in CATEGORY_RANGES if c != "other"]:
-            cur.execute(
-                "SELECT EXISTS (SELECT FROM pg_class WHERE relname = %s)",
-                (f"release_{cat}",),
-            )
-            exists = bool(cur.fetchone()[0])
-            cur.execute(
-                """
-                    SELECT EXISTS(
-                        SELECT 1
-                        FROM pg_partitioned_table p
-                        JOIN pg_class c ON p.partrelid = c.oid
-                        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                        WHERE c.relname = %s AND a.attname = 'posted_at'
-                    )
-                """,
-                (f"release_{cat}",),
-            )
-            partitioned = bool(cur.fetchone()[0])
-            if exists and not partitioned:
-                migrate_release_partitions_by_date(raw, cat)
-        create_release_posted_at_index(raw)
-    except Exception:
-        pass
-    finally:
+    engine_sync = getattr(engine, "sync_engine", None)
+    engine_url = getattr(engine, "url", "")
+    if engine_sync is not None and "postgresql" in str(engine_url):
+        raw = None
         try:
-            raw.close()
-        except Exception:
-            pass
+            raw = engine_sync.raw_connection()  # type: ignore[union-attr]
+            cur = raw.cursor()
+            for cat in [c for c in CATEGORY_RANGES if c != "other"]:
+                cur.execute(
+                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = %s)",
+                    (f"release_{cat}",),
+                )
+                exists = bool(cur.fetchone()[0])
+                cur.execute(
+                    """
+                        SELECT EXISTS(
+                            SELECT 1
+                            FROM pg_partitioned_table p
+                            JOIN pg_class c ON p.partrelid = c.oid
+                            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                            WHERE c.relname = %s AND a.attname = 'posted_at'
+                        )
+                    """,
+                    (f"release_{cat}",),
+                )
+                partitioned = bool(cur.fetchone()[0])
+                if exists and not partitioned:
+                    migrate_release_partitions_by_date(raw, cat)
+            create_release_posted_at_index(raw)
+        except Exception as exc:
+            logger.error(
+                "release_partition_check_failed", exc_info=True, extra={"error": str(exc)}
+            )
+            raise
+        finally:
+            if raw is not None:
+                try:
+                    raw.close()
+                except Exception:
+                    pass
 
     async def _apply(conn: Any) -> None:
         await apply_async(conn, text, statements=statements)
