@@ -107,9 +107,6 @@ def migrate_release_table(conn: Any) -> None:
     cur.execute(
         "CREATE INDEX release_posted_at_idx ON release (posted_at)",
     )
-    cur.execute(
-        "CREATE UNIQUE INDEX release_norm_title_category_id_key ON release (norm_title, category_id)",
-    )
 
     create_release_posted_at_index(conn)
 
