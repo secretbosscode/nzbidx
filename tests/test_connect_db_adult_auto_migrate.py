@@ -83,7 +83,11 @@ def test_connect_db_adult_auto_migrate(monkeypatch, caplog):
     monkeypatch.setenv("DATABASE_URL", "postgres://user@host/db")
     monkeypatch.setattr(main, "create_engine", lambda *a, **k: DummyEngine())
     monkeypatch.setattr(main, "text", lambda s: s)
-    monkeypatch.setattr(main, "migrate_release_partitions_by_date", lambda conn, cat: fake_migrate(conn) if cat == "adult" else None)
+    monkeypatch.setattr(
+        main,
+        "migrate_release_partitions_by_date",
+        lambda conn, cat: fake_migrate(conn) if cat == "adult" else None,
+    )
     monkeypatch.setattr(main, "migrate_release_table", lambda *a, **k: None)
     monkeypatch.setattr(main, "PARTITION_CATEGORIES", ["adult"])
 

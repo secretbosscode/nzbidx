@@ -103,7 +103,9 @@ CATEGORY_MAP = {
     "comics": "7030",
 }
 
-PARTITION_CATEGORIES = [c for c, r in CATEGORY_RANGES.items() if r is not None and c != "other"]
+PARTITION_CATEGORIES = [
+    c for c, r in CATEGORY_RANGES.items() if r is not None and c != "other"
+]
 
 
 def _category_from_id(category_id: int) -> str:
@@ -485,7 +487,9 @@ def connect_db() -> Any:
                     )
                 for cat in PARTITION_CATEGORIES:
                     cat_exists = conn_sync.execute(
-                        text(f"SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_{cat}')"),
+                        text(
+                            f"SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_{cat}')"
+                        ),
                     ).fetchone()[0]
                     cat_partitioned = conn_sync.execute(
                         text(
@@ -761,7 +765,9 @@ def insert_release(
                 sqlite_rows,
             )
         else:
-            partition_rows: dict[tuple[str, int], list[tuple[Any, ...]]] = defaultdict(list)
+            partition_rows: dict[tuple[str, int], list[tuple[Any, ...]]] = defaultdict(
+                list
+            )
             other_rows: list[tuple[Any, ...]] = []
             for row in to_insert:
                 category_id = row[2]
