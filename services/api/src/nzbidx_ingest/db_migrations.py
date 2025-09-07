@@ -68,13 +68,31 @@ def migrate_release_table(conn: Any) -> None:
 
     # Create partitions.
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000)",
+        "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000) PARTITION BY RANGE (posted_at)",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000)",
+        "CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000)",
+        "CREATE TABLE IF NOT EXISTS release_movies_default PARTITION OF release_movies DEFAULT",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_music PARTITION OF release FOR VALUES FROM (3000) TO (4000) PARTITION BY RANGE (posted_at)",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_music_default PARTITION OF release_music DEFAULT",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release FOR VALUES FROM (5000) TO (6000) PARTITION BY RANGE (posted_at)",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_tv_default PARTITION OF release_tv DEFAULT",
     )
     cur.execute(
         "CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release FOR VALUES FROM (6000) TO (7000) PARTITION BY RANGE (posted_at)",
@@ -86,7 +104,13 @@ def migrate_release_table(conn: Any) -> None:
         "CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT",
     )
     cur.execute(
-        "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000)",
+        "CREATE TABLE IF NOT EXISTS release_books PARTITION OF release FOR VALUES FROM (7000) TO (8000) PARTITION BY RANGE (posted_at)",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS release_books_default PARTITION OF release_books DEFAULT",
     )
     cur.execute(
         "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
