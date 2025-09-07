@@ -152,7 +152,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     engine_url = getattr(engine, "url", "")
     if engine_sync is not None and "postgresql" in str(engine_url):
 
-        async def _partition_check(sync_conn: Any) -> None:
+        def _partition_check(sync_conn: Any) -> None:
             raw = sync_conn.connection.dbapi_connection
             cur = raw.cursor()
             for cat in [c for c in CATEGORY_RANGES if c != "other"]:
