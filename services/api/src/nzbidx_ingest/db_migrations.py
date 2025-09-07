@@ -209,9 +209,6 @@ def ensure_release_year_partition(conn: Any, category: str, year: int) -> None:
         f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF {parent} FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')",
     )
     cur.execute(
-        f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON ONLY {table} (posted_at)",
-    )
-    cur.execute(
         f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON {table} (posted_at)",
     )
     conn.commit()
