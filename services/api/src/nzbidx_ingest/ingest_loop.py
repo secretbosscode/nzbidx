@@ -34,6 +34,7 @@ from .main import (
     CATEGORY_MAP,
     prune_group,
 )
+from .sql import sql_placeholder
 from email.utils import parsedate_to_datetime
 from datetime import timezone
 
@@ -309,7 +310,7 @@ def _process_groups(
         part_counts: dict[str, int] = {}
         has_parts_flags: dict[str, bool] = {}
         if db is not None:
-            placeholder = "?" if db.__class__.__module__.startswith("sqlite3") else "%s"
+            placeholder = sql_placeholder(db)
 
             def _update_segments(cur: object) -> None:
                 for title, segs in parts.items():

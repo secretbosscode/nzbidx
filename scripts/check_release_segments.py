@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "services" / "api" / "src"))
 
-from nzbidx_api.db import get_connection
+from nzbidx_api.db import get_connection, sql_placeholder
 
 
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helper
@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - CLI helpe
 
     conn = get_connection()
     with conn.cursor() as cur:
-        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+        placeholder = sql_placeholder(conn)
         cur.execute(
             f"SELECT segments FROM release WHERE id = {placeholder}",
             (args.release_id,),

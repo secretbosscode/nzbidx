@@ -407,7 +407,11 @@ def get_connection() -> Any:
 @lru_cache(maxsize=None)
 def _sql_placeholder_by_type(conn_cls: type[Any]) -> str:
     """Return the DB-API parameter placeholder for the given connection class."""
-    return "?" if conn_cls.__module__.startswith("sqlite3") else "%s"
+    if conn_cls.__module__.startswith("sqlite3"):
+        return "?"
+    if conn_cls.__module__.startswith("asyncpg"):
+        return "$1"
+    return "%s"
 
 
 def sql_placeholder(conn: Any) -> str:
