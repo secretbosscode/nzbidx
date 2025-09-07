@@ -57,6 +57,7 @@ tests/test_nntp_client_reconnect.py
 tests/test_nzb_builder_segments.py
 tests/test_parsers_extensions.py
 tests/test_parsers_segments.py
+tests/test_partition_migration.py
 tests/test_release_partition_migration.py
 tests/test_search_cache_service.py
 tests/test_segment_schema_surrogates.py
