@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 # Category ranges in the ``release`` partitioned table.  The ``other`` category
 # acts as the default partition and therefore has no explicit bounds.
-_CATEGORY_RANGES: dict[str, tuple[int, int] | None] = {
+CATEGORY_RANGES: dict[str, tuple[int, int] | None] = {
     "movies": (2000, 3000),
     "music": (3000, 4000),
     "tv": (5000, 6000),
@@ -131,8 +131,8 @@ def migrate_release_partitions_by_date(
     """
 
     table = f"release_{category}"
-    ranges = _CATEGORY_RANGES.get(category)
-    if category not in _CATEGORY_RANGES:
+    ranges = CATEGORY_RANGES.get(category)
+    if category not in CATEGORY_RANGES:
         raise ValueError(f"unknown category: {category}")
 
     cur = conn.cursor()
@@ -196,44 +196,33 @@ def migrate_release_partitions_by_date(
     conn.commit()
 
 
-def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
-    """Backward-compatible wrapper for ``migrate_release_partitions_by_date``."""
+def ensure_release_year_partition(conn: Any, category: str, year: int) -> None:
+    """Create a yearly ``release_<category>`` partition if it does not exist."""
 
-    migrate_release_partitions_by_date(conn, "adult", batch_size=batch_size)
-
-
-def ensure_release_adult_year_partition(conn: Any, year: int) -> None:
-    """Create a yearly ``release_adult`` partition if it does not exist."""
-
-    table = f"release_adult_{year}"
+    table = f"release_{category}_{year}"
+    parent = f"release_{category}"
     cur = conn.cursor()
     cur.execute("SELECT to_regclass(%s)", (table,))
     if cur.fetchone()[0] is not None:
         return
     cur.execute(
-        f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF release_adult FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')",
+        f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF {parent} FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')",
     )
     cur.execute(
         f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON ONLY {table} (posted_at)",
     )
     cur.execute(
-        f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON {table} (posted_at)"
+        f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON {table} (posted_at)",
     )
     conn.commit()
 
 
-def drop_unused_release_adult_partitions(
-    conn: Any, retain: Iterable[str] | None = None
+def drop_unused_release_partitions(
+    conn: Any, category: str, retain: Iterable[str] | None = None
 ) -> None:
-    """Drop empty ``release_adult`` partitions not in ``retain``.
+    """Drop empty ``release_<category>`` partitions not in ``retain``."""
 
-    Partitions are discovered via ``pg_inherits`` and ``pg_class``.  Any
-    partition with zero rows and not explicitly retained is dropped.  The
-    retention set may be provided via ``retain`` or configured through the
-    ``RELEASE_ADULT_PARTITIONS_RETAIN`` environment variable (comma separated
-    table names).  The ``release_adult_default`` partition is always retained.
-    """
-
+    parent = f"release_{category}"
     cur = conn.cursor()
     cur.execute(
         """
@@ -241,17 +230,18 @@ def drop_unused_release_adult_partitions(
         FROM pg_inherits i
         JOIN pg_class c ON c.oid = i.inhrelid
         JOIN pg_class p ON p.oid = i.inhparent
-        WHERE p.relname = 'release_adult'
-        """
+        WHERE p.relname = %s
+        """,
+        (parent,),
     )
     partitions = [row[0] for row in cur.fetchall()]
 
     if retain is None:
-        env = os.getenv("RELEASE_ADULT_PARTITIONS_RETAIN", "")
+        env = os.getenv(f"RELEASE_{category.upper()}_PARTITIONS_RETAIN", "")
         retain_set = {p.strip() for p in env.split(",") if p.strip()}
     else:
         retain_set = set(retain)
-    retain_set.add("release_adult_default")
+    retain_set.add(f"{parent}_default")
 
     for table in partitions:
         if table in retain_set:
@@ -260,6 +250,12 @@ def drop_unused_release_adult_partitions(
         if cur.fetchone() is None:
             cur.execute(f"DROP TABLE {table}")
     conn.commit()
+
+
+# Backward-compatible aliases -------------------------------------------------
+
+def migrate_release_adult_partitions(conn: Any, batch_size: int = 1000) -> None:
+    migrate_release_partitions_by_date(conn, "adult", batch_size=batch_size)
 
 
 def add_release_has_parts_index(conn: Any) -> None:

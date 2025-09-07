@@ -1,7 +1,7 @@
-from nzbidx_ingest.db_migrations import drop_unused_release_adult_partitions
+from nzbidx_ingest.db_migrations import drop_unused_release_partitions
 
 
-def test_drop_unused_release_adult_partitions(monkeypatch):
+def test_drop_unused_release_partitions(monkeypatch):
     tables = {
         "release_adult_keep": 0,
         "release_adult_drop": 0,
@@ -51,6 +51,6 @@ def test_drop_unused_release_adult_partitions(monkeypatch):
     monkeypatch.setenv("RELEASE_ADULT_PARTITIONS_RETAIN", "release_adult_keep")
 
     conn = DummyConn(tables)
-    drop_unused_release_adult_partitions(conn)
+    drop_unused_release_partitions(conn, "adult")
 
     assert conn.dropped == ["release_adult_drop"]

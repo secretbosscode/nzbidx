@@ -51,7 +51,7 @@ def test_full_schema_startup(monkeypatch, with_ingest) -> None:
 
     monkeypatch.setattr(db, "create_async_engine", lambda *a, **k: dummy_engine)
     monkeypatch.setattr(db, "text", lambda s: s)
-    monkeypatch.setattr(db, "migrate_release_adult_partitions", lambda raw: None)
+    monkeypatch.setattr(db, "migrate_release_partitions_by_date", lambda raw, cat: None)
     monkeypatch.setattr(db, "_engine", None)
     monkeypatch.setattr(db, "_engine_loop", None)
 

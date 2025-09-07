@@ -23,6 +23,11 @@ from typing import Any, Optional
 from . import migrations as migrations_pkg
 
 from nzbidx_migrations import apply_async, _split_sql
+from nzbidx_ingest.db_migrations import (
+    migrate_release_partitions_by_date,
+    create_release_posted_at_index,
+    CATEGORY_RANGES,
+)
 
 # Optional SQLAlchemy dependency
 try:  # pragma: no cover - import guard
@@ -143,46 +148,42 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
     statements = load_schema_statements()
 
-    async def _apply(conn: Any) -> None:
-        exists = False
-        partitioned = False
-        try:
-            exists = bool(
-                await conn.scalar(
-                    text("SELECT to_regclass('release_adult') IS NOT NULL")
-                )
+    # Ensure category partitions are partitioned by posted_at
+    try:
+        raw = get_engine().sync_engine.raw_connection()  # type: ignore[union-attr]
+        cur = raw.cursor()
+        for cat in [c for c in CATEGORY_RANGES if c != "other"]:
+            cur.execute(
+                "SELECT EXISTS (SELECT FROM pg_class WHERE relname = %s)",
+                (f"release_{cat}",),
             )
-            if exists:
-                partitioned = bool(
-                    await conn.scalar(
-                        text(
-                            "SELECT EXISTS ("
-                            "SELECT 1 FROM pg_partitioned_table "
-                            "WHERE partrelid = to_regclass('release_adult')"
-                            ")"
-                        )
+            exists = bool(cur.fetchone()[0])
+            cur.execute(
+                """
+                    SELECT EXISTS(
+                        SELECT 1
+                        FROM pg_partitioned_table p
+                        JOIN pg_class c ON p.partrelid = c.oid
+                        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                        WHERE c.relname = %s AND a.attname = 'posted_at'
                     )
-                )
-        except Exception:  # pragma: no cover - system catalogs missing
-            exists = False
-            partitioned = False
+                """,
+                (f"release_{cat}",),
+            )
+            partitioned = bool(cur.fetchone()[0])
+            if exists and not partitioned:
+                migrate_release_partitions_by_date(raw, cat)
+        create_release_posted_at_index(raw)
+    except Exception:
+        pass
+    finally:
+        try:
+            raw.close()
+        except Exception:
+            pass
 
-        def _predicate(stmt: str) -> bool:
-            nonlocal exists, partitioned
-            upper = stmt.upper()
-            if (
-                "CREATE TABLE" in upper
-                and "RELEASE_ADULT" in upper
-                and "PARTITION OF RELEASE" in upper
-                and not exists
-            ):
-                exists = True
-                partitioned = True
-            elif exists and not partitioned and "PARTITION OF RELEASE_ADULT" in upper:
-                raise RuntimeError(f"release_adult_unpartitioned: {stmt}")
-            return True
-
-        await apply_async(conn, text, statements=statements, predicate=_predicate)
+    async def _apply(conn: Any) -> None:
+        await apply_async(conn, text, statements=statements)
 
     async def _run_migrations(conn: Any) -> None:
         """Import and execute database migrations."""
