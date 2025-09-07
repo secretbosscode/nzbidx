@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from typing import Any, Iterable
 
 
@@ -233,6 +234,17 @@ def ensure_release_year_partition(conn: Any, category: str, year: int) -> None:
         f"CREATE INDEX IF NOT EXISTS {table}_posted_at_idx ON {table} (posted_at)",
     )
     conn.commit()
+
+
+def ensure_current_and_next_year_partitions(conn: Any) -> None:
+    """Pre-create ``release`` partitions for the current and next year."""
+
+    year = datetime.now().year
+    for category, bounds in CATEGORY_RANGES.items():
+        if bounds is None:
+            continue
+        ensure_release_year_partition(conn, category, year)
+        ensure_release_year_partition(conn, category, year + 1)
 
 
 def drop_unused_release_partitions(

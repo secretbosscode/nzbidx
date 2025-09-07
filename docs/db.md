@@ -45,6 +45,10 @@ connections run as an ordinary user. Point `DATABASE_URL` at the database, e.g.
 
 Existing deployments with an unpartitioned `release` table are migrated automatically when the application starts using a superuser `DATABASE_URL`; no manual script is required.
 
+The application also pre-creates yearly `release_<category>` partitions for the
+current and next calendar years on startup so upcoming releases have a
+destination table without manual intervention.
+
 ## Full-text search
 
 The application automatically creates the `search_vector` column and GIN
