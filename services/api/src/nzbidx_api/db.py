@@ -27,6 +27,7 @@ from nzbidx_ingest.db_migrations import (
     migrate_release_partitions_by_date,
     create_release_posted_at_index,
     CATEGORY_RANGES,
+    ensure_current_and_next_year_partitions,
 )
 
 # Optional SQLAlchemy dependency
@@ -238,6 +239,13 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             logger.error("migration_failed", exc_info=True, extra={"error": str(exc)})
             raise
 
+    async def _ensure_release_partitions(conn: Any) -> None:
+        def _ensure(sync_conn: Any) -> None:
+            raw = sync_conn.connection.dbapi_connection
+            ensure_current_and_next_year_partitions(raw)
+
+        await conn.run_sync(_ensure)
+
     async def _drop_privileges(conn: Any) -> None:
         """Revoke superuser rights from the current role if possible."""
         try:
@@ -251,6 +259,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             async with engine.connect() as conn:
                 await _apply(conn)
                 await _run_migrations(conn)
+                await _ensure_release_partitions(conn)
                 await _drop_privileges(conn)
             return
         except OSError as exc:
