@@ -32,7 +32,7 @@ except ModuleNotFoundError:  # pragma: no cover
             return None
 
         def get(self, path: str, params: dict | None = None):  # type: ignore[override]
-            request = SimpleNamespace(query_params=params or {}, headers={}, url=None)
+            request = SimpleNamespace(query_params=params or {}, headers={}, url=None, state=SimpleNamespace())
             for route in getattr(self.app, "routes", []):
                 if getattr(route, "path", None) == path:
                     resp = route.endpoint(request)
@@ -48,7 +48,7 @@ except ModuleNotFoundError:  # pragma: no cover
                 return json or {}
 
             request = SimpleNamespace(
-                query_params={}, headers=headers or {}, json=_json, url=None
+                query_params={}, headers=headers or {}, json=_json, url=None, state=SimpleNamespace()
             )
             for route in getattr(self.app, "routes", []):
                 if getattr(route, "path", None) == path:

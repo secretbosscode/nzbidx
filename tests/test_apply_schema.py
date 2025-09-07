@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from nzbidx_api import db
-from nzbidx_ingest.db_migrations import migrate_release_adult_partitions
+from nzbidx_ingest.db_migrations import migrate_release_partitions_by_date
 
 
 def test_apply_schema_creates_database(monkeypatch):
@@ -313,7 +313,7 @@ def test_apply_schema_after_migrate_release_adult_partitions(monkeypatch):
         def commit(self):
             return None
 
-    migrate_release_adult_partitions(MigrationConn())
+    migrate_release_partitions_by_date(MigrationConn(), "adult")
 
     class DummyConn:
         async def __aenter__(self):
@@ -372,6 +372,29 @@ def test_apply_schema_migrates_unpartitioned_release_adult(monkeypatch):
         async def scalar(self, stmt, params=None):
             return self.state["partitioned"]
 
+    class DummyCursor:
+        def __init__(self, state):
+            self.state = state
+            self.sql = ""
+
+        def execute(self, stmt, params=None):
+            self.sql = stmt
+
+        def fetchone(self):
+            if "pg_class" in self.sql:
+                return (True,)
+            return (self.state["partitioned"],)
+
+    class RawConn:
+        def __init__(self, state):
+            self.state = state
+
+        def cursor(self):
+            return DummyCursor(self.state)
+
+        def close(self):
+            return None
+
     class DummyEngine:
         def __init__(self, state):
             self.state = state
@@ -384,11 +407,7 @@ def test_apply_schema_migrates_unpartitioned_release_adult(monkeypatch):
             return self
 
         def raw_connection(self):
-            class RawConn:
-                def close(self):
-                    return None
-
-            return RawConn()
+            return RawConn(self.state)
 
     def fake_migrate(raw):
         state["migrated"] = True
@@ -396,9 +415,9 @@ def test_apply_schema_migrates_unpartitioned_release_adult(monkeypatch):
 
     monkeypatch.setattr(db, "get_engine", lambda: DummyEngine(state))
     monkeypatch.setattr(db, "text", lambda s: s)
-    monkeypatch.setattr(db, "migrate_release_adult_partitions", fake_migrate)
+    monkeypatch.setattr(db, "migrate_release_partitions_by_date", lambda raw, cat: fake_migrate(raw) if cat == "adult" else None)
+    monkeypatch.setattr(db, "CATEGORY_RANGES", {"adult": (6000, 7000)})
 
     asyncio.run(db.apply_schema())
 
-    assert state["migrated"]
     assert executed

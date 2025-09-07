@@ -9,6 +9,7 @@ import os
 import sys
 import threading
 import time
+import inspect
 from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlencode
@@ -406,7 +407,7 @@ class TimingMiddleware(BaseHTTPMiddleware):
 async def health(request: Request) -> ORJSONResponse:
     """Health check endpoint."""
     db_status = "ok" if await ping() else "down"
-    req_id = getattr(request.state, "request_id", "")
+    req_id = getattr(getattr(request, "state", None), "request_id", "")
     payload = {"status": "ok", "db": db_status, "request_id": req_id}
     last = getattr(ingest_loop, "last_run", 0.0)
     last_wall = getattr(ingest_loop, "last_run_wall", 0.0)
@@ -426,8 +427,11 @@ async def health(request: Request) -> ORJSONResponse:
 
 async def status(request: Request) -> ORJSONResponse:
     """Return dependency status and circuit breaker states."""
-    req_id = getattr(request.state, "request_id", "")
-    payload = {"request_id": req_id, "breaker": {"os": await os_breaker.state()}}
+    req_id = getattr(getattr(request, "state", None), "request_id", "")
+    state = os_breaker.state()
+    if inspect.isawaitable(state):
+        state = await state
+    payload = {"request_id": req_id, "breaker": {"os": state}}
     return ORJSONResponse(payload)
 
 

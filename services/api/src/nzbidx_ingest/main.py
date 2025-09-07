@@ -37,9 +37,10 @@ from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
 from .db_migrations import (
     migrate_release_table,
-    ensure_release_adult_year_partition,
-    migrate_release_adult_partitions,
+    ensure_release_year_partition,
+    migrate_release_partitions_by_date,
     create_release_posted_at_index,
+    CATEGORY_RANGES,
 )
 from .sql import sql_placeholder
 from nzbidx_migrations import apply_sync
@@ -101,6 +102,18 @@ CATEGORY_MAP = {
     "books": "7020",
     "comics": "7030",
 }
+
+PARTITION_CATEGORIES = [c for c, r in CATEGORY_RANGES.items() if r is not None and c != "other"]
+
+
+def _category_from_id(category_id: int) -> str:
+    for name, bounds in CATEGORY_RANGES.items():
+        if bounds is None:
+            continue
+        start, end = bounds
+        if start <= category_id < end:
+            return name
+    return "other"
 
 
 def _load_group_category_hints() -> list[tuple[str, str]]:
@@ -385,31 +398,13 @@ def connect_db() -> Any:
                     if not partitioned:
                         logger.error("release_table_not_partitioned")
                         raise RuntimeError("release table must be partitioned")
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release_adult')"
-                )
-                adult_exists = bool(cur.fetchone()[0])
-                cur.execute(
-                    """
-                        SELECT EXISTS(
-                            SELECT 1
-                            FROM pg_partitioned_table p
-                            JOIN pg_class c ON p.partrelid = c.oid
-                            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                            WHERE c.relname = 'release_adult' AND a.attname = 'posted_at'
-                        )
-                    """
-                )
-                adult_partitioned = bool(cur.fetchone()[0])
-                if adult_exists and not adult_partitioned:
-                    logger.info("release_adult_table_migrating")
-                    try:
-                        migrate_release_adult_partitions(conn)
-                        create_release_posted_at_index(conn)
-                    except Exception:
-                        pass
+                for cat in PARTITION_CATEGORIES:
                     cur = conn.cursor()
+                    cur.execute(
+                        "SELECT EXISTS (SELECT FROM pg_class WHERE relname = %s)",
+                        (f"release_{cat}",),
+                    )
+                    exists = bool(cur.fetchone()[0])
                     cur.execute(
                         """
                             SELECT EXISTS(
@@ -417,18 +412,40 @@ def connect_db() -> Any:
                                 FROM pg_partitioned_table p
                                 JOIN pg_class c ON p.partrelid = c.oid
                                 JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                                WHERE c.relname = 'release_adult' AND a.attname = 'posted_at'
+                                WHERE c.relname = %s AND a.attname = 'posted_at'
                             )
-                        """
+                        """,
+                        (f"release_{cat}",),
                     )
-                    adult_partitioned = bool(cur.fetchone()[0])
-                    if adult_partitioned:
-                        logger.info("release_adult_table_auto_migrated")
-                if adult_exists and not adult_partitioned:
-                    logger.error("release_adult_table_not_partitioned")
-                    raise RuntimeError(
-                        "release_adult table must be partitioned by posted_at"
-                    )
+                    partitioned = bool(cur.fetchone()[0])
+                    if exists and not partitioned:
+                        logger.info(f"release_{cat}_table_migrating")
+                        try:
+                            migrate_release_partitions_by_date(conn, cat)
+                            create_release_posted_at_index(conn)
+                        except Exception:
+                            pass
+                        cur = conn.cursor()
+                        cur.execute(
+                            """
+                                SELECT EXISTS(
+                                    SELECT 1
+                                    FROM pg_partitioned_table p
+                                    JOIN pg_class c ON p.partrelid = c.oid
+                                    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                                    WHERE c.relname = %s AND a.attname = 'posted_at'
+                                )
+                            """,
+                            (f"release_{cat}",),
+                        )
+                        partitioned = bool(cur.fetchone()[0])
+                        if partitioned:
+                            logger.info(f"release_{cat}_table_auto_migrated")
+                    if exists and not partitioned:
+                        logger.error(f"release_{cat}_table_not_partitioned")
+                        raise RuntimeError(
+                            f"release_{cat} table must be partitioned by posted_at",
+                        )
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
@@ -458,40 +475,39 @@ def connect_db() -> Any:
                             """
                     )
                 ).fetchone()[0]
-                adult_exists = conn_sync.execute(
-                    text(
-                        "SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_adult')"
-                    )
-                ).fetchone()[0]
-                adult_partitioned = conn_sync.execute(
-                    text(
-                        """
-                            SELECT EXISTS(
-                                SELECT 1
-                                FROM pg_partitioned_table p
-                                JOIN pg_class c ON p.partrelid = c.oid
-                                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                                WHERE c.relname = 'release_adult' AND a.attname = 'posted_at'
-                            )
-                        """
-                    )
-                ).fetchone()[0]
                 if exists and not partitioned:
                     logger.error(
                         "release_table_not_partitioned",
                         extra={"next_step": "drop_or_migrate"},
                     )
                     raise RuntimeError(
-                        "'release' table exists but is not partitioned; drop or migrate the table before starting the worker"
+                        "'release' table exists but is not partitioned; drop or migrate the table before starting the worker",
                     )
-                if adult_exists and not adult_partitioned:
-                    logger.error(
-                        "release_adult_table_not_partitioned",
-                        extra={"next_step": "drop_or_migrate"},
-                    )
-                    raise RuntimeError(
-                        "'release_adult' table exists but is not partitioned by posted_at; drop or migrate the table before starting the worker"
-                    )
+                for cat in PARTITION_CATEGORIES:
+                    cat_exists = conn_sync.execute(
+                        text(f"SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_{cat}')"),
+                    ).fetchone()[0]
+                    cat_partitioned = conn_sync.execute(
+                        text(
+                            """
+                                SELECT EXISTS(
+                                    SELECT 1
+                                    FROM pg_partitioned_table p
+                                    JOIN pg_class c ON p.partrelid = c.oid
+                                    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                                    WHERE c.relname = 'release_{cat}' AND a.attname = 'posted_at'
+                                )
+                            """
+                        ),
+                    ).fetchone()[0]
+                    if cat_exists and not cat_partitioned:
+                        logger.error(
+                            f"release_{cat}_table_not_partitioned",
+                            extra={"next_step": "drop_or_migrate"},
+                        )
+                        raise RuntimeError(
+                            f"'release_{cat}' table exists but is not partitioned by posted_at; drop or migrate the table before starting the worker",
+                        )
                 if not exists:
                     logger.info(
                         "release_table_missing",
@@ -745,26 +761,24 @@ def insert_release(
                 sqlite_rows,
             )
         else:
-            adult_rows: dict[int, list[tuple[Any, ...]]] = defaultdict(list)
+            partition_rows: dict[tuple[str, int], list[tuple[Any, ...]]] = defaultdict(list)
             other_rows: list[tuple[Any, ...]] = []
             for row in to_insert:
                 category_id = row[2]
                 posted_at = row[7]
-                if (
-                    category_id is not None
-                    and 6000 <= category_id < 7000
-                    and posted_at is not None
-                ):
-                    adult_rows[posted_at.year].append(row)
-                else:
-                    other_rows.append(row)
-            for year, rows in adult_rows.items():
-                ensure_release_adult_year_partition(conn, year)
-            if adult_rows:
+                if category_id is not None and posted_at is not None:
+                    cat = _category_from_id(category_id)
+                    if cat in PARTITION_CATEGORIES:
+                        partition_rows[(cat, posted_at.year)].append(row)
+                        continue
+                other_rows.append(row)
+            for (cat, year), rows in partition_rows.items():
+                ensure_release_year_partition(conn, cat, year)
+            if partition_rows:
                 create_release_posted_at_index(conn)
-                for year, rows in adult_rows.items():
+                for (cat, year), rows in partition_rows.items():
                     sql = (
-                        f"INSERT INTO release_adult_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) "
+                        f"INSERT INTO release_{cat}_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) "
                         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING"
                     )
                     try:

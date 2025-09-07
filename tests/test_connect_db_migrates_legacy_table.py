@@ -73,6 +73,7 @@ def test_connect_db_migrates_legacy_table(monkeypatch):
     monkeypatch.setattr(main, "text", lambda s: s)
     monkeypatch.setattr(main, "migrate_release_table", dummy_migrate)
 
-    main._SCHEMA_CHECKED.clear()
+    if hasattr(main, "_SCHEMA_CHECKED"):
+        main._SCHEMA_CHECKED.clear()
     connect_db()
     assert called
