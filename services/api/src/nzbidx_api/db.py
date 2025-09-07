@@ -151,9 +151,9 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     engine_sync = getattr(engine, "sync_engine", None)
     engine_url = getattr(engine, "url", "")
     if engine_sync is not None and "postgresql" in str(engine_url):
-        raw = None
-        try:
-            raw = engine_sync.raw_connection()  # type: ignore[union-attr]
+
+        async def _partition_check(sync_conn: Any) -> None:
+            raw = sync_conn.connection.dbapi_connection
             cur = raw.cursor()
             for cat in [c for c in CATEGORY_RANGES if c != "other"]:
                 cur.execute(
@@ -177,6 +177,9 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 if exists and not partitioned:
                     migrate_release_partitions_by_date(raw, cat)
             create_release_posted_at_index(raw)
+
+        try:
+            await engine.run_sync(_partition_check)
         except Exception as exc:
             logger.error(
                 "release_partition_check_failed",
@@ -184,12 +187,6 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 extra={"error": str(exc)},
             )
             raise
-        finally:
-            if raw is not None:
-                try:
-                    raw.close()
-                except Exception:
-                    pass
 
     async def _apply(conn: Any) -> None:
         await apply_async(conn, text, statements=statements)
