@@ -144,23 +144,41 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     statements = load_schema_statements()
 
     async def _apply(conn: Any) -> None:
+        exists = False
         partitioned = False
         try:
-            partitioned = bool(
+            exists = bool(
                 await conn.scalar(
-                    text(
-                        "SELECT EXISTS ("
-                        "SELECT 1 FROM pg_partitioned_table "
-                        "WHERE partrelid = to_regclass('release_adult')"
-                        ")"
-                    )
+                    text("SELECT to_regclass('release_adult') IS NOT NULL")
                 )
             )
+            if exists:
+                partitioned = bool(
+                    await conn.scalar(
+                        text(
+                            "SELECT EXISTS ("
+                            "SELECT 1 FROM pg_partitioned_table "
+                            "WHERE partrelid = to_regclass('release_adult')"
+                            ")"
+                        )
+                    )
+                )
         except Exception:  # pragma: no cover - system catalogs missing
+            exists = False
             partitioned = False
 
         def _predicate(stmt: str) -> bool:
-            if not partitioned and "PARTITION OF release_adult" in stmt:
+            nonlocal exists, partitioned
+            upper = stmt.upper()
+            if (
+                "CREATE TABLE" in upper
+                and "RELEASE_ADULT" in upper
+                and "PARTITION OF RELEASE" in upper
+                and not exists
+            ):
+                exists = True
+                partitioned = True
+            elif exists and not partitioned and "PARTITION OF RELEASE_ADULT" in upper:
                 raise RuntimeError(f"release_adult_unpartitioned: {stmt}")
             return True
 
