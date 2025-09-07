@@ -158,7 +158,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             cur = raw.cursor()
             for cat in [c for c in CATEGORY_RANGES if c != "other"]:
                 cur.execute(
-                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = %s)",
+                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = $1)",
                     (f"release_{cat}",),
                 )
                 exists = bool(cur.fetchone()[0])
@@ -169,7 +169,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                             FROM pg_partitioned_table p
                             JOIN pg_class c ON p.partrelid = c.oid
                             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                            WHERE c.relname = %s AND a.attname = 'posted_at'
+                            WHERE c.relname = $1 AND a.attname = 'posted_at'
                         )
                     """,
                     (f"release_{cat}",),
@@ -212,7 +212,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             for info in modules:
                 name = info.name
                 cur.execute(
-                    "SELECT 1 FROM nzbidx_schema_migrations WHERE name = %s",
+                    "SELECT 1 FROM nzbidx_schema_migrations WHERE name = $1",
                     (name,),
                 )
                 if cur.fetchone():
@@ -222,7 +222,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 if migrate:
                     migrate(raw)
                     cur.execute(
-                        "INSERT INTO nzbidx_schema_migrations (name) VALUES (%s)",
+                        "INSERT INTO nzbidx_schema_migrations (name) VALUES ($1)",
                         (name,),
                     )
                     try:
