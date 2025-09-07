@@ -41,18 +41,35 @@ def _conn() -> Tuple[Any, str]:
         'CREATE TABLE IF NOT EXISTS cursor ("group" TEXT PRIMARY KEY, last_article INTEGER, irrelevant INTEGER DEFAULT 0)'
     )
     conn.commit()
-    db_specific_errors: tuple[type[BaseException], ...] = (sqlite3.OperationalError,)
-    if psycopg:
-        db_specific_errors += (psycopg.errors.DuplicateColumn,)
-    try:
-        conn.execute("ALTER TABLE cursor ADD COLUMN irrelevant INTEGER DEFAULT 0")
-        conn.commit()
-    except db_specific_errors:
-        conn.rollback()
-    except Exception:  # pragma: no cover - unexpected schema issue
-        logging.exception("Unexpected error adding 'irrelevant' column to cursor table")
-        conn.rollback()
-        raise
+    if parsed.scheme.startswith("postgres"):
+        try:
+            conn.execute(
+                "ALTER TABLE cursor ADD COLUMN IF NOT EXISTS irrelevant INTEGER DEFAULT 0"
+            )
+            conn.commit()
+        except Exception:  # pragma: no cover - unexpected schema issue
+            logging.exception(
+                "Unexpected error adding 'irrelevant' column to cursor table"
+            )
+            conn.rollback()
+            raise
+    else:
+        try:
+            cur = conn.execute("PRAGMA table_info(cursor)")
+            cols = [row[1] for row in cur.fetchall()]
+            if "irrelevant" not in cols:
+                conn.execute(
+                    "ALTER TABLE cursor ADD COLUMN irrelevant INTEGER DEFAULT 0"
+                )
+                conn.commit()
+        except sqlite3.OperationalError:
+            conn.rollback()
+        except Exception:  # pragma: no cover - unexpected schema issue
+            logging.exception(
+                "Unexpected error adding 'irrelevant' column to cursor table"
+            )
+            conn.rollback()
+            raise
     return conn, paramstyle
 
 

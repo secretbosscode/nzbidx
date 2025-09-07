@@ -144,3 +144,56 @@ def test_set_cursors_logs_error_on_failure(monkeypatch, caplog):
 
     assert calls["rollback"] and calls["closed"]
     assert "cursor_update_failed" in caplog.text
+
+
+def test_conn_multiple_calls_no_duplicate_sqlite(tmp_path, monkeypatch, caplog):
+    db_path = tmp_path / "dup.sqlite"
+    monkeypatch.setenv("CURSOR_DB", str(db_path))
+    importlib.reload(config)
+    importlib.reload(cursors)
+    with caplog.at_level(logging.ERROR):
+        conn1, _ = cursors._conn()
+        conn1.close()
+        conn2, _ = cursors._conn()
+        conn2.close()
+    assert not caplog.records
+
+
+def test_conn_multiple_calls_no_duplicate_postgres(monkeypatch, caplog):
+    executed: list[str] = []
+
+    class DummyDuplicateColumn(Exception):
+        pass
+
+    class DummyConn:
+        def execute(self, stmt: str, params: tuple | None = None):
+            executed.append(stmt)
+            if stmt == "ALTER TABLE cursor ADD COLUMN irrelevant INTEGER DEFAULT 0":
+                raise DummyDuplicateColumn("duplicate column")
+            return types.SimpleNamespace(fetchall=lambda: [])
+
+        def commit(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def rollback(self) -> None:  # pragma: no cover - trivial
+            return None
+
+        def close(self) -> None:  # pragma: no cover - trivial
+            return None
+
+    fake_psycopg = types.SimpleNamespace(
+        connect=lambda url: DummyConn(),
+        errors=types.SimpleNamespace(DuplicateColumn=DummyDuplicateColumn),
+    )
+    monkeypatch.setitem(sys.modules, "psycopg", fake_psycopg)
+    monkeypatch.setenv("CURSOR_DB", "postgres://user@host/db")
+    importlib.reload(config)
+    importlib.reload(cursors)
+    with caplog.at_level(logging.ERROR):
+        conn1, _ = cursors._conn()
+        conn1.close()
+        conn2, _ = cursors._conn()
+        conn2.close()
+    assert not caplog.records
+    alter_stmts = [stmt for stmt in executed if stmt.startswith("ALTER TABLE cursor")]
+    assert all("IF NOT EXISTS" in stmt for stmt in alter_stmts)
