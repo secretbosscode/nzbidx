@@ -179,7 +179,9 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             create_release_posted_at_index(raw)
         except Exception as exc:
             logger.error(
-                "release_partition_check_failed", exc_info=True, extra={"error": str(exc)}
+                "release_partition_check_failed",
+                exc_info=True,
+                extra={"error": str(exc)},
             )
             raise
         finally:
