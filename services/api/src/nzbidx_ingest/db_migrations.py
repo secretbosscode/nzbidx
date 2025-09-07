@@ -328,7 +328,7 @@ def create_release_posted_at_index(conn: Any) -> None:
                 """
                 SELECT inhrelid::regclass::text
                 FROM pg_inherits
-                WHERE inhparent = %s::regclass
+                WHERE inhparent = $1::regclass
                 """,
                 (table,),
             )
