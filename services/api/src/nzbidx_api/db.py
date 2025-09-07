@@ -204,7 +204,8 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             for info in modules:
                 name = info.name
                 cur.execute(
-                    f"SELECT 1 FROM nzbidx_schema_migrations WHERE name = '{name}'"
+                    "SELECT 1 FROM nzbidx_schema_migrations WHERE name = %s",
+                    (name,),
                 )
                 if cur.fetchone():
                     continue
@@ -213,7 +214,8 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 if migrate:
                     migrate(raw)
                     cur.execute(
-                        f"INSERT INTO nzbidx_schema_migrations (name) VALUES ('{name}')"
+                        "INSERT INTO nzbidx_schema_migrations (name) VALUES (%s)",
+                        (name,),
                     )
                     try:
                         raw.commit()
