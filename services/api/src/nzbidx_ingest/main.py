@@ -719,12 +719,8 @@ def insert_release(
             )
         )
 
-    placeholders = ",".join(
-        [
-            "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
-            for _ in titles
-        ]
-    )
+    placeholder = sql_placeholder(conn)
+    placeholders = ",".join([placeholder] * len(titles))
     existing: set[tuple[str, int]] = set()
     updates: list[tuple[Optional[datetime], str, int]] = []
     if titles:
@@ -830,7 +826,7 @@ def insert_release(
                             inserted.discard(title)
     # Ensure posted_at is updated for existing rows
     if updates:
-        placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+        placeholder = sql_placeholder(conn)
         if conn.__class__.__module__.startswith("sqlite3"):
             sqlite_updates = [
                 (u[0].isoformat() if u[0] else None, u[1], u[2]) for u in updates
@@ -864,7 +860,7 @@ def insert_release(
 def prune_group(conn: Any, group: str) -> None:
     """Remove all releases associated with ``group`` from storage."""
     cur = conn.cursor()
-    placeholder = "?" if conn.__class__.__module__.startswith("sqlite3") else "%s"
+    placeholder = sql_placeholder(conn)
     cur.execute(f"DELETE FROM release WHERE source_group = {placeholder}", (group,))
     conn.commit()
 
