@@ -14,6 +14,7 @@ import importlib
 import logging
 import os
 import pkgutil
+import re
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
@@ -279,7 +280,25 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     for attempt in range(1, max_attempts + 1):
         try:
             async with engine.connect() as conn:
-                await _apply(conn)
+                try:
+                    await _apply(conn)
+                except Exception as exc:
+                    msg = str(getattr(exc, "orig", exc)).lower()
+                    if "is not partitioned" not in msg:
+                        raise
+                    match = re.search(
+                        r'relation "(?P<table>release_[a-z0-9_]+)" is not partitioned',
+                        msg,
+                    )
+                    if not match:
+                        raise
+                    category = match.group("table").removeprefix("release_")
+                    await conn.run_sync(
+                        lambda sync_conn: migrate_release_partitions_by_date(
+                            sync_conn.connection.dbapi_connection, category
+                        )
+                    )
+                    await _apply(conn)
                 await _run_migrations(conn)
                 await _ensure_release_partitions(conn)
                 await _drop_privileges(conn)
