@@ -156,17 +156,15 @@ def migrate_release_table(conn: Any) -> None:
     # Copy rows and drop the old table.
     cur.execute(
         """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = 'release_old'
-          AND is_generated = 'NEVER'
-        ORDER BY ordinal_position
+        INSERT INTO release (
+            id, norm_title, category, category_id, language, tags, source_group,
+            size_bytes, posted_at, segments, has_parts, part_count
+        )
+        SELECT
+            id, norm_title, category, category_id, language, tags, source_group,
+            size_bytes, posted_at, segments, has_parts, part_count
+        FROM release_old
         """
-    )
-    columns = [row[0] for row in cur.fetchall()]
-    column_list = ", ".join(columns)
-    cur.execute(
-        f"INSERT INTO release ({column_list}) SELECT {column_list} FROM release_old"
     )
     cur.execute("DROP TABLE release_old")
 
@@ -230,26 +228,27 @@ def migrate_release_partitions_by_date(
     conn.commit()
     create_release_posted_at_index(conn)
 
-    # Determine columns excluding generated ``search_vector``
-    cur.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'release'
-        ORDER BY ordinal_position
-        """
-    )
-    columns = [row[0] for row in cur.fetchall() if row[0] != "search_vector"]
-    column_sql = ", ".join(columns)
-
     # Move rows into new partitioned table
     while True:
         cur.execute(
             f"""
             WITH moved AS (
-                SELECT {column_sql} FROM {table}_old ORDER BY id LIMIT {batch_size}
+                SELECT
+                    id, norm_title, category, category_id, language, tags,
+                    source_group, size_bytes, posted_at, segments, has_parts,
+                    part_count
+                FROM {table}_old ORDER BY id LIMIT {batch_size}
             )
-            INSERT INTO {table} ({column_sql}) SELECT {column_sql} FROM moved RETURNING id
+            INSERT INTO {table} (
+                id, norm_title, category, category_id, language, tags,
+                source_group, size_bytes, posted_at, segments, has_parts,
+                part_count
+            )
+            SELECT
+                id, norm_title, category, category_id, language, tags,
+                source_group, size_bytes, posted_at, segments, has_parts,
+                part_count
+            FROM moved RETURNING id
             """
         )
         ids = [row[0] for row in cur.fetchall()]

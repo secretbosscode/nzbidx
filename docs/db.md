@@ -61,6 +61,13 @@ The application also pre-creates yearly `release_<category>` partitions for the
 current and next calendar years on startup so upcoming releases have a
 destination table without manual intervention.
 
+## Data migrations
+
+When writing data migration scripts, avoid `SELECT *` queries. Explicitly
+enumerating columns decouples migrations from schema order and omits generated
+fields such as `search_vector` that PostgreSQL can derive automatically.
+Listing columns makes migrations resilient to future schema changes.
+
 ## Partitioning release tables
 
 Each `release_<category>` table must be partitioned by the `posted_at` column so
