@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS release (
     segments JSONB,
     has_parts BOOLEAN NOT NULL DEFAULT FALSE,
     part_count INT NOT NULL DEFAULT 0,
+    search_vector tsvector GENERATED ALWAYS AS (
+        to_tsvector('simple', coalesce(norm_title,'') || ' ' || coalesce(tags,''))
+    ) STORED,
     UNIQUE (norm_title, category_id, posted_at)
 ) PARTITION BY RANGE (category_id);
 
@@ -92,6 +95,10 @@ ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS segments JSONB;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS has_parts BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS part_count INT NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS search_vector tsvector
+    GENERATED ALWAYS AS (
+        to_tsvector('simple', coalesce(norm_title,'') || ' ' || coalesce(tags,''))
+    ) STORED;
 ALTER TABLE IF EXISTS release DROP CONSTRAINT IF EXISTS release_norm_title_key;
 ALTER TABLE IF EXISTS release DROP CONSTRAINT IF EXISTS release_norm_title_category_id_key;
 DO $$
@@ -117,5 +124,6 @@ CREATE INDEX IF NOT EXISTS release_tags_idx ON release USING GIN (tags gin_trgm_
 CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
+CREATE INDEX IF NOT EXISTS release_search_idx ON release USING GIN (search_vector);
 CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_posted_at_key ON release (norm_title, category_id, posted_at);
