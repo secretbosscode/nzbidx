@@ -350,6 +350,7 @@ def create_release_posted_at_index(conn: Any) -> None:
             )
             tables.extend(row[0] for row in cur.fetchall())
     except Exception:
+        conn.rollback()
         cur.execute(
             "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
         )
