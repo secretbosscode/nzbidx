@@ -164,6 +164,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
     engine_sync = getattr(engine, "sync_engine", None)
     engine_url = getattr(engine, "url", "")
+    need_partition_check = False
     if engine_sync is not None and "postgresql" in str(engine_url):
 
         def _partition_check(sync_conn: Any) -> None:
@@ -192,16 +193,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                     migrate_release_partitions_by_date(raw, cat)
             create_release_posted_at_index(raw)
 
-        try:
-            async with engine.connect() as conn:
-                await conn.run_sync(_partition_check)
-        except Exception as exc:
-            logger.error(
-                "release_partition_check_failed",
-                exc_info=True,
-                extra={"error": str(exc)},
-            )
-            raise
+        need_partition_check = True
 
     async def _apply(conn: Any) -> None:
         await apply_async(conn, text, statements=statements)
@@ -297,6 +289,19 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     for attempt in range(1, max_attempts + 1):
         try:
             async with engine.connect() as conn:
+                if need_partition_check:
+                    try:
+                        await conn.run_sync(_partition_check)
+                    except Exception as exc:
+                        msg = str(getattr(exc, "orig", exc)).lower()
+                        if "does not exist" in msg or "invalid catalog name" in msg:
+                            raise
+                        logger.error(
+                            "release_partition_check_failed",
+                            exc_info=True,
+                            extra={"error": str(exc)},
+                        )
+                        raise
                 await _apply(conn)
                 await _run_migrations(conn)
                 await _ensure_release_partitions(conn)
