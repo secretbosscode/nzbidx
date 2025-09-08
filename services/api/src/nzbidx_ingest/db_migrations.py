@@ -19,6 +19,21 @@ CATEGORY_RANGES: dict[str, tuple[int, int] | None] = {
 }
 
 
+def _format_partition_bound(value: int | str) -> str:
+    """Return a SQL-safe literal for ``value``.
+
+    Integers are returned as-is while strings are single quoted with any
+    embedded quotes doubled to prevent SQL injection.  Only integers and
+    strings are accepted as partition bounds.
+    """
+
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        return "'" + value.replace("'", "''") + "'"
+    raise TypeError("partition bounds must be int or str")
+
+
 def migrate_release_table(conn: Any) -> None:
     """Migrate ``release`` rows into partitioned tables by ``category_id``.
 
@@ -178,9 +193,10 @@ def migrate_release_partitions_by_date(
         )
     else:
         start, end = ranges
+        start_sql = _format_partition_bound(start)
+        end_sql = _format_partition_bound(end)
         cur.execute(
-            f"CREATE TABLE {table} PARTITION OF release FOR VALUES FROM ($1) TO ($2) PARTITION BY RANGE (posted_at)",
-            (start, end),
+            f"CREATE TABLE {table} PARTITION OF release FOR VALUES FROM ({start_sql}) TO ({end_sql}) PARTITION BY RANGE (posted_at)"
         )
 
     # Determine distinct years present in existing data
