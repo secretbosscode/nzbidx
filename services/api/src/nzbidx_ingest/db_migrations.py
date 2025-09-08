@@ -154,7 +154,20 @@ def migrate_release_table(conn: Any) -> None:
     create_release_posted_at_index(conn)
 
     # Copy rows and drop the old table.
-    cur.execute("INSERT INTO release SELECT * FROM release_old")
+    cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'release_old'
+          AND is_generated = 'NEVER'
+        ORDER BY ordinal_position
+        """
+    )
+    columns = [row[0] for row in cur.fetchall()]
+    column_list = ", ".join(columns)
+    cur.execute(
+        f"INSERT INTO release ({column_list}) SELECT {column_list} FROM release_old"
+    )
     cur.execute("DROP TABLE release_old")
 
     conn.commit()
