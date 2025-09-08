@@ -14,7 +14,7 @@
 - Handle search vector migration automatically at startup; manual SQL script removed.
 - Add `release_posted_at_idx` index on `posted_at DESC`.
 - Add configurable retry attempts and delay for NNTP connections.
-- Optionally trust `X-Forwarded-For`/`X-Real-IP` headers for rate limiting via `TRUST_PROXY_HEADERS`.
+- Optionally trust `X-Forwarded-For`/`X-Real-IP` headers for rate limiting via `TRUST_PROXY_HEADERS` with validation to avoid spoofing.
 
 ## [0.0.0] - 2024-01-01
 - Initial release.

@@ -52,29 +52,31 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.limit = limit_val
         self.trust_proxy_headers = settings.trust_proxy_headers
 
-    def _client_ip(self, request: Request) -> str:
-        """Return the best-effort client IP for ``request``."""
-        if self.trust_proxy_headers:
-            header = request.headers.get("x-forwarded-for")
-            if header:
-                candidate = header.split(",")[0].strip()
+    def _trusted_ip_from_headers(self, request: Request) -> str | None:
+        """Return the first valid IP from proxy headers if present."""
+        for header_name in ("x-forwarded-for", "x-real-ip"):
+            header = request.headers.get(header_name)
+            if not header:
+                continue
+            for part in header.split(","):
+                part = part.strip()
+                if not part:
+                    continue
                 try:
-                    ipaddress.ip_address(candidate)
-                    return candidate
+                    ipaddress.ip_address(part)
                 except ValueError:
-                    pass
-            header = request.headers.get("x-real-ip")
-            if header:
-                candidate = header.split(",")[0].strip()
-                try:
-                    ipaddress.ip_address(candidate)
-                    return candidate
-                except ValueError:
-                    pass
-        return request.client.host if request.client else "anonymous"
+                    continue
+                return part
+        return None
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        count = await self.limiter.increment(self._client_ip(request))
+        if self.trust_proxy_headers:
+            client_ip = self._trusted_ip_from_headers(request)
+            if client_ip is None:
+                client_ip = request.client.host if request.client else "anonymous"
+        else:
+            client_ip = request.client.host if request.client else "anonymous"
+        count = await self.limiter.increment(client_ip)
         if count > self.limit:
             return rate_limited()
         return await call_next(request)
