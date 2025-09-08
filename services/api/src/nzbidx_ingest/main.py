@@ -365,10 +365,15 @@ def connect_db() -> Any:
 
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
+            auto_migrate = os.getenv("AUTO_MIGRATE_PARTITIONS", "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
 
             # Ensure the ``release`` table is partitioned before attempting any
             # migrations.  If the table exists but is not partitioned, attempt to
-            # migrate it automatically and verify the result.
+            # migrate it automatically (when enabled) and verify the result.
             conn = None
             try:
                 conn = engine.raw_connection()
@@ -383,13 +388,13 @@ def connect_db() -> Any:
                     ")"
                 )
                 partitioned = bool(cur.fetchone()[0])
-                if exists and not partitioned:
+                if exists and not partitioned and auto_migrate:
                     logger.info("release_table_migrating")
                     try:
                         migrate_release_table(conn)
                         create_release_posted_at_index(conn)
                     except Exception:
-                        pass
+                        logger.exception("release_table_migration_failed")
                     cur = conn.cursor()
                     cur.execute(
                         "SELECT EXISTS ("
@@ -397,9 +402,13 @@ def connect_db() -> Any:
                         ")"
                     )
                     partitioned = bool(cur.fetchone()[0])
-                    if not partitioned:
-                        logger.error("release_table_not_partitioned")
-                        raise RuntimeError("release table must be partitioned")
+                    if partitioned:
+                        logger.info("release_table_auto_migrated")
+                    else:
+                        logger.error("release_table_migration_failed")
+                if exists and not partitioned:
+                    logger.error("release_table_not_partitioned")
+                    raise RuntimeError("release table must be partitioned")
                 for cat in PARTITION_CATEGORIES:
                     cur = conn.cursor()
                     cur.execute(
@@ -420,16 +429,17 @@ def connect_db() -> Any:
                         (f"release_{cat}",),
                     )
                     partitioned = bool(cur.fetchone()[0])
-                    if exists and not partitioned:
+                    if exists and not partitioned and auto_migrate:
                         logger.info(f"release_{cat}_table_migrating")
                         try:
                             migrate_release_partitions_by_date(conn, cat)
                             create_release_posted_at_index(conn)
                         except Exception:
-                            pass
-                        cur = conn.cursor()
-                        cur.execute(
-                            """
+                            logger.exception(f"release_{cat}_table_migration_failed")
+                        else:
+                            cur = conn.cursor()
+                            cur.execute(
+                                """
                                 SELECT EXISTS(
                                     SELECT 1
                                     FROM pg_partitioned_table p
@@ -437,12 +447,14 @@ def connect_db() -> Any:
                                     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
                                     WHERE c.relname = %s AND a.attname = 'posted_at'
                                 )
-                            """,
-                            (f"release_{cat}",),
-                        )
-                        partitioned = bool(cur.fetchone()[0])
-                        if partitioned:
-                            logger.info(f"release_{cat}_table_auto_migrated")
+                                """,
+                                (f"release_{cat}",),
+                            )
+                            partitioned = bool(cur.fetchone()[0])
+                            if partitioned:
+                                logger.info(f"release_{cat}_table_auto_migrated")
+                            else:
+                                logger.error(f"release_{cat}_table_migration_failed")
                     if exists and not partitioned:
                         logger.error(f"release_{cat}_table_not_partitioned")
                         raise RuntimeError(
