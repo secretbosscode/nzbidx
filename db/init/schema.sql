@@ -20,11 +20,41 @@ CREATE TABLE IF NOT EXISTS release (
 ) PARTITION BY RANGE (category_id);
 
 CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
-    FOR VALUES FROM (2000) TO (3000);
+    FOR VALUES FROM (2000) TO (3000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE IF NOT EXISTS release_movies_2025 PARTITION OF release_movies
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE IF NOT EXISTS release_movies_default PARTITION OF release_movies DEFAULT;
+CREATE INDEX IF NOT EXISTS release_movies_2024_posted_at_idx
+    ON ONLY release_movies_2024 (posted_at);
+CREATE INDEX IF NOT EXISTS release_movies_2025_posted_at_idx
+    ON ONLY release_movies_2025 (posted_at);
 CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
-    FOR VALUES FROM (3000) TO (4000);
+    FOR VALUES FROM (3000) TO (4000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE IF NOT EXISTS release_music_2025 PARTITION OF release_music
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE IF NOT EXISTS release_music_default PARTITION OF release_music DEFAULT;
+CREATE INDEX IF NOT EXISTS release_music_2024_posted_at_idx
+    ON ONLY release_music_2024 (posted_at);
+CREATE INDEX IF NOT EXISTS release_music_2025_posted_at_idx
+    ON ONLY release_music_2025 (posted_at);
 CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
-    FOR VALUES FROM (5000) TO (6000);
+    FOR VALUES FROM (5000) TO (6000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE IF NOT EXISTS release_tv_2025 PARTITION OF release_tv
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE IF NOT EXISTS release_tv_default PARTITION OF release_tv DEFAULT;
+CREATE INDEX IF NOT EXISTS release_tv_2024_posted_at_idx
+    ON ONLY release_tv_2024 (posted_at);
+CREATE INDEX IF NOT EXISTS release_tv_2025_posted_at_idx
+    ON ONLY release_tv_2025 (posted_at);
 CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
     FOR VALUES FROM (6000) TO (7000)
     PARTITION BY RANGE (posted_at);
@@ -38,7 +68,17 @@ CREATE INDEX IF NOT EXISTS release_adult_2024_posted_at_idx
 CREATE INDEX IF NOT EXISTS release_adult_2025_posted_at_idx
     ON ONLY release_adult_2025 (posted_at);
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
-    FOR VALUES FROM (7000) TO (8000);
+    FOR VALUES FROM (7000) TO (8000)
+    PARTITION BY RANGE (posted_at);
+CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+CREATE TABLE IF NOT EXISTS release_books_2025 PARTITION OF release_books
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE IF NOT EXISTS release_books_default PARTITION OF release_books DEFAULT;
+CREATE INDEX IF NOT EXISTS release_books_2024_posted_at_idx
+    ON ONLY release_books_2024 (posted_at);
+CREATE INDEX IF NOT EXISTS release_books_2025_posted_at_idx
+    ON ONLY release_books_2025 (posted_at);
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
 
 DROP INDEX IF EXISTS release_embedding_idx;
@@ -85,3 +125,5 @@ CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release USING GIN (norm_tit
 CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group);
 CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes);
 CREATE INDEX IF NOT EXISTS release_search_idx ON release USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS release_norm_title_category_id_posted_at_key ON release (norm_title, category_id, posted_at);

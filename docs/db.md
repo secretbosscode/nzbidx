@@ -5,7 +5,8 @@ Manual steps to create the database for NZBidx.
 When using the provided Docker setup, the database and required extensions are
 provisioned automatically. The manual steps below apply only to custom
 installations. The schema in `db/init/schema.sql` must be loaded before
-starting the application so all tables and generated columns exist.
+starting the application so all tables, yearly partitioned `release_<category>`
+tables, and generated columns exist.
 
 ## Prerequisites
 
@@ -32,8 +33,8 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 ## Apply schema
 
-Run the schema file before starting the application to create tables and
-indexes:
+Run the schema file before starting the application to create tables, indexes,
+and pre-create yearly `release_<category>` partitions:
 
 ```bash
 psql -U postgres -d nzbidx -f db/init/schema.sql
@@ -55,6 +56,7 @@ connections run as an ordinary user. Point `DATABASE_URL` at the database, e.g.
 
 Existing deployments with an unpartitioned `release` table are migrated automatically when the application starts using a superuser `DATABASE_URL`; no manual script is required.
 
+The schema pre-creates `release_<category>` partitions for 2024 and 2025.
 The application also pre-creates yearly `release_<category>` partitions for the
 current and next calendar years on startup so upcoming releases have a
 destination table without manual intervention.
