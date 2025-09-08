@@ -553,7 +553,7 @@ async def api(request: Request) -> Response:
     """Newznab compatible endpoint."""
     params = request.query_params
     api_key = params.get("apikey")
-    qs_len = len(request.scope.get("query_string", b""))
+    qs_len = len(getattr(request, "scope", {}).get("query_string", b""))
     if qs_len > settings.max_query_bytes:
         return invalid_params("query string too long")
     for value in params.values():

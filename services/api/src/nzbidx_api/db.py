@@ -15,7 +15,7 @@ import logging
 import os
 import pkgutil
 from functools import lru_cache
-from importlib import resources
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 from typing import Any, Optional
@@ -131,11 +131,16 @@ def get_engine() -> Optional[AsyncEngine]:
     return engine
 
 
+SCHEMA_PATH = Path(__file__).resolve().parents[4] / "db" / "init" / "schema.sql"
+
+
+def _read_schema_text() -> str:
+    return SCHEMA_PATH.read_text(encoding="utf-8")
+
+
 @lru_cache()
 def load_schema_statements() -> list[str]:
-    sql = (
-        resources.files(__package__).joinpath("schema.sql").read_text(encoding="utf-8")
-    )
+    sql = _read_schema_text()
     if sqlparse:
         return [s.strip() for s in sqlparse.split(sql) if s.strip()]
     return _split_sql(sql)
@@ -240,6 +245,10 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             raise
 
     async def _ensure_release_partitions(conn: Any) -> None:
+        dialect_name = getattr(getattr(conn, "dialect", None), "name", "")
+        if not hasattr(conn, "run_sync") or dialect_name != "postgresql":
+            return
+
         def _ensure(sync_conn: Any) -> None:
             raw = sync_conn.connection.dbapi_connection
             ensure_current_and_next_year_partitions(raw)
@@ -455,7 +464,12 @@ async def dispose_engine() -> None:
             await _engine.dispose()
         elif _engine_loop and not _engine_loop.is_closed():
             try:
-                fut = asyncio.run_coroutine_threadsafe(_engine.dispose(), _engine_loop)
+                if _engine_loop.is_running():
+                    fut = asyncio.run_coroutine_threadsafe(
+                        _engine.dispose(), _engine_loop
+                    )
+                else:
+                    raise RuntimeError
             except RuntimeError:
                 await _engine.dispose()
             else:
