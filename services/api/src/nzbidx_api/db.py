@@ -34,10 +34,12 @@ from nzbidx_ingest.db_migrations import (
 try:  # pragma: no cover - import guard
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+    from sqlalchemy.exc import DBAPIError
 except Exception:  # pragma: no cover - optional dependency
     text = None  # type: ignore
     AsyncEngine = None  # type: ignore
     create_async_engine = None  # type: ignore
+    DBAPIError = Exception  # type: ignore[assignment]
 
 # Optional sqlparse dependency for parsing schema statements.  When unavailable
 # the internal splitter from nzbidx_migrations is used.
@@ -272,7 +274,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
         try:
             await conn.execute(text("ALTER ROLE CURRENT_USER NOSUPERUSER"))
             await conn.commit()
-        except PostgresError as exc:
+        except (PostgresError, DBAPIError) as exc:
             await conn.rollback()
             logger.warning("drop_privileges_failed", extra={"error": str(exc)})
         except Exception as exc:
