@@ -34,10 +34,12 @@ from nzbidx_ingest.db_migrations import (
 try:  # pragma: no cover - import guard
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+    from sqlalchemy.exc import DBAPIError
 except Exception:  # pragma: no cover - optional dependency
     text = None  # type: ignore
     AsyncEngine = None  # type: ignore
     create_async_engine = None  # type: ignore
+    DBAPIError = Exception  # type: ignore
 
 # Optional sqlparse dependency for parsing schema statements.  When unavailable
 # the internal splitter from nzbidx_migrations is used.
@@ -333,7 +335,7 @@ async def _create_database(url: str) -> None:
                 try:
                     name_literal = dbname.replace('"', '""')
                     await conn.execute(text(f'CREATE DATABASE "{name_literal}"'))
-                except PostgresError as exc:  # pragma: no cover - db may exist
+                except (DBAPIError, PostgresError) as exc:  # pragma: no cover - db may exist
                     msg = str(getattr(exc, "orig", exc)).lower()
                     if "already exists" not in msg and "duplicate database" not in msg:
                         logger.warning(
