@@ -47,6 +47,8 @@ def test_release_partitions_migrate_by_date(monkeypatch):
             "SELECT 1 FROM pg_class WHERE relname=%s", (f"release_{name}_2024",)
         )
         assert cur.fetchone() is not None
+        cur.execute(f"SELECT search_vector FROM release_{name}_2024")
+        assert cur.fetchone()[0] is not None
 
     cur.close()
     conn.close()
