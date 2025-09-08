@@ -217,9 +217,13 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             logger.error("migration_failed", exc_info=True, extra={"error": str(exc)})
             raise
 
-    async def _ensure_release_partitions(conn: Any, *, migrate_only: bool = False) -> None:
+    async def _ensure_release_partitions(
+        conn: Any, *, migrate_only: bool = False
+    ) -> None:
         dialect_name = getattr(getattr(conn, "dialect", None), "name", None)
-        if not hasattr(conn, "run_sync") or (dialect_name and dialect_name != "postgresql"):
+        if not hasattr(conn, "run_sync") or (
+            dialect_name and dialect_name != "postgresql"
+        ):
             return
 
         def _ensure(sync_conn: Any) -> None:
