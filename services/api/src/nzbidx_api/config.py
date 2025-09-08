@@ -32,6 +32,19 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value_lower = value.lower()
+    if value_lower in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if value_lower in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    logger.warning("Invalid %s=%r, using default %s", name, value, default)
+    return default
+
+
 def api_keys() -> set[str]:
     keys = os.getenv("API_KEYS", "")
     return {k.strip() for k in keys.split(",") if k.strip()}
@@ -57,6 +70,9 @@ class Settings:
     rate_window: int = field(default_factory=lambda: _int_env("RATE_WINDOW", 60))
     rate_limit_max_ips: int = field(
         default_factory=lambda: _int_env("RATE_LIMIT_MAX_IPS", 1024)
+    )
+    trust_proxy_headers: bool = field(
+        default_factory=lambda: _bool_env("TRUST_PROXY_HEADERS", False)
     )
     key_rate_limit: int = field(default_factory=lambda: _int_env("KEY_RATE_LIMIT", 100))
     key_rate_window: int = field(
