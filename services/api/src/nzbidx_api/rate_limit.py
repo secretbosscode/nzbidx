@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import asyncio
+import ipaddress
 from typing import Dict
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -49,10 +50,31 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         window_val = window if window is not None else settings.rate_window
         self.limiter = RateLimiter(limit_val, window_val)
         self.limit = limit_val
+        self.trust_proxy_headers = settings.trust_proxy_headers
+
+    def _client_ip(self, request: Request) -> str:
+        """Return the best-effort client IP for ``request``."""
+        if self.trust_proxy_headers:
+            header = request.headers.get("x-forwarded-for")
+            if header:
+                candidate = header.split(",")[0].strip()
+                try:
+                    ipaddress.ip_address(candidate)
+                    return candidate
+                except ValueError:
+                    pass
+            header = request.headers.get("x-real-ip")
+            if header:
+                candidate = header.split(",")[0].strip()
+                try:
+                    ipaddress.ip_address(candidate)
+                    return candidate
+                except ValueError:
+                    pass
+        return request.client.host if request.client else "anonymous"
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        client_ip = request.client.host if request.client else "anonymous"
-        count = await self.limiter.increment(client_ip)
+        count = await self.limiter.increment(self._client_ip(request))
         if count > self.limit:
             return rate_limited()
         return await call_next(request)
