@@ -51,6 +51,12 @@ async def _run_apply_schema(monkeypatch) -> list[str]:
 
         async def execute(self, stmt, params=None):
             executed.append(stmt)
+            # Simulate the behavior of PostgreSQL when attempting to create a
+            # child partition before the parent has been migrated.  The first
+            # attempt to create ``release_movies_2024`` should fail until the
+            # migration runs and marks the table as partitioned.
+            if "release_movies_2024" in stmt and not self.state["partitioned"]:
+                raise RuntimeError('relation "release_movies" is not partitioned')
 
         async def commit(self):  # pragma: no cover - trivial
             return None
@@ -107,4 +113,9 @@ async def _run_apply_schema(monkeypatch) -> list[str]:
 
 def test_apply_schema_partitions_release_movies(monkeypatch):
     executed = asyncio.run(_run_apply_schema(monkeypatch))
-    assert any("release_movies_2024" in stmt for stmt in executed)
+    # The child partition creation should be attempted once, fail, trigger the
+    # migration, and then succeed on retry.
+    child_attempts = [i for i, s in enumerate(executed) if "release_movies_2024" in s]
+    assert len(child_attempts) == 2
+    migrate_index = executed.index("MIGRATE movies")
+    assert child_attempts[0] < migrate_index < child_attempts[1]
