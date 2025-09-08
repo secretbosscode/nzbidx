@@ -142,16 +142,9 @@ def test_apply_schema_handles_function_with_semicolons_without_sqlparse(monkeypa
         def connect(self):
             return DummyConn()
 
-    class DummyResource:
-        def joinpath(self, name: str):
-            return self
-
-        def read_text(self, encoding: str = "utf-8") -> str:
-            return sql
-
     monkeypatch.setattr(db, "get_engine", lambda: DummyEngine())
     monkeypatch.setattr(db, "text", lambda s: s)
-    monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
+    monkeypatch.setattr(db, "_read_schema_text", lambda: sql)
     monkeypatch.setattr(db, "sqlparse", None)
     db.load_schema_statements.cache_clear()
 
@@ -198,16 +191,9 @@ def test_apply_schema_handles_tagged_dollar_quotes(monkeypatch):
         def connect(self):
             return DummyConn()
 
-    class DummyResource:
-        def joinpath(self, name: str):
-            return self
-
-        def read_text(self, encoding: str = "utf-8") -> str:
-            return sql
-
     monkeypatch.setattr(db, "get_engine", lambda: DummyEngine())
     monkeypatch.setattr(db, "text", lambda s: s)
-    monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
+    monkeypatch.setattr(db, "_read_schema_text", lambda: sql)
     monkeypatch.setattr(db, "sqlparse", None)
     db.load_schema_statements.cache_clear()
 
