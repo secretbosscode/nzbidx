@@ -271,7 +271,15 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
     async def _drop_privileges(conn: Any) -> None:
         """Revoke superuser rights from the current role if possible."""
+        dialect_name = getattr(getattr(conn, "dialect", None), "name", "")
+        if dialect_name != "postgresql":
+            return
         try:
+            is_super = await conn.scalar(
+                text("SELECT rolsuper FROM pg_roles WHERE rolname = CURRENT_USER")
+            )
+            if not is_super:
+                return
             await conn.execute(text("ALTER ROLE CURRENT_USER NOSUPERUSER"))
             await conn.commit()
         except (PostgresError, DBAPIError) as exc:
