@@ -18,8 +18,8 @@ script against a fresh database before starting the API service:
 psql "$DATABASE_URL" -f db/init/schema.sql
 ```
 
-This creates the `release` table, its `search_vector` column, and the
-`release_search_idx` index. Verify the index exists:
+This creates the partitioned `release` table, yearly partitioned
+`release_<category>` tables, and the `release_search_idx` index. Verify the index exists:
 
 ```bash
 psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
@@ -154,8 +154,9 @@ until the migration succeeds.
 - **Checks:** `docker compose logs postgres`, `psql -c '\dx'` to list installed
   extensions.
 - **Actions:** ensure `db/init/schema.sql` ran under a superuser (via
-  `POSTGRES_USER`).  If using an external database, run the script manually or
-  ask an administrator to install `pg_trgm` and `vector`.
+  `POSTGRES_USER`) so extensions and partitioned tables were created. If using
+  an external database, run the script manually or ask an administrator to
+  install `pg_trgm` and `vector`.
 
 ## Missing database driver
 - **Symptoms:** startup logs show `ModuleNotFoundError: No module named 'psycopg'`

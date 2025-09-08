@@ -15,16 +15,16 @@ the maintained `standard-nntplib` package to provide NNTP client support.
 ## Database Performance
 
 Postgres uses a set of indexes to keep queries fast as the dataset grows. The
-schema creates the indexes during initialization; see `db/init/schema.sql` for
-details.
+schema creates the indexes and partitioned `release_<category>` tables with
+yearly partitions during initialization; see `db/init/schema.sql` for details.
 
 Connections to PostgreSQL require the [`psycopg` driver](https://www.psycopg.org/).
 The container images install `psycopg[binary] >= 3.1` from the application's
 `pyproject.toml`. The `pg_trgm` extension must be installed by a
 superuser—`docker-compose` mounts `db/init/schema.sql` so the database is
-provisioned with the required extension during initialisation. Having permission
-to create databases is not enough; roles without superuser rights cannot install
-extensions.
+provisioned with the required extension and partitioned tables during
+initialization. Having permission to create databases is not enough; roles
+without superuser rights cannot install extensions.
 
 Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper uses APScheduler to run `VACUUM (ANALYZE)`,
@@ -50,7 +50,8 @@ When adjusting the allowed file-type extensions, remove outdated rows:
 
 Seed a fresh PostgreSQL instance before starting ingestion or the API service.
 Apply the schema file to install required extensions, create the partitioned
-`release` table, and add the `search_vector` column and index:
+`release` table, add the `search_vector` column and index, and pre-create
+yearly partitions on each `release_<category>` table:
 
 ```bash
 psql "$DATABASE_URL" -f db/init/schema.sql
@@ -383,7 +384,8 @@ Schema creation is idempotent; running with a new database is sufficient.
 The required `vector` and `pg_trgm` extensions must be installed by a
 superuser before the application starts. Having `CREATE DATABASE` privileges
 alone won't work. The compose files mount `db/init/schema.sql`, which installs
-the extensions and creates tables during startup as `POSTGRES_USER`. When using
+the extensions and creates partitioned tables with yearly partitions during
+startup as `POSTGRES_USER`. When using
 an external Postgres instance or setting up the database manually, create the
 role and database, install the extensions and apply the schema as described in
 [docs/db.md](docs/db.md). Once the extensions are installed the `nzbidx` role
