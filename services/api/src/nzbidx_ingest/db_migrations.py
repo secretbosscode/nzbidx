@@ -217,14 +217,26 @@ def migrate_release_partitions_by_date(
     conn.commit()
     create_release_posted_at_index(conn)
 
+    # Determine columns excluding generated ``search_vector``
+    cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'release'
+        ORDER BY ordinal_position
+        """
+    )
+    columns = [row[0] for row in cur.fetchall() if row[0] != "search_vector"]
+    column_sql = ", ".join(columns)
+
     # Move rows into new partitioned table
     while True:
         cur.execute(
             f"""
             WITH moved AS (
-                SELECT * FROM {table}_old ORDER BY id LIMIT {batch_size}
+                SELECT {column_sql} FROM {table}_old ORDER BY id LIMIT {batch_size}
             )
-            INSERT INTO {table} SELECT * FROM moved RETURNING id
+            INSERT INTO {table} ({column_sql}) SELECT {column_sql} FROM moved RETURNING id
             """
         )
         ids = [row[0] for row in cur.fetchall()]
