@@ -451,9 +451,11 @@ def connect_db() -> Any:
             except Exception:
                 # On any errors (e.g. system catalogs missing) fall back to the
                 # migration logic below which will attempt to create the
-                # required structures.  Any failures there will surface as
+                # required structures. Any failures there will surface as
                 # RuntimeError from the caller's perspective.
-                pass
+                logger.exception(
+                    "Error verifying release table partitions; proceeding with migration logic"
+                )
             finally:
                 if conn is not None:
                     try:
