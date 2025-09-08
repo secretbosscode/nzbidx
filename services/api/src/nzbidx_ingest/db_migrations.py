@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from typing import Any, Iterable
+
+logger = logging.getLogger(__name__)
 
 
 # Category ranges in the ``release`` partitioned table.  The ``other`` category
@@ -349,8 +352,11 @@ def create_release_posted_at_index(conn: Any) -> None:
                 (table,),
             )
             tables.extend(row[0] for row in cur.fetchall())
-    except Exception:
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        logger.exception("Falling back to non-partitioned index creation", exc_info=exc)
         cur.execute(
             "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)",
         )
-    conn.commit()
+        conn.commit()
