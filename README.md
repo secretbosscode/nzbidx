@@ -105,6 +105,7 @@ faster serializer once compatible.
 | `RATE_LIMIT` | Requests per window | `60` |
 | `RATE_WINDOW` | Rate limit window in seconds | `60` |
 | `RATE_LIMIT_MAX_IPS` | Maximum unique IPs tracked for rate limiting | `1024` |
+| `TRUST_PROXY_HEADERS` | Use `X-Forwarded-For` / `X-Real-IP` for client IPs | `0` |
 | `NZBIDX_USE_STD_JSON` | `0` uses `orjson` if installed; `1` or unset uses the standard library `json` module | `1` |
 | `NZB_TIMEOUT_SECONDS` | Maximum seconds to fetch an NZB before failing (≥ `NNTP_TOTAL_TIMEOUT`) | `NNTP_TOTAL_TIMEOUT` (`600`) |
 | `NNTP_HOST` | NNTP provider host | _(required for ingest worker)_ |
@@ -245,6 +246,9 @@ Protect the `/api` endpoints by supplying one or more keys:
 Requests are limited per IP using `RATE_LIMIT` requests per `RATE_WINDOW`
 seconds. The limiter tracks up to `RATE_LIMIT_MAX_IPS` addresses, evicting
 least-recently-used entries when full. Exceeding the limit returns HTTP 429.
+When `TRUST_PROXY_HEADERS` is enabled, the first IP from `X-Forwarded-For`
+or `X-Real-IP` headers is used for rate limiting; invalid or missing values
+fall back to the direct client address to avoid spoofing.
 
 ## Pagination & Caching
 
