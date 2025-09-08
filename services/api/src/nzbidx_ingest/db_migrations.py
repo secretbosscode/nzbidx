@@ -246,6 +246,36 @@ def ensure_release_year_partition(conn: Any, category: str, year: int) -> None:
     cur.execute("SELECT to_regclass($1)", (table,))
     if cur.fetchone()[0] is not None:
         return
+    # Ensure the parent table exists and is partitioned by ``posted_at`` before
+    # attempting to create a child partition.  ``pg_partitioned_table`` only
+    # contains entries for partitioned tables, so we query it and verify the
+    # partition key definition references ``posted_at``.
+    cur.execute("SELECT to_regclass($1)", (parent,))
+    if cur.fetchone()[0] is None:
+        logger.warning(
+            "parent table %s not found; skipping creation of %s", parent, table
+        )
+        conn.rollback()
+        return
+    cur.execute(
+        """
+        SELECT pg_get_partkeydef(pt.partrelid)
+        FROM pg_partitioned_table pt
+        WHERE pt.partrelid = $1::regclass
+        """,
+        (parent,),
+    )
+    row = cur.fetchone()
+    if row is None or "posted_at" not in row[0]:
+        logger.warning(
+            "%s is not partitioned by posted_at; migrating and skipping partition creation",
+            parent,
+        )
+        conn.rollback()
+        migrate_release_partitions_by_date(conn, category)
+        # Try again now that the parent has been migrated.
+        ensure_release_year_partition(conn, category, year)
+        return
     cur.execute(
         f"CREATE TABLE IF NOT EXISTS {table} PARTITION OF {parent} FOR VALUES FROM ('{year}-01-01') TO ('{year + 1}-01-01')",
     )
