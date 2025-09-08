@@ -57,11 +57,15 @@ if psycopg:  # pragma: no cover - psycopg not installed
 else:  # pragma: no cover - psycopg not installed
     DB_CLOSE_ERRORS: tuple[type[BaseException], ...] = ()
 
-# Optional asyncpg dependency for low-level connection termination.
+# Optional asyncpg dependency for low-level connection termination and errors.
 try:  # pragma: no cover - import guard
-    from asyncpg.exceptions import InternalClientError
+    from asyncpg.exceptions import InternalClientError, PostgresError
 except Exception:  # pragma: no cover - optional dependency
     InternalClientError = RuntimeError  # type: ignore[misc,assignment]
+
+    class PostgresError(Exception):  # type: ignore[no-redef]
+        """Fallback when asyncpg is unavailable."""
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -209,8 +213,11 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             )
             try:
                 raw.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "migration_commit_failed",
+                    extra={"error": str(exc)},
+                )
             modules = sorted(
                 pkgutil.iter_modules(migrations_pkg.__path__), key=lambda m: m.name
             )
@@ -232,8 +239,11 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                     )
                     try:
                         raw.commit()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.warning(
+                            "migration_commit_failed",
+                            extra={"error": str(exc)},
+                        )
 
         if not hasattr(conn, "run_sync") or not hasattr(conn, "execution_options"):
             return
@@ -260,8 +270,17 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
         try:
             await conn.execute(text("ALTER ROLE CURRENT_USER NOSUPERUSER"))
             await conn.commit()
-        except Exception:
+        except PostgresError as exc:
             await conn.rollback()
+            logger.warning("drop_privileges_failed", extra={"error": str(exc)})
+        except Exception as exc:
+            await conn.rollback()
+            logger.warning(
+                "drop_privileges_unexpected_error",
+                exc_info=True,
+                extra={"error": str(exc)},
+            )
+            raise
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -314,10 +333,19 @@ async def _create_database(url: str) -> None:
                 try:
                     name_literal = dbname.replace('"', '""')
                     await conn.execute(text(f'CREATE DATABASE "{name_literal}"'))
-                except Exception as exc:  # pragma: no cover - db may exist
+                except PostgresError as exc:  # pragma: no cover - db may exist
                     msg = str(getattr(exc, "orig", exc)).lower()
                     if "already exists" not in msg and "duplicate database" not in msg:
+                        logger.warning(
+                            "create_database_failed",
+                            exc_info=True,
+                            extra={"error": str(exc)},
+                        )
                         raise
+                    logger.warning(
+                        "database_already_exists",
+                        extra={"error": str(exc)},
+                    )
     finally:
         await admin_engine.dispose()
 
