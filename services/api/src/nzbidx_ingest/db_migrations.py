@@ -154,7 +154,18 @@ def migrate_release_table(conn: Any) -> None:
     create_release_posted_at_index(conn)
 
     # Copy rows and drop the old table.
-    cur.execute("INSERT INTO release SELECT * FROM release_old")
+    cur.execute(
+        """
+        INSERT INTO release (
+            id, norm_title, category, category_id, language, tags, source_group,
+            size_bytes, posted_at, segments, has_parts, part_count
+        )
+        SELECT
+            id, norm_title, category, category_id, language, tags, source_group,
+            size_bytes, posted_at, segments, has_parts, part_count
+        FROM release_old
+        """
+    )
     cur.execute("DROP TABLE release_old")
 
     conn.commit()
@@ -222,9 +233,22 @@ def migrate_release_partitions_by_date(
         cur.execute(
             f"""
             WITH moved AS (
-                SELECT * FROM {table}_old ORDER BY id LIMIT {batch_size}
+                SELECT
+                    id, norm_title, category, category_id, language, tags,
+                    source_group, size_bytes, posted_at, segments, has_parts,
+                    part_count
+                FROM {table}_old ORDER BY id LIMIT {batch_size}
             )
-            INSERT INTO {table} SELECT * FROM moved RETURNING id
+            INSERT INTO {table} (
+                id, norm_title, category, category_id, language, tags,
+                source_group, size_bytes, posted_at, segments, has_parts,
+                part_count
+            )
+            SELECT
+                id, norm_title, category, category_id, language, tags,
+                source_group, size_bytes, posted_at, segments, has_parts,
+                part_count
+            FROM moved RETURNING id
             """
         )
         ids = [row[0] for row in cur.fetchall()]
