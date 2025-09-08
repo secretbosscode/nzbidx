@@ -48,18 +48,20 @@ When adjusting the allowed file-type extensions, remove outdated rows:
 
 ## Database Initialization
 
-Seed a fresh PostgreSQL instance before starting ingestion. Apply the schema
-file to install required extensions, create the partitioned `release` table,
-and add the full-text search column and index:
+Seed a fresh PostgreSQL instance before starting ingestion or the API service.
+Apply the schema file to install required extensions, create the partitioned
+`release` table, and add the `search_vector` column and index:
 
 ```bash
 psql "$DATABASE_URL" -f db/init/schema.sql
 psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
 ```
 
-Run these commands once with a superuser account or via your migration tool.
-The `to_regclass` query returns `release_search_idx` when the schema is applied.
-See [docs/db.md#full-text-search](docs/db.md#full-text-search) for details.
+Run the first command on a fresh database before starting the API service; it
+must succeed so the `release` table and its `search_vector` column exist. Run
+these commands once with a superuser account or via your migration tool. The
+`to_regclass` query returns `release_search_idx` when the schema is applied. See
+[docs/db.md#full-text-search](docs/db.md#full-text-search) for details.
 
 The application migrates the `release` table automatically on startup when
 provided a `DATABASE_URL` with superuser privileges, so no separate migration
