@@ -4,7 +4,8 @@ Manual steps to create the database for NZBidx.
 
 When using the provided Docker setup, the database and required extensions are
 provisioned automatically. The manual steps below apply only to custom
-installations.
+installations. The schema in `db/init/schema.sql` must be loaded before
+starting the application so all tables and generated columns exist.
 
 ## Prerequisites
 
@@ -31,11 +32,20 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 ## Apply schema
 
-Load the schema file to create tables and indexes:
+Run the schema file before starting the application to create tables and
+indexes:
 
 ```bash
 psql -U postgres -d nzbidx -f db/init/schema.sql
 ```
+
+Verify that the `search_vector` column was created on the `release` table:
+
+```bash
+psql -U postgres -d nzbidx -c "\\d release"
+```
+
+`search_vector` should appear in the column list.
 
 After the extensions are installed and the schema applied, the `nzbidx` role does
 not require superuser privileges. The schema application routine automatically
@@ -51,8 +61,9 @@ destination table without manual intervention.
 
 ## Full-text search
 
-The application automatically creates the `search_vector` column and GIN
-index when it starts. No manual migration is required.
+The schema defines a `search_vector` column on the `release` table and a GIN
+index for full-text search. Once the schema is applied, no additional migration
+steps are required.
 
 ## Event loop considerations
 
