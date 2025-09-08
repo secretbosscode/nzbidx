@@ -322,6 +322,13 @@ def create_release_posted_at_index(conn: Any) -> None:
     """Ensure ``release_posted_at_idx`` exists on ``release`` and its partitions."""
 
     cur = conn.cursor()
+    # Ensure the ``release`` table exists before attempting to inspect partitions.
+    cur.execute("SELECT to_regclass('release')")
+    if cur.fetchone()[0] is None:
+        logger.info("release table not found; skipping posted_at index creation")
+        conn.rollback()
+        return
+
     try:
         cur.execute(
             """
