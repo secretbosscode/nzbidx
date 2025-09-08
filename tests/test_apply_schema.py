@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
+from sqlalchemy.exc import DBAPIError
 
 from nzbidx_api import db
 from nzbidx_ingest.db_migrations import migrate_release_partitions_by_date
@@ -79,6 +81,69 @@ def test_apply_schema_creates_database(monkeypatch):
     assert admin_urls == [("postgresql+asyncpg://u@h/postgres", "AUTOCOMMIT")]
     assert any(stmt.startswith("CREATE DATABASE") for stmt in admin_exec)
     assert executed  # schema statements executed after creation
+
+
+def test_apply_schema_creates_database_on_partition_check_failure(monkeypatch, caplog):
+    executed: list[str] = []
+    created: list[str] = []
+
+    class InvalidCatalogNameError(DBAPIError):
+        pass
+
+    class DummyConn:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt, params=None):
+            executed.append(stmt)
+
+        async def commit(self):
+            return None
+
+        async def rollback(self):
+            return None
+
+        async def scalar(self, stmt, params=None):
+            return 0
+
+    class DummyEngine:
+        def __init__(self):
+            self.calls = 0
+            self.sync_engine = object()
+            self.url = "postgresql+asyncpg://u@h/db"
+
+        def connect(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise InvalidCatalogNameError(
+                    "invalid catalog name", None, Exception("invalid catalog name")
+                )
+            return DummyConn()
+
+    async def fake_apply_async(conn, text, statements):
+        for stmt in statements:
+            await conn.execute(stmt)
+
+    async def fake_create_database(url):
+        created.append(url)
+
+    engine = DummyEngine()
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    monkeypatch.setattr(db, "load_schema_statements", lambda: ["CREATE TABLE t(a int)"])
+    monkeypatch.setattr(db, "apply_async", fake_apply_async)
+    monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db, "_create_database", fake_create_database)
+    monkeypatch.setattr(db, "DATABASE_URL", "postgresql+asyncpg://u@h/db")
+
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(db.apply_schema())
+
+    assert created == ["postgresql+asyncpg://u@h/db"]
+    assert executed == ["CREATE TABLE t(a int)"]
+    assert "release_partition_check_failed" not in caplog.messages
 
 
 def test_apply_schema_retries_on_oserror(monkeypatch):
