@@ -65,7 +65,9 @@ except Exception:  # pragma: no cover - optional dependency
 
     class PostgresError(Exception):  # type: ignore[no-redef]
         """Fallback when asyncpg is unavailable."""
+
         pass
+
 
 logger = logging.getLogger(__name__)
 
