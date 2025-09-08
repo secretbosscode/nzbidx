@@ -3,7 +3,7 @@ import asyncio
 from nzbidx_api import db
 
 
-async def _run_apply_schema() -> list[str]:
+async def _run_apply_schema(monkeypatch) -> list[str]:
     executed: list[str] = []
     state = {"partitioned": False, "migrated": False}
 
@@ -86,15 +86,17 @@ async def _run_apply_schema() -> list[str]:
         state["partitioned"] = True
         state["migrated"] = True
 
-    db.get_engine = lambda: DummyEngine(state)  # type: ignore[attr-defined]
-    db.text = lambda s: s  # type: ignore[attr-defined]
-    db.migrate_release_partitions_by_date = fake_migrate  # type: ignore[attr-defined]
-    db.CATEGORY_RANGES = {"movies": (2000, 3000)}  # type: ignore[attr-defined]
-    db.load_schema_statements = (  # type: ignore[attr-defined]
+    monkeypatch.setattr(db, "get_engine", lambda: DummyEngine(state))
+    monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db, "migrate_release_partitions_by_date", fake_migrate)
+    monkeypatch.setattr(db, "CATEGORY_RANGES", {"movies": (2000, 3000)})
+    monkeypatch.setattr(
+        db,
+        "load_schema_statements",
         lambda: [
             "CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release FOR VALUES FROM (2000) TO (3000) PARTITION BY RANGE (posted_at)",
             "CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies FOR VALUES FROM ('2024-01-01') TO ('2025-01-01')",
-        ]
+        ],
     )
 
     await db.apply_schema()
@@ -103,6 +105,6 @@ async def _run_apply_schema() -> list[str]:
     return executed
 
 
-def test_apply_schema_partitions_release_movies():
-    executed = asyncio.run(_run_apply_schema())
+def test_apply_schema_partitions_release_movies(monkeypatch):
+    executed = asyncio.run(_run_apply_schema(monkeypatch))
     assert any("release_movies_2024" in stmt for stmt in executed)

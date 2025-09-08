@@ -11,7 +11,7 @@ ENV NZBIDX_USE_STD_JSON=${NZBIDX_USE_STD_JSON}
 
 COPY services/api/ services/api/
 # Schema file required by the API when applying migrations
-COPY db/init/schema.sql services/api/src/db/init/schema.sql
+COPY db/init/ db/init/
 
 # Install service dependencies from the pyproject.toml so the
 # PostgreSQL driver is included in the final image.

@@ -16,14 +16,11 @@ def test_apply_schema_runs_migrations(tmp_path, monkeypatch):
     engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
     monkeypatch.setattr(db, "get_engine", lambda: engine)
 
-    class DummyResource:
-        def joinpath(self, name: str):
-            return self
-
-        def read_text(self, encoding: str = "utf-8") -> str:
-            return "CREATE TABLE release (id INTEGER PRIMARY KEY, posted_at TIMESTAMP);"
-
-    monkeypatch.setattr(db.resources, "files", lambda pkg: DummyResource())
+    monkeypatch.setattr(
+        db,
+        "_read_schema_text",
+        lambda: "CREATE TABLE release (id INTEGER PRIMARY KEY, posted_at TIMESTAMP);",
+    )
     db.load_schema_statements.cache_clear()
 
     def migrate_posted(conn):
