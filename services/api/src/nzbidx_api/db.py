@@ -196,12 +196,16 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             async with engine.connect() as conn:
                 await conn.run_sync(_partition_check)
         except Exception as exc:
-            logger.error(
-                "release_partition_check_failed",
-                exc_info=True,
-                extra={"error": str(exc)},
-            )
-            raise
+            msg = str(getattr(exc, "orig", exc)).lower()
+            if "invalid catalog name" in msg:
+                await _create_database(DATABASE_URL)
+            else:
+                logger.error(
+                    "release_partition_check_failed",
+                    exc_info=True,
+                    extra={"error": str(exc)},
+                )
+                raise
 
     async def _apply(conn: Any) -> None:
         await apply_async(conn, text, statements=statements)
