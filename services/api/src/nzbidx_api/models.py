@@ -18,7 +18,7 @@ Base = declarative_base()
 class Release(Base):
     __tablename__ = "release"
     __table_args__ = (
-        UniqueConstraint("norm_title", "category_id"),
+        UniqueConstraint("norm_title", "category_id", "posted_at"),
         {"postgresql_partition_by": "RANGE (category_id)"},
     )
 

@@ -14,12 +14,17 @@ def test_release_model_matches_db() -> None:
 
     insp = inspect(engine)
     columns = {c["name"] for c in insp.get_columns("release")}
-    assert {"norm_title", "category_id"} <= columns
+    assert {"norm_title", "category_id", "posted_at"} <= columns
 
     meta_ucs = [
         c for c in Release.__table__.constraints if isinstance(c, UniqueConstraint)
     ]
-    assert any(set(c.columns.keys()) == {"norm_title", "category_id"} for c in meta_ucs)
+    assert any(
+        set(c.columns.keys()) == {"norm_title", "category_id", "posted_at"}
+        for c in meta_ucs
+    )
 
     db_ucs = insp.get_unique_constraints("release")
-    assert {"norm_title", "category_id"} in [set(uc["column_names"]) for uc in db_ucs]
+    assert {"norm_title", "category_id", "posted_at"} in [
+        set(uc["column_names"]) for uc in db_ucs
+    ]

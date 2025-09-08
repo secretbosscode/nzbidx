@@ -132,9 +132,9 @@ def migrate_release_table(conn: Any) -> None:
         "CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT",
     )
 
-    # Enforce uniqueness on norm_title/category_id across partitions.
+    # Enforce uniqueness on norm_title/category_id/posted_at across partitions.
     cur.execute(
-        "ALTER TABLE release ADD CONSTRAINT release_norm_title_category_id_key UNIQUE (norm_title, category_id)",
+        "ALTER TABLE release ADD CONSTRAINT release_norm_title_category_id_posted_at_key UNIQUE (norm_title, category_id, posted_at)",
     )
 
     # Recreate indexes on the new table.
