@@ -11,11 +11,15 @@ Quick reference for common operational issues.
 ## PostgreSQL requirements
 Connections to PostgreSQL require the `psycopg` driver. The Docker images
 install `psycopg[binary] >= 3.1` from the service `pyproject.toml` files. The
-`pg_trgm` and `vector` extensions must be installed by a superuser; the init
-script at `db/init/schema.sql` handles this during database provisioning.
+`pg_trgm` and `vector` extensions must be installed by a superuser; run the init
+script against a fresh database before starting the API service:
 
-The schema creates the `search_vector` column and `release_search_idx` index.
-Verify the index exists:
+```bash
+psql "$DATABASE_URL" -f db/init/schema.sql
+```
+
+This creates the `release` table, its `search_vector` column, and the
+`release_search_idx` index. Verify the index exists:
 
 ```bash
 psql "$DATABASE_URL" -c "SELECT to_regclass('release_search_idx');"
