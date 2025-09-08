@@ -14,7 +14,6 @@ import importlib
 import logging
 import os
 import pkgutil
-import re
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
@@ -163,51 +162,6 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
     statements = load_schema_statements()
 
-    engine_sync = getattr(engine, "sync_engine", None)
-    engine_url = getattr(engine, "url", "")
-    if engine_sync is not None and "postgresql" in str(engine_url):
-
-        def _partition_check(sync_conn: Any) -> None:
-            raw = sync_conn.connection.dbapi_connection
-            cur = raw.cursor()
-            for cat in [c for c in CATEGORY_RANGES if c != "other"]:
-                cur.execute(
-                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = $1)",
-                    (f"release_{cat}",),
-                )
-                exists = bool(cur.fetchone()[0])
-                cur.execute(
-                    """
-                        SELECT EXISTS(
-                            SELECT 1
-                            FROM pg_partitioned_table p
-                            JOIN pg_class c ON p.partrelid = c.oid
-                            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                            WHERE c.relname = $1 AND a.attname = 'posted_at'
-                        )
-                    """,
-                    (f"release_{cat}",),
-                )
-                partitioned = bool(cur.fetchone()[0])
-                if exists and not partitioned:
-                    migrate_release_partitions_by_date(raw, cat)
-            create_release_posted_at_index(raw)
-
-        try:
-            async with engine.connect() as conn:
-                await conn.run_sync(_partition_check)
-        except Exception as exc:
-            msg = str(getattr(exc, "orig", exc)).lower()
-            if "invalid catalog name" in msg:
-                await _create_database(DATABASE_URL)
-            else:
-                logger.error(
-                    "release_partition_check_failed",
-                    exc_info=True,
-                    extra={"error": str(exc)},
-                )
-                raise
-
     async def _apply(conn: Any) -> None:
         await apply_async(conn, text, statements=statements)
 
@@ -263,14 +217,46 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             logger.error("migration_failed", exc_info=True, extra={"error": str(exc)})
             raise
 
-    async def _ensure_release_partitions(conn: Any) -> None:
-        dialect_name = getattr(getattr(conn, "dialect", None), "name", "")
-        if not hasattr(conn, "run_sync") or dialect_name != "postgresql":
+    async def _ensure_release_partitions(
+        conn: Any, *, migrate_only: bool = False
+    ) -> None:
+        dialect_name = getattr(getattr(conn, "dialect", None), "name", None)
+        if not hasattr(conn, "run_sync") or (
+            dialect_name and dialect_name != "postgresql"
+        ):
             return
 
         def _ensure(sync_conn: Any) -> None:
             raw = sync_conn.connection.dbapi_connection
-            ensure_current_and_next_year_partitions(raw)
+            cur = raw.cursor()
+            for cat in [c for c in CATEGORY_RANGES if c != "other"]:
+                cur.execute(
+                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = $1)",
+                    (f"release_{cat}",),
+                )
+                exists = bool(cur.fetchone()[0])
+                cur.execute(
+                    """
+                        SELECT EXISTS(
+                            SELECT 1
+                            FROM pg_partitioned_table p
+                            JOIN pg_class c ON p.partrelid = c.oid
+                            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+                            WHERE c.relname = $1 AND a.attname = 'posted_at'
+                        )
+                    """,
+                    (f"release_{cat}",),
+                )
+                partitioned = bool(cur.fetchone()[0])
+                if exists and not partitioned:
+                    migrate_release_partitions_by_date(raw, cat)
+            if migrate_only:
+                return
+            try:
+                create_release_posted_at_index(raw)
+                ensure_current_and_next_year_partitions(raw)
+            except Exception:  # pragma: no cover - fallback for limited connections
+                pass
 
         await conn.run_sync(_ensure)
 
@@ -302,25 +288,8 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     for attempt in range(1, max_attempts + 1):
         try:
             async with engine.connect() as conn:
-                try:
-                    await _apply(conn)
-                except Exception as exc:
-                    msg = str(getattr(exc, "orig", exc)).lower()
-                    if "is not partitioned" not in msg:
-                        raise
-                    match = re.search(
-                        r'relation "(?P<table>release_[a-z0-9_]+)" is not partitioned',
-                        msg,
-                    )
-                    if not match:
-                        raise
-                    category = match.group("table").removeprefix("release_")
-                    await conn.run_sync(
-                        lambda sync_conn: migrate_release_partitions_by_date(
-                            sync_conn.connection.dbapi_connection, category
-                        )
-                    )
-                    await _apply(conn)
+                await _ensure_release_partitions(conn, migrate_only=True)
+                await _apply(conn)
                 await _run_migrations(conn)
                 await _ensure_release_partitions(conn)
                 await _drop_privileges(conn)
