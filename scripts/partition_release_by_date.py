@@ -22,9 +22,8 @@ def ensure_year_partition(cur: Any, category: str, year: int) -> None:
     cur.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {child} PARTITION OF {table}
-        FOR VALUES FROM (%s) TO (%s)
-        """,
-        (start, end),
+        FOR VALUES FROM ('{start}') TO ('{end}')
+        """
     )
     cur.execute(
         f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {child}_posted_at_idx ON {child} (posted_at)"
