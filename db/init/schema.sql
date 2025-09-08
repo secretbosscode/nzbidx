@@ -66,7 +66,7 @@ BEGIN
     ALTER TABLE IF EXISTS release
         ADD CONSTRAINT release_norm_title_category_id_posted_at_key UNIQUE (norm_title, category_id, posted_at);
 EXCEPTION
-    WHEN duplicate_object THEN NULL;
+    WHEN duplicate_table THEN NULL;
 END $$;
 
 UPDATE release SET language = 'und' WHERE language IS NULL;
