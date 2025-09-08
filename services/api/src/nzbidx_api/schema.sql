@@ -22,63 +22,118 @@ CREATE TABLE IF NOT EXISTS release (
 CREATE TABLE IF NOT EXISTS release_movies PARTITION OF release
     FOR VALUES FROM (2000) TO (3000)
     PARTITION BY RANGE (posted_at);
-CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies
-    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-CREATE TABLE IF NOT EXISTS release_movies_2025 PARTITION OF release_movies
-    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-CREATE TABLE IF NOT EXISTS release_movies_default PARTITION OF release_movies DEFAULT;
-CREATE INDEX IF NOT EXISTS release_movies_2024_posted_at_idx
-    ON ONLY release_movies_2024 (posted_at);
-CREATE INDEX IF NOT EXISTS release_movies_2025_posted_at_idx
-    ON ONLY release_movies_2025 (posted_at);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_partitioned_table p
+        JOIN pg_class c ON p.partrelid = c.oid
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+        WHERE c.relname = 'release_movies' AND a.attname = 'posted_at'
+    ) THEN
+        CREATE TABLE IF NOT EXISTS release_movies_2024 PARTITION OF release_movies
+            FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+        CREATE TABLE IF NOT EXISTS release_movies_2025 PARTITION OF release_movies
+            FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+        CREATE TABLE IF NOT EXISTS release_movies_default PARTITION OF release_movies DEFAULT;
+        CREATE INDEX IF NOT EXISTS release_movies_2024_posted_at_idx
+            ON ONLY release_movies_2024 (posted_at);
+        CREATE INDEX IF NOT EXISTS release_movies_2025_posted_at_idx
+            ON ONLY release_movies_2025 (posted_at);
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS release_music PARTITION OF release
     FOR VALUES FROM (3000) TO (4000)
     PARTITION BY RANGE (posted_at);
-CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music
-    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-CREATE TABLE IF NOT EXISTS release_music_2025 PARTITION OF release_music
-    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-CREATE TABLE IF NOT EXISTS release_music_default PARTITION OF release_music DEFAULT;
-CREATE INDEX IF NOT EXISTS release_music_2024_posted_at_idx
-    ON ONLY release_music_2024 (posted_at);
-CREATE INDEX IF NOT EXISTS release_music_2025_posted_at_idx
-    ON ONLY release_music_2025 (posted_at);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_partitioned_table p
+        JOIN pg_class c ON p.partrelid = c.oid
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+        WHERE c.relname = 'release_music' AND a.attname = 'posted_at'
+    ) THEN
+        CREATE TABLE IF NOT EXISTS release_music_2024 PARTITION OF release_music
+            FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+        CREATE TABLE IF NOT EXISTS release_music_2025 PARTITION OF release_music
+            FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+        CREATE TABLE IF NOT EXISTS release_music_default PARTITION OF release_music DEFAULT;
+        CREATE INDEX IF NOT EXISTS release_music_2024_posted_at_idx
+            ON ONLY release_music_2024 (posted_at);
+        CREATE INDEX IF NOT EXISTS release_music_2025_posted_at_idx
+            ON ONLY release_music_2025 (posted_at);
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS release_tv PARTITION OF release
     FOR VALUES FROM (5000) TO (6000)
     PARTITION BY RANGE (posted_at);
-CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv
-    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-CREATE TABLE IF NOT EXISTS release_tv_2025 PARTITION OF release_tv
-    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-CREATE TABLE IF NOT EXISTS release_tv_default PARTITION OF release_tv DEFAULT;
-CREATE INDEX IF NOT EXISTS release_tv_2024_posted_at_idx
-    ON ONLY release_tv_2024 (posted_at);
-CREATE INDEX IF NOT EXISTS release_tv_2025_posted_at_idx
-    ON ONLY release_tv_2025 (posted_at);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_partitioned_table p
+        JOIN pg_class c ON p.partrelid = c.oid
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+        WHERE c.relname = 'release_tv' AND a.attname = 'posted_at'
+    ) THEN
+        CREATE TABLE IF NOT EXISTS release_tv_2024 PARTITION OF release_tv
+            FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+        CREATE TABLE IF NOT EXISTS release_tv_2025 PARTITION OF release_tv
+            FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+        CREATE TABLE IF NOT EXISTS release_tv_default PARTITION OF release_tv DEFAULT;
+        CREATE INDEX IF NOT EXISTS release_tv_2024_posted_at_idx
+            ON ONLY release_tv_2024 (posted_at);
+        CREATE INDEX IF NOT EXISTS release_tv_2025_posted_at_idx
+            ON ONLY release_tv_2025 (posted_at);
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS release_adult PARTITION OF release
     FOR VALUES FROM (6000) TO (7000)
     PARTITION BY RANGE (posted_at);
-CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult
-    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-CREATE TABLE IF NOT EXISTS release_adult_2025 PARTITION OF release_adult
-    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT;
-CREATE INDEX IF NOT EXISTS release_adult_2024_posted_at_idx
-    ON ONLY release_adult_2024 (posted_at);
-CREATE INDEX IF NOT EXISTS release_adult_2025_posted_at_idx
-    ON ONLY release_adult_2025 (posted_at);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_partitioned_table p
+        JOIN pg_class c ON p.partrelid = c.oid
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+        WHERE c.relname = 'release_adult' AND a.attname = 'posted_at'
+    ) THEN
+        CREATE TABLE IF NOT EXISTS release_adult_2024 PARTITION OF release_adult
+            FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+        CREATE TABLE IF NOT EXISTS release_adult_2025 PARTITION OF release_adult
+            FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+        CREATE TABLE IF NOT EXISTS release_adult_default PARTITION OF release_adult DEFAULT;
+        CREATE INDEX IF NOT EXISTS release_adult_2024_posted_at_idx
+            ON ONLY release_adult_2024 (posted_at);
+        CREATE INDEX IF NOT EXISTS release_adult_2025_posted_at_idx
+            ON ONLY release_adult_2025 (posted_at);
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS release_books PARTITION OF release
     FOR VALUES FROM (7000) TO (8000)
     PARTITION BY RANGE (posted_at);
-CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books
-    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
-CREATE TABLE IF NOT EXISTS release_books_2025 PARTITION OF release_books
-    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
-CREATE TABLE IF NOT EXISTS release_books_default PARTITION OF release_books DEFAULT;
-CREATE INDEX IF NOT EXISTS release_books_2024_posted_at_idx
-    ON ONLY release_books_2024 (posted_at);
-CREATE INDEX IF NOT EXISTS release_books_2025_posted_at_idx
-    ON ONLY release_books_2025 (posted_at);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_partitioned_table p
+        JOIN pg_class c ON p.partrelid = c.oid
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
+        WHERE c.relname = 'release_books' AND a.attname = 'posted_at'
+    ) THEN
+        CREATE TABLE IF NOT EXISTS release_books_2024 PARTITION OF release_books
+            FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+        CREATE TABLE IF NOT EXISTS release_books_2025 PARTITION OF release_books
+            FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+        CREATE TABLE IF NOT EXISTS release_books_default PARTITION OF release_books DEFAULT;
+        CREATE INDEX IF NOT EXISTS release_books_2024_posted_at_idx
+            ON ONLY release_books_2024 (posted_at);
+        CREATE INDEX IF NOT EXISTS release_books_2025_posted_at_idx
+            ON ONLY release_books_2025 (posted_at);
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS release_other PARTITION OF release DEFAULT;
 
 DROP INDEX IF EXISTS release_embedding_idx;

@@ -217,9 +217,9 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
             logger.error("migration_failed", exc_info=True, extra={"error": str(exc)})
             raise
 
-    async def _ensure_release_partitions(conn: Any) -> None:
-        dialect_name = getattr(getattr(conn, "dialect", None), "name", "")
-        if not hasattr(conn, "run_sync") or dialect_name != "postgresql":
+    async def _ensure_release_partitions(conn: Any, *, migrate_only: bool = False) -> None:
+        dialect_name = getattr(getattr(conn, "dialect", None), "name", None)
+        if not hasattr(conn, "run_sync") or (dialect_name and dialect_name != "postgresql"):
             return
 
         def _ensure(sync_conn: Any) -> None:
@@ -246,8 +246,13 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 partitioned = bool(cur.fetchone()[0])
                 if exists and not partitioned:
                     migrate_release_partitions_by_date(raw, cat)
-            create_release_posted_at_index(raw)
-            ensure_current_and_next_year_partitions(raw)
+            if migrate_only:
+                return
+            try:
+                create_release_posted_at_index(raw)
+                ensure_current_and_next_year_partitions(raw)
+            except Exception:  # pragma: no cover - fallback for limited connections
+                pass
 
         await conn.run_sync(_ensure)
 
@@ -279,6 +284,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     for attempt in range(1, max_attempts + 1):
         try:
             async with engine.connect() as conn:
+                await _ensure_release_partitions(conn, migrate_only=True)
                 await _apply(conn)
                 await _run_migrations(conn)
                 await _ensure_release_partitions(conn)
