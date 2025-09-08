@@ -21,7 +21,6 @@ src/nzbidx_api/openapi.py
 src/nzbidx_api/orjson_response.py
 src/nzbidx_api/otel.py
 src/nzbidx_api/rate_limit.py
-src/nzbidx_api/schema.sql
 src/nzbidx_api/search.py
 src/nzbidx_api/search_cache.py
 src/nzbidx_api/starlette_compat.py

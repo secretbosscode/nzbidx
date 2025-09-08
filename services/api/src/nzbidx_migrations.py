@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from importlib import resources
+from pathlib import Path
 from typing import Any, Callable
 
 try:  # pragma: no cover - optional dependency
@@ -81,9 +81,8 @@ def _split_sql(sql: str) -> list[str]:
 
 def load_schema_statements() -> list[str]:
     """Return SQL statements from the bundled schema file."""
-    sql = (
-        resources.files("nzbidx_api").joinpath("schema.sql").read_text(encoding="utf-8")
-    )
+    schema_path = Path(__file__).resolve().parents[3] / "db" / "init" / "schema.sql"
+    sql = schema_path.read_text(encoding="utf-8")
     if sqlparse:
         return [s.strip() for s in sqlparse.split(sql) if s.strip()]
     return _split_sql(sql)
