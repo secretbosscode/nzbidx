@@ -95,7 +95,6 @@ CATEGORY_MAP = {
 }
 
 
-
 def _load_group_category_hints() -> list[tuple[str, str]]:
     """Return default group/category hints, optionally extended via config."""
     hints: list[tuple[str, str]] = [
@@ -339,11 +338,11 @@ def connect_db() -> Any:
             raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
         parsed = urlparse(url)
 
-
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
             with engine.begin() as conn_sync:  # type: ignore[call-arg]
-                conn_sync.execute(text("""
+                conn_sync.execute(
+                    text("""
                         CREATE TABLE IF NOT EXISTS release (
                             id BIGSERIAL PRIMARY KEY,
                             norm_title TEXT,
@@ -358,14 +357,43 @@ def connect_db() -> Any:
                             has_parts BOOLEAN NOT NULL DEFAULT FALSE,
                             part_count INT NOT NULL DEFAULT 0
                         )
-                    """))
-                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"))
-                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"))
-                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"))
-                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"))
-                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)"))
-                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"))
-                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"))
+                    """)
+                )
+                conn_sync.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
+                    )
+                )
+                conn_sync.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"
+                    )
+                )
+                conn_sync.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"
+                    )
+                )
+                conn_sync.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"
+                    )
+                )
+                conn_sync.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)"
+                    )
+                )
+                conn_sync.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"
+                    )
+                )
+                conn_sync.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"
+                    )
+                )
             return engine.raw_connection()
 
         try:
