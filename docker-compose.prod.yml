@@ -13,6 +13,7 @@ services:
         max-file: "5"
     environment:
       NZBIDX_USE_STD_JSON: ${NZBIDX_USE_STD_JSON:-1} # set to 0 to enable orjson
+      AUTO_MIGRATE_PARTITIONS: ${AUTO_MIGRATE_PARTITIONS:-1}
       NNTP_TOTAL_TIMEOUT: ${NNTP_TOTAL_TIMEOUT:-600}
       NZB_TIMEOUT_SECONDS: ${NZB_TIMEOUT_SECONDS:-600} # should be ≥ NNTP_TOTAL_TIMEOUT
   postgres:

@@ -54,12 +54,16 @@ revokes superuser rights from the role as a cleanup step, so subsequent
 connections run as an ordinary user. Point `DATABASE_URL` at the database, e.g.
 `postgres://nzbidx:nzbidx@localhost:5432/nzbidx`.
 
-Existing deployments with an unpartitioned `release` table are migrated automatically when the application starts using a superuser `DATABASE_URL`; no manual script is required.
+Existing deployments with an unpartitioned `release` table are migrated
+automatically when the application starts with `AUTO_MIGRATE_PARTITIONS`
+set to a truthy value and using a superuser `DATABASE_URL`; no manual script is
+required.
 
 The schema pre-creates `release_<category>` partitions for 2024 and 2025.
-The application also pre-creates yearly `release_<category>` partitions for the
-current and next calendar years on startup so upcoming releases have a
-destination table without manual intervention.
+When `AUTO_MIGRATE_PARTITIONS` is enabled the application also pre-creates
+yearly `release_<category>` partitions for the current and next calendar years
+on startup so upcoming releases have a destination table without manual
+intervention.
 
 ## Data migrations
 

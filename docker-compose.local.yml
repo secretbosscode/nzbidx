@@ -36,6 +36,7 @@ services:
       NNTP_TOTAL_TIMEOUT: 600
       NZB_TIMEOUT_SECONDS: 600 # should be ≥ NNTP_TOTAL_TIMEOUT
       SEARCH_TTL_SECONDS: 60
+      AUTO_MIGRATE_PARTITIONS: 1
   postgres:
     image: pgvector/pgvector:pg17
     environment:

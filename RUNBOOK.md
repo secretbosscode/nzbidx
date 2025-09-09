@@ -49,7 +49,10 @@ asyncio.run(main())
 
 ## Release table partitioning
 The `release` table must be partitioned by `category_id` so partitions can be
-maintained independently. The application migrates and creates this table automatically on startup when provided a `DATABASE_URL` with superuser privileges. For reference, create the table and partitions:
+maintained independently. When `AUTO_MIGRATE_PARTITIONS` is set to a truthy
+value and a superuser `DATABASE_URL` is supplied, the application migrates and
+creates this table automatically on startup. For reference, create the table and
+partitions:
 
 ```sql
 CREATE TABLE IF NOT EXISTS release (

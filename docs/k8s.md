@@ -9,10 +9,11 @@ Persistent storage is required for the backing Postgres service; use
 `PersistentVolumeClaim` resources or managed cloud services and set
 `DATABASE_URL` accordingly.
 
-The example manifest also sets `NNTP_TOTAL_TIMEOUT` and
-`NZB_TIMEOUT_SECONDS`. Adjust these to suit your deployment, ensuring
-`NZB_TIMEOUT_SECONDS` is greater than or equal to `NNTP_TOTAL_TIMEOUT` to avoid
-premature API timeouts during NZB generation.
+The example manifest sets `AUTO_MIGRATE_PARTITIONS=1` to migrate legacy tables
+and create missing yearly partitions on startup. It also sets
+`NNTP_TOTAL_TIMEOUT` and `NZB_TIMEOUT_SECONDS`. Adjust these to suit your
+deployment, ensuring `NZB_TIMEOUT_SECONDS` is greater than or equal to
+`NNTP_TOTAL_TIMEOUT` to avoid premature API timeouts during NZB generation.
 
 Database maintenance, including vacuuming, analyzing, reindexing and pruning
 releases outside configured size limits, runs automatically via
