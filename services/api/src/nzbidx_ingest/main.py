@@ -7,7 +7,6 @@ import logging
 import os
 import re
 import sqlite3
-from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Any, Iterable
@@ -35,15 +34,7 @@ except ImportError:  # pragma: no cover - optional dependency
 from .logging import setup_logging
 from .parsers import extract_tags
 from .resource_monitor import install_signal_handlers, start_memory_logger
-from .db_migrations import (
-    migrate_release_table,
-    ensure_release_year_partition,
-    migrate_release_partitions_by_date,
-    create_release_posted_at_index,
-    CATEGORY_RANGES,
-)
 from .sql import sql_placeholder
-from nzbidx_migrations import apply_sync
 
 logger = logging.getLogger(__name__)
 
@@ -103,19 +94,6 @@ CATEGORY_MAP = {
     "comics": "7030",
 }
 
-PARTITION_CATEGORIES = [
-    c for c, r in CATEGORY_RANGES.items() if r is not None and c != "other"
-]
-
-
-def _category_from_id(category_id: int) -> str:
-    for name, bounds in CATEGORY_RANGES.items():
-        if bounds is None:
-            continue
-        start, end = bounds
-        if start <= category_id < end:
-            return name
-    return "other"
 
 
 def _load_group_category_hints() -> list[tuple[str, str]]:
@@ -295,9 +273,7 @@ def prune_disallowed_filetypes(
     bs = batch_size or int(os.getenv("PRUNE_BATCH_SIZE", "1000"))
     placeholder = sql_placeholder(conn)
     total = 0
-    with conn.cursor() as cur:
-        cur.execute("SELECT tablename FROM pg_tables WHERE tablename LIKE 'release_%'")
-        tables = ["release"] + [row[0] for row in cur.fetchall()]
+    tables = ["release"]
     for table in tables:
         while True:
             placeholders = ",".join([placeholder] * len(allowed))
@@ -363,182 +339,33 @@ def connect_db() -> Any:
             raise RuntimeError("sqlalchemy is required for PostgreSQL URLs")
         parsed = urlparse(url)
 
+
         def _connect(u: str) -> Any:
             engine = create_engine(u, echo=False, future=True)
-            auto_migrate = os.getenv("AUTO_MIGRATE_PARTITIONS", "").lower() in (
-                "1",
-                "true",
-                "yes",
-            )
-
-            # Ensure the ``release`` table is partitioned before attempting any
-            # migrations.  If the table exists but is not partitioned, attempt to
-            # migrate it automatically (when enabled) and verify the result.
-            conn = None
-            try:
-                conn = engine.raw_connection()
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT EXISTS (SELECT FROM pg_class WHERE relname = 'release')"
-                )
-                exists = bool(cur.fetchone()[0])
-                cur.execute(
-                    "SELECT EXISTS ("
-                    "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
-                    ")"
-                )
-                partitioned = bool(cur.fetchone()[0])
-                if exists and not partitioned and auto_migrate:
-                    logger.info("release_table_migrating")
-                    try:
-                        migrate_release_table(conn)
-                        create_release_posted_at_index(conn)
-                    except Exception:
-                        logger.exception("release_table_migration_failed")
-                    cur = conn.cursor()
-                    cur.execute(
-                        "SELECT EXISTS ("
-                        "SELECT FROM pg_partitioned_table WHERE partrelid = 'release'::regclass"
-                        ")"
-                    )
-                    partitioned = bool(cur.fetchone()[0])
-                    if partitioned:
-                        logger.info("release_table_auto_migrated")
-                    else:
-                        logger.error("release_table_migration_failed")
-                if exists and not partitioned:
-                    logger.error("release_table_not_partitioned")
-                    raise RuntimeError("release table must be partitioned")
-                for cat in PARTITION_CATEGORIES:
-                    cur = conn.cursor()
-                    cur.execute(
-                        "SELECT EXISTS (SELECT FROM pg_class WHERE relname = %s)",
-                        (f"release_{cat}",),
-                    )
-                    exists = bool(cur.fetchone()[0])
-                    cur.execute(
-                        """
-                            SELECT EXISTS(
-                                SELECT 1
-                                FROM pg_partitioned_table p
-                                JOIN pg_class c ON p.partrelid = c.oid
-                                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                                WHERE c.relname = %s AND a.attname = 'posted_at'
-                            )
-                        """,
-                        (f"release_{cat}",),
-                    )
-                    partitioned = bool(cur.fetchone()[0])
-                    if exists and not partitioned and auto_migrate:
-                        logger.info(f"release_{cat}_table_migrating")
-                        try:
-                            migrate_release_partitions_by_date(conn, cat)
-                            create_release_posted_at_index(conn)
-                        except Exception:
-                            logger.exception(f"release_{cat}_table_migration_failed")
-                        else:
-                            cur = conn.cursor()
-                            cur.execute(
-                                """
-                                SELECT EXISTS(
-                                    SELECT 1
-                                    FROM pg_partitioned_table p
-                                    JOIN pg_class c ON p.partrelid = c.oid
-                                    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                                    WHERE c.relname = %s AND a.attname = 'posted_at'
-                                )
-                                """,
-                                (f"release_{cat}",),
-                            )
-                            partitioned = bool(cur.fetchone()[0])
-                            if partitioned:
-                                logger.info(f"release_{cat}_table_auto_migrated")
-                            else:
-                                logger.error(f"release_{cat}_table_migration_failed")
-                    if exists and not partitioned:
-                        logger.error(f"release_{cat}_table_not_partitioned")
-                        raise RuntimeError(
-                            f"release_{cat} table must be partitioned by posted_at",
+            with engine.begin() as conn_sync:  # type: ignore[call-arg]
+                conn_sync.execute(text("""
+                        CREATE TABLE IF NOT EXISTS release (
+                            id BIGSERIAL PRIMARY KEY,
+                            norm_title TEXT,
+                            category TEXT,
+                            category_id INT,
+                            language TEXT NOT NULL DEFAULT 'und',
+                            tags TEXT NOT NULL DEFAULT '',
+                            source_group TEXT,
+                            size_bytes BIGINT,
+                            posted_at TIMESTAMPTZ,
+                            segments TEXT,
+                            has_parts BOOLEAN NOT NULL DEFAULT FALSE,
+                            part_count INT NOT NULL DEFAULT 0
                         )
-            except Exception:
-                # On any errors (e.g. system catalogs missing) fall back to the
-                # migration logic below which will attempt to create the
-                # required structures. Any failures there will surface as
-                # RuntimeError from the caller's perspective.
-                logger.exception(
-                    "Error verifying release table partitions; proceeding with migration logic"
-                )
-            finally:
-                if conn is not None:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
-
-            with engine.connect() as conn_sync:  # type: ignore[call-arg]
-                exists = conn_sync.execute(
-                    text("SELECT EXISTS (SELECT FROM pg_class WHERE relname='release')")
-                ).fetchone()[0]
-                partitioned = conn_sync.execute(
-                    text(
-                        """
-                            SELECT EXISTS(
-                                SELECT 1
-                                FROM pg_partitioned_table p
-                                JOIN pg_class c ON p.partrelid = c.oid
-                                WHERE c.relname = 'release'
-                            )
-                            """
-                    )
-                ).fetchone()[0]
-                if exists and not partitioned:
-                    logger.error(
-                        "release_table_not_partitioned",
-                        extra={"next_step": "drop_or_migrate"},
-                    )
-                    raise RuntimeError(
-                        "'release' table exists but is not partitioned; drop or migrate the table before starting the worker",
-                    )
-                for cat in PARTITION_CATEGORIES:
-                    cat_exists = conn_sync.execute(
-                        text(
-                            f"SELECT EXISTS (SELECT FROM pg_class WHERE relname='release_{cat}')"
-                        ),
-                    ).fetchone()[0]
-                    cat_partitioned = conn_sync.execute(
-                        text(
-                            """
-                                SELECT EXISTS(
-                                    SELECT 1
-                                    FROM pg_partitioned_table p
-                                    JOIN pg_class c ON p.partrelid = c.oid
-                                    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(p.partattrs)
-                                    WHERE c.relname = 'release_{cat}' AND a.attname = 'posted_at'
-                                )
-                            """
-                        ),
-                    ).fetchone()[0]
-                    if cat_exists and not cat_partitioned:
-                        logger.error(
-                            f"release_{cat}_table_not_partitioned",
-                            extra={"next_step": "drop_or_migrate"},
-                        )
-                        raise RuntimeError(
-                            f"'release_{cat}' table exists but is not partitioned by posted_at; drop or migrate the table before starting the worker",
-                        )
-                if not exists:
-                    logger.info(
-                        "release_table_missing",
-                        extra={"next_step": "creating"},
-                    )
-                else:
-                    logger.info(
-                        "release_table_partitioned",
-                        extra={"next_step": "ensuring_partitions"},
-                    )
-
-                if not exists or partitioned:
-                    apply_sync(conn_sync, text)
+                    """))
+                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"))
+                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_size_bytes_idx ON release (size_bytes)"))
+                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_category_id_idx ON release (category_id)"))
+                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_norm_title_idx ON release (norm_title)"))
+                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_tags_idx ON release (tags)"))
+                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_posted_at_idx ON release (posted_at)"))
+                conn_sync.execute(text("CREATE INDEX IF NOT EXISTS release_has_parts_idx ON release (posted_at) WHERE has_parts"))
             return engine.raw_connection()
 
         try:
@@ -775,69 +602,28 @@ def insert_release(
                 sqlite_rows,
             )
         else:
-            partition_rows: dict[tuple[str, int], list[tuple[Any, ...]]] = defaultdict(
-                list
+            sql = (
+                "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING"
             )
-            other_rows: list[tuple[Any, ...]] = []
-            for row in to_insert:
-                category_id = row[2]
-                posted_at = row[7]
-                if category_id is not None and posted_at is not None:
-                    cat = _category_from_id(category_id)
-                    if cat in PARTITION_CATEGORIES:
-                        partition_rows[(cat, posted_at.year)].append(row)
-                        continue
-                other_rows.append(row)
-            for (cat, year), rows in partition_rows.items():
-                ensure_release_year_partition(conn, cat, year)
-            if partition_rows:
-                create_release_posted_at_index(conn)
-                for (cat, year), rows in partition_rows.items():
-                    sql = (
-                        f"INSERT INTO release_{cat}_{year} (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING"
-                    )
+            try:
+                cur.executemany(sql, to_insert)
+            except db_errors:  # type: ignore[misc]
+                conn.rollback()
+                cur = conn.cursor()
+                for row in to_insert:
                     try:
-                        cur.executemany(sql, rows)
+                        cur.execute(sql, row)
                     except db_errors:  # type: ignore[misc]
+                        title = row[0]
+                        group_name = row[5]
+                        logger.warning(
+                            "insert_release_data_error",
+                            extra={"norm_title": title, "group": group_name},
+                        )
                         conn.rollback()
                         cur = conn.cursor()
-                        for row in rows:
-                            try:
-                                cur.execute(sql, row)
-                            except db_errors:  # type: ignore[misc]
-                                title = row[0]
-                                group_name = row[5]
-                                logger.warning(
-                                    "insert_release_data_error",
-                                    extra={"norm_title": title, "group": group_name},
-                                )
-                                conn.rollback()
-                                cur = conn.cursor()
-                                inserted.discard(title)
-            if other_rows:
-                sql = (
-                    "INSERT INTO release (norm_title, category, category_id, language, tags, source_group, size_bytes, posted_at) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (norm_title, category_id, posted_at) DO NOTHING"
-                )
-                try:
-                    cur.executemany(sql, other_rows)
-                except db_errors:  # type: ignore[misc]
-                    conn.rollback()
-                    cur = conn.cursor()
-                    for row in other_rows:
-                        try:
-                            cur.execute(sql, row)
-                        except db_errors:  # type: ignore[misc]
-                            title = row[0]
-                            group_name = row[5]
-                            logger.warning(
-                                "insert_release_data_error",
-                                extra={"norm_title": title, "group": group_name},
-                            )
-                            conn.rollback()
-                            cur = conn.cursor()
-                            inserted.discard(title)
+                        inserted.discard(title)
     # Ensure posted_at is updated for existing rows
     if updates:
         placeholder = sql_placeholder(conn)
