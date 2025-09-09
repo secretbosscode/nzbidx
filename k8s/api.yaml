@@ -16,12 +16,14 @@ spec:
       - name: api
         image: nzbidx:latest
         env:
-        - name: DATABASE_URL
-          value: postgresql://postgres:postgres@postgres:5432/postgres
-        - name: NNTP_TOTAL_TIMEOUT
-          value: "600"
-        - name: NZB_TIMEOUT_SECONDS
-          value: "600" # should be ≥ NNTP_TOTAL_TIMEOUT
+      - name: DATABASE_URL
+        value: postgresql://postgres:postgres@postgres:5432/postgres
+      - name: AUTO_MIGRATE_PARTITIONS
+        value: "1"
+      - name: NNTP_TOTAL_TIMEOUT
+        value: "600"
+      - name: NZB_TIMEOUT_SECONDS
+        value: "600" # should be ≥ NNTP_TOTAL_TIMEOUT
         ports:
         - containerPort: 8080
         readinessProbe:

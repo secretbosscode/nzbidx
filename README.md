@@ -17,6 +17,9 @@ the maintained `standard-nntplib` package to provide NNTP client support.
 Postgres uses a set of indexes to keep queries fast as the dataset grows. The
 schema creates the indexes and partitioned `release_<category>` tables with
 yearly partitions during initialization; see `db/init/schema.sql` for details.
+Setting `AUTO_MIGRATE_PARTITIONS` to `1`, `true`, or `yes` before starting the
+worker migrates legacy tables and creates missing yearly partitions
+automatically.
 
 Connections to PostgreSQL require the [`psycopg` driver](https://www.psycopg.org/).
 The container images install `psycopg[binary] >= 3.1` from the application's
@@ -101,6 +104,7 @@ faster serializer once compatible.
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `DATABASE_URL` | Connection string for the application | `postgres://nzbidx:nzbidx@postgres:5432/nzbidx` |
+| `AUTO_MIGRATE_PARTITIONS` | `1`, `true`, or `yes` migrates legacy release tables and ensures yearly partitions at startup | _(unset)_ |
 | `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Postgres credentials for the database container | `nzbidx` |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD` | Superuser applied to `schema.sql` during init | `nzbidx` |
 | `POSTGRES_PORT` | Host port exposing Postgres | `15432` |
