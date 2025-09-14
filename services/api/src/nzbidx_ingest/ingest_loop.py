@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from collections import defaultdict
 from threading import Event
@@ -587,6 +588,11 @@ def run_forever(stop_event: Event | None = None) -> None:
             logger.exception("ingest_loop_failure")
             delay = failure_delay
             failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
+        if not isinstance(delay, (int, float)) or not math.isfinite(float(delay)) or float(delay) < 0:
+            logger.error("ingest_delay_invalid", extra={"delay": delay})
+            delay = float(INGEST_POLL_MIN_SECONDS)
+        else:
+            delay = float(delay)
         delay = max(INGEST_POLL_MIN_SECONDS, min(INGEST_POLL_MAX_SECONDS, delay))
         if stop_event:
             if stop_event.wait(delay):
