@@ -588,7 +588,11 @@ def run_forever(stop_event: Event | None = None) -> None:
             logger.exception("ingest_loop_failure")
             delay = failure_delay
             failure_delay = min(INGEST_POLL_MAX_SECONDS, failure_delay * 2)
-        if not isinstance(delay, (int, float)) or not math.isfinite(float(delay)) or float(delay) < 0:
+        if (
+            not isinstance(delay, (int, float))
+            or not math.isfinite(float(delay))
+            or float(delay) < 0
+        ):
             logger.error("ingest_delay_invalid", extra={"delay": delay})
             delay = float(INGEST_POLL_MIN_SECONDS)
         else:
