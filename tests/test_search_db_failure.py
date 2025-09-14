@@ -35,7 +35,9 @@ def test_persistent_db_failure_returns_503_and_logs(monkeypatch, caplog):
 
     monkeypatch.setattr(search_mod.asyncio, "sleep", no_sleep)
 
-    req = SimpleNamespace(query_params={"t": "search"}, headers={"Cache-Control": "no-cache"})
+    req = SimpleNamespace(
+        query_params={"t": "search"}, headers={"Cache-Control": "no-cache"}
+    )
     with caplog.at_level(logging.WARNING, logger="nzbidx_api.search"):
         resp = asyncio.run(api_main.api(req))
     assert resp.status_code == 503
