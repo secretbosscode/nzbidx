@@ -24,6 +24,10 @@ class SearchVectorUnavailable(RuntimeError):
     """Raised when full text search vector is unavailable."""
 
 
+class SearchBackendError(RuntimeError):
+    """Raised when the search backend fails after retries."""
+
+
 logger = logging.getLogger(__name__)
 
 MAX_LIMIT = settings.max_limit
@@ -169,7 +173,7 @@ async def search_releases_async(
                     extra={**extra_info, "max_attempts": max_attempts},
                 )
                 if attempt == max_attempts:
-                    return items
+                    raise SearchBackendError("search backend failure") from exc
                 await asyncio.sleep(0.1 * attempt)
                 continue
             logger.warning("search_query_failed", extra=extra_info)
