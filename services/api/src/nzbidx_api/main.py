@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 import inspect
+import types
 from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlencode
@@ -230,8 +231,18 @@ def _thread_excepthook(args: threading.ExceptHookArgs) -> None:
     logger.exception("thread_uncaught_exception", exc_info=exc, extra={"thread": name})
 
 
+def _sys_excepthook(
+    exc_type: type[BaseException], exc_value: BaseException, exc_tb: Optional[types.TracebackType]
+) -> None:
+    """Log uncaught main-thread exceptions consistently."""
+    logger.exception(
+        "uncaught_exception", exc_info=(exc_type, exc_value, exc_tb)
+    )
+
+
 setup_logging()
 threading.excepthook = _thread_excepthook
+sys.excepthook = _sys_excepthook
 setup_tracing()
 
 _START_TIME = time.monotonic()
