@@ -232,12 +232,12 @@ def _thread_excepthook(args: threading.ExceptHookArgs) -> None:
 
 
 def _sys_excepthook(
-    exc_type: type[BaseException], exc_value: BaseException, exc_tb: Optional[types.TracebackType]
+    exc_type: type[BaseException],
+    exc_value: BaseException,
+    exc_tb: Optional[types.TracebackType],
 ) -> None:
     """Log uncaught main-thread exceptions consistently."""
-    logger.exception(
-        "uncaught_exception", exc_info=(exc_type, exc_value, exc_tb)
-    )
+    logger.exception("uncaught_exception", exc_info=(exc_type, exc_value, exc_tb))
 
 
 setup_logging()
