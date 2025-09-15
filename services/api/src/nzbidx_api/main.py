@@ -17,6 +17,10 @@ from urllib.parse import urlencode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from nzbidx_ingest import ingest_loop
+from nzbidx_ingest.resource_monitor import (
+    install_signal_handlers,
+    start_memory_logger,
+)
 
 from .starlette_compat import (
     BaseHTTPMiddleware,
@@ -231,6 +235,8 @@ def _thread_excepthook(args: threading.ExceptHookArgs) -> None:
 
 
 setup_logging()
+install_signal_handlers()
+start_memory_logger()
 threading.excepthook = _thread_excepthook
 setup_tracing()
 
