@@ -69,6 +69,7 @@ from .search import (
     search_releases_async,
     _format_pubdate,
     SearchVectorUnavailable,
+    SearchBackendError,
 )
 from .middleware_security import SecurityMiddleware
 from .middleware_request_id import RequestIDMiddleware
@@ -607,6 +608,8 @@ async def api(request: Request) -> Response:
             )
         except SearchVectorUnavailable as exc:
             return search_unavailable(str(exc), status_code=503)
+        except SearchBackendError as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         xml = rss_xml(items, extended=extended)
@@ -639,6 +642,8 @@ async def api(request: Request) -> Response:
             )
         except SearchVectorUnavailable as exc:
             return search_unavailable(str(exc), status_code=503)
+        except SearchBackendError as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         xml = rss_xml(items, extended=extended)
@@ -669,6 +674,8 @@ async def api(request: Request) -> Response:
                 api_key=api_key,
             )
         except SearchVectorUnavailable as exc:
+            return search_unavailable(str(exc), status_code=503)
+        except SearchBackendError as exc:
             return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
@@ -720,6 +727,8 @@ async def api(request: Request) -> Response:
             )
         except SearchVectorUnavailable as exc:
             return search_unavailable(str(exc), status_code=503)
+        except SearchBackendError as exc:
+            return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
         xml = rss_xml(items, extended=extended)
@@ -754,6 +763,8 @@ async def api(request: Request) -> Response:
                 api_key=api_key,
             )
         except SearchVectorUnavailable as exc:
+            return search_unavailable(str(exc), status_code=503)
+        except SearchBackendError as exc:
             return search_unavailable(str(exc), status_code=503)
         except Exception:
             return search_unavailable()
