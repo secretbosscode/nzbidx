@@ -120,17 +120,8 @@ def install_signal_handlers() -> None:
 
     try:
         if not faulthandler.is_enabled():
-            faulthandler.enable()
+            faulthandler.enable(chain=True)
     except (OSError, RuntimeError, ValueError):  # pragma: no cover - depends on env
         logger.debug("unable_to_enable_faulthandler")
         return
 
-    fatal_signal_names = ("SIGSEGV", "SIGFPE", "SIGABRT", "SIGBUS", "SIGILL")
-    for name in fatal_signal_names:
-        sig = getattr(signal, name, None)
-        if sig is None:
-            continue
-        try:
-            faulthandler.register(sig, chain=True)
-        except (ValueError, OSError, RuntimeError):  # pragma: no cover - env dependent
-            logger.debug("unable_to_register_faulthandler", extra={"signal": name})
