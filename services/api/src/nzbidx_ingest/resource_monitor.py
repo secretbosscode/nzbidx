@@ -96,5 +96,41 @@ def install_signal_handlers() -> None:
         finally:
             raise SystemExit(0)
 
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, _handler)
+    monitored_signal_names = (
+        "SIGTERM",
+        "SIGINT",
+        "SIGQUIT",
+        "SIGUSR1",
+        "SIGUSR2",
+    )
+
+    for name in monitored_signal_names:
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
+        try:
+            signal.signal(sig, _handler)
+        except (OSError, RuntimeError, ValueError):
+            logger.debug("unable_to_install_signal_handler", extra={"signal": name})
+
+    try:  # Optional enhanced diagnostics for fatal signals
+        import faulthandler
+    except Exception:  # pragma: no cover - best effort setup
+        return
+
+    try:
+        if not faulthandler.is_enabled():
+            faulthandler.enable()
+    except (OSError, RuntimeError, ValueError):  # pragma: no cover - depends on env
+        logger.debug("unable_to_enable_faulthandler")
+        return
+
+    fatal_signal_names = ("SIGSEGV", "SIGFPE", "SIGABRT", "SIGBUS", "SIGILL")
+    for name in fatal_signal_names:
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
+        try:
+            faulthandler.register(sig, chain=True)
+        except (ValueError, OSError, RuntimeError):  # pragma: no cover - env dependent
+            logger.debug("unable_to_register_faulthandler", extra={"signal": name})
