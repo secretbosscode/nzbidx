@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import re
+import sys
 from functools import lru_cache
 from typing import Optional
 
@@ -56,6 +58,10 @@ PART_RE = re.compile(r"\bpart\s*\d+\b", re.IGNORECASE)
 ARCHIVE_RE = re.compile(r"\b(rar|par2|zip)\b", re.IGNORECASE)
 _FILE_EXT_RE = re.compile(r"\.([A-Za-z0-9]{2,4})\b")
 
+logger = logging.getLogger(__name__)
+
+_PYTHON_UNSUPPORTED_FOR_LANGDETECT = sys.version_info >= (3, 13)
+
 
 def extract_tags(subject: str) -> list[str]:
     """Extract lowercased tags from bracketed segments in ``subject``."""
@@ -95,12 +101,21 @@ def extract_segment_number(subject: str) -> int:
     return 1
 
 
-try:  # pragma: no cover - optional dependency
-    from langdetect import DetectorFactory, detect  # type: ignore
-
-    DetectorFactory.seed = 0
-except Exception:  # pragma: no cover - fallback when langdetect not installed
+if _PYTHON_UNSUPPORTED_FOR_LANGDETECT:
     detect = None  # type: ignore
+    logger.warning(
+        "langdetect disabled: Python %s.%s is not supported",
+        sys.version_info.major,
+        sys.version_info.minor,
+        extra={"event": "langdetect_python_guard"},
+    )
+else:
+    try:  # pragma: no cover - optional dependency
+        from langdetect import DetectorFactory, detect  # type: ignore
+
+        DetectorFactory.seed = 0
+    except Exception:  # pragma: no cover - fallback when langdetect not installed
+        detect = None  # type: ignore
 
 
 @lru_cache(maxsize=1024)
