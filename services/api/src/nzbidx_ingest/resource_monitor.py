@@ -124,4 +124,3 @@ def install_signal_handlers() -> None:
     except (OSError, RuntimeError, ValueError):  # pragma: no cover - depends on env
         logger.debug("unable_to_enable_faulthandler")
         return
-
