@@ -48,3 +48,46 @@ def test_detect_language_disabled(monkeypatch):
     monkeypatch.delenv("DETECT_LANGUAGE", raising=False)
     importlib.reload(config)
     importlib.reload(parsers)
+
+
+def test_detect_language_python_guard(monkeypatch):
+    import collections
+    import importlib
+    import sys
+    import types
+
+    VersionInfo = collections.namedtuple(
+        "VersionInfo", "major minor micro releaselevel serial"
+    )
+
+    original_version = sys.version_info
+    guard_version = VersionInfo(3, 13, 0, "final", 0)
+    monkeypatch.setattr(sys, "version_info", guard_version)
+
+    import nzbidx_ingest.config as config
+    import nzbidx_ingest.parsers as parsers
+
+    class FailLangdetect(types.ModuleType):
+        def __getattr__(self, name: str) -> object:  # pragma: no cover - defensive
+            raise AssertionError("langdetect should not be imported when guarded")
+
+    original_langdetect = sys.modules.get("langdetect")
+    sys.modules["langdetect"] = FailLangdetect("langdetect")
+
+    importlib.reload(config)
+    importlib.reload(parsers)
+
+    try:
+        assert parsers._PYTHON_UNSUPPORTED_FOR_LANGDETECT is True
+        assert parsers.detect is None
+        assert parsers.detect_language("ascii only subject") == "en"
+        assert parsers.detect_language("你好") is None
+    finally:
+        if original_langdetect is None:
+            sys.modules.pop("langdetect", None)
+        else:
+            sys.modules["langdetect"] = original_langdetect
+
+        monkeypatch.setattr(sys, "version_info", original_version)
+        importlib.reload(config)
+        importlib.reload(parsers)
