@@ -91,3 +91,69 @@ def test_detect_language_python_guard(monkeypatch):
         monkeypatch.setattr(sys, "version_info", original_version)
         importlib.reload(config)
         importlib.reload(parsers)
+
+
+def test_detect_language_python_guard_clears_stale_detect(monkeypatch):
+    import collections
+    import importlib
+    import sys
+    import types
+
+    subject = "ascii only subject"
+
+    import nzbidx_ingest.config as config
+    import nzbidx_ingest.parsers as parsers
+
+    sentinel_calls: list[str] = []
+
+    def stale_detect(text: str) -> str:
+        sentinel_calls.append(text)
+        return "xx"
+
+    parsers.detect = stale_detect  # type: ignore[attr-defined]
+    parsers._detect_language_cached.cache_clear()
+    assert parsers.detect_language(subject) == "xx"
+    assert sentinel_calls == [subject]
+
+    VersionInfo = collections.namedtuple(
+        "VersionInfo", "major minor micro releaselevel serial"
+    )
+    original_version = sys.version_info
+    guard_version = VersionInfo(3, 13, 0, "final", 0)
+    monkeypatch.setattr(sys, "version_info", guard_version)
+
+    fail_calls: list[str] = []
+
+    class FailLangdetect(types.ModuleType):
+        def __getattr__(self, name: str) -> object:  # pragma: no cover - defensive
+            raise AssertionError(f"unexpected attribute access: {name}")
+
+    fail_module = FailLangdetect("langdetect")
+
+    def failing_detect(text: str) -> str:
+        fail_calls.append(text)
+        return "zz"
+
+    fail_module.detect = failing_detect  # type: ignore[attr-defined]
+
+    original_langdetect = sys.modules.get("langdetect")
+    sys.modules["langdetect"] = fail_module
+
+    importlib.reload(config)
+    importlib.reload(parsers)
+
+    try:
+        assert parsers._PYTHON_UNSUPPORTED_FOR_LANGDETECT is True
+        assert parsers.detect is None
+        assert parsers.detect_language(subject) == "en"
+        assert fail_calls == []
+        assert sentinel_calls == [subject]
+    finally:
+        if original_langdetect is None:
+            sys.modules.pop("langdetect", None)
+        else:
+            sys.modules["langdetect"] = original_langdetect
+
+        monkeypatch.setattr(sys, "version_info", original_version)
+        importlib.reload(config)
+        importlib.reload(parsers)

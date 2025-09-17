@@ -101,8 +101,18 @@ def extract_segment_number(subject: str) -> int:
     return 1
 
 
-if _PYTHON_UNSUPPORTED_FOR_LANGDETECT:
+def _disable_langdetect() -> None:
+    """Disable ``langdetect`` integration and clear cached state."""
+
+    global detect
     detect = None  # type: ignore
+    cached = globals().get("_detect_language_cached")
+    if cached is not None and hasattr(cached, "cache_clear"):
+        cached.cache_clear()  # type: ignore[attr-defined]
+
+
+if _PYTHON_UNSUPPORTED_FOR_LANGDETECT:
+    _disable_langdetect()
     logger.warning(
         "langdetect disabled: Python %s.%s is not supported",
         sys.version_info.major,
@@ -115,7 +125,7 @@ else:
 
         DetectorFactory.seed = 0
     except Exception:  # pragma: no cover - fallback when langdetect not installed
-        detect = None  # type: ignore
+        _disable_langdetect()
 
 
 @lru_cache(maxsize=1024)
@@ -132,9 +142,13 @@ def _detect_language_cached(subject: str) -> Optional[str]:
     for token, code in LANGUAGE_TOKENS.items():
         if token in upper:
             return code
+    cleaned = _clean_language_text(subject)
+    if _PYTHON_UNSUPPORTED_FOR_LANGDETECT:
+        if cleaned and cleaned.isascii():
+            return "en"
+        return None
     if detect is not None:
         try:
-            cleaned = _clean_language_text(subject)
             if not cleaned:
                 return None
             return detect(cleaned)
@@ -144,10 +158,13 @@ def _detect_language_cached(subject: str) -> Optional[str]:
     # ASCII-only we assume English; otherwise we give up. This heuristic keeps
     # the ingest worker functional in minimal environments and satisfies our
     # tests without pulling in the optional dependency.
-    cleaned = _clean_language_text(subject)
     if cleaned and cleaned.isascii():
         return "en"
     return None
+
+
+if _PYTHON_UNSUPPORTED_FOR_LANGDETECT:
+    _disable_langdetect()
 
 
 def detect_language(subject: str) -> Optional[str]:
