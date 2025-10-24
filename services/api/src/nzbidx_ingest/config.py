@@ -262,8 +262,9 @@ def _configured_groups() -> List[str]:
     return []
 
 
-def _load_groups() -> List[str]:
-    mode = _resolve_group_mode()
+def _load_groups(mode: str | None = None) -> List[str]:
+    if mode is None:
+        mode = _resolve_group_mode()
     if mode == "curated":
         curated = _load_curated_groups()
         if curated:
@@ -311,33 +312,27 @@ def _load_groups() -> List[str]:
 
 
 NNTP_GROUPS: List[str] | None = None
-_CACHED_GROUP_MODE: str | None = None
-
-
-def get_group_mode() -> str:
-    """Return the currently active NNTP group selection mode."""
-
-    return _resolve_group_mode()
+_LAST_GROUP_MODE: str | None = None
 
 
 def get_nntp_groups() -> List[str]:
     """Return configured NNTP groups loading them on first use."""
 
-    global NNTP_GROUPS, _CACHED_GROUP_MODE
+    global NNTP_GROUPS, _LAST_GROUP_MODE
     mode = _resolve_group_mode()
-    if _CACHED_GROUP_MODE != mode:
-        _CACHED_GROUP_MODE = mode
-        NNTP_GROUPS = None
-    if NNTP_GROUPS is None:
-        NNTP_GROUPS = _load_groups()
+    if NNTP_GROUPS is None or _LAST_GROUP_MODE != mode:
+        NNTP_GROUPS = _load_groups(mode)
+        _LAST_GROUP_MODE = mode
     return NNTP_GROUPS
 
 
 def set_nntp_groups(groups: List[str] | None) -> None:
     """Set cached NNTP groups."""
 
-    global NNTP_GROUPS
+    global NNTP_GROUPS, _LAST_GROUP_MODE
     NNTP_GROUPS = groups
+    if groups is None:
+        _LAST_GROUP_MODE = None
 
 
 def _load_ignore_groups() -> List[str]:
