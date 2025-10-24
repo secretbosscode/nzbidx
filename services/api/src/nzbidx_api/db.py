@@ -102,6 +102,7 @@ def get_release_retention_days() -> int:
     env_value = os.getenv("RELEASE_RETENTION_DAYS", "").strip()
     return _parse_retention_days(env_value or None)
 
+
 # Engine lifecycle management -------------------------------------------------
 if create_async_engine:
     POOL_RECYCLE_SECONDS = int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800"))
@@ -442,7 +443,9 @@ async def prune_old_releases(retention_days: int | None = None) -> dict[str, obj
     if not engine:
         return {"dropped": [], "deleted": {}}
 
-    days = retention_days if retention_days is not None else get_release_retention_days()
+    days = (
+        retention_days if retention_days is not None else get_release_retention_days()
+    )
     if days <= 0:
         return {"dropped": [], "deleted": {}}
 

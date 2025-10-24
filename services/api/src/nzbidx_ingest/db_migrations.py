@@ -323,7 +323,9 @@ def ensure_current_and_next_year_partitions(conn: Any) -> None:
         ensure_release_year_partition(conn, category, year + 1)
 
 
-def drop_release_partitions_before(conn: Any, cutoff: datetime | date) -> dict[str, object]:
+def drop_release_partitions_before(
+    conn: Any, cutoff: datetime | date
+) -> dict[str, object]:
     """Drop ``release`` partitions whose upper bound is before ``cutoff``."""
 
     if isinstance(cutoff, datetime):
