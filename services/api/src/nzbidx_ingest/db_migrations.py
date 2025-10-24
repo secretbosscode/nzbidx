@@ -364,8 +364,9 @@ def drop_release_partitions_before(conn: Any, cutoff: datetime | date) -> dict[s
                     extra={"table": table, "bound": bound},
                 )
                 continue
-            _, upper_literal = match.groups()
+            lower_literal, upper_literal = match.groups()
             try:
+                lower_date = datetime.fromisoformat(lower_literal).date()
                 upper_date = datetime.fromisoformat(upper_literal).date()
             except ValueError:
                 logger.debug(
@@ -376,6 +377,18 @@ def drop_release_partitions_before(conn: Any, cutoff: datetime | date) -> dict[s
             if upper_date <= cutoff_date:
                 cur.execute(f"DROP TABLE IF EXISTS {table}")
                 dropped.append(table)
+                continue
+            if lower_date < cutoff_date:
+                cur.execute(
+                    f"DELETE FROM {table} "
+                    "WHERE posted_at IS NOT NULL AND posted_at < $1",
+                    (cutoff_date,),
+                )
+                count = cur.rowcount or 0
+                if count < 0:
+                    count = 0
+                if count:
+                    deleted[table] = deleted.get(table, 0) + int(count)
 
         default_table = f"{parent}_default"
         cur.execute("SELECT to_regclass($1)", (default_table,))
