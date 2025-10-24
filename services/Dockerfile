@@ -13,6 +13,12 @@ COPY services/api/ services/api/
 # Schema file required by the API when applying migrations
 COPY db/init/ db/init/
 
+# Install build dependencies required for compiling native extensions
+# (e.g. asyncpg) before installing the application in editable mode.
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install service dependencies from the pyproject.toml so the
 # PostgreSQL driver is included in the final image.
 RUN pip install --no-cache-dir -e services/api
