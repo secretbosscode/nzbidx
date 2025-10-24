@@ -18,7 +18,7 @@ from .config import (
     INGEST_SLEEP_MS,
     INGEST_DB_LATENCY_MS,
     min_size_for_release,
-    is_curated_mode,
+    get_group_mode,
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
@@ -498,6 +498,16 @@ def run_once(client: NNTPClient | None = None) -> float:
     poll.
     """
     global last_run, last_run_wall
+    mode = get_group_mode()
+    curated_mode = mode == "curated"
+    if curated_mode:
+        if cursors.reset_for_curated():
+            logger.info(
+                "cursor_reset_for_curated",
+                extra={"event": "cursor_reset_for_curated"},
+            )
+    else:
+        cursors.mark_group_mode(mode)
     groups_all = config.get_nntp_groups()
     ignored = set(config.IGNORE_GROUPS or [])
     if ignored:
@@ -550,7 +560,7 @@ def run_once(client: NNTPClient | None = None) -> float:
         if created_client:
             client.connect()
         db = connect_db()
-        if is_curated_mode():
+        if curated_mode:
             prune_non_curated_groups(db, groups_all)
         delay = _process_groups(client, db, groups, ignored)
         if _group_probes:

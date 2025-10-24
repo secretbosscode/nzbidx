@@ -311,12 +311,23 @@ def _load_groups() -> List[str]:
 
 
 NNTP_GROUPS: List[str] | None = None
+_CACHED_GROUP_MODE: str | None = None
+
+
+def get_group_mode() -> str:
+    """Return the currently active NNTP group selection mode."""
+
+    return _resolve_group_mode()
 
 
 def get_nntp_groups() -> List[str]:
     """Return configured NNTP groups loading them on first use."""
 
-    global NNTP_GROUPS
+    global NNTP_GROUPS, _CACHED_GROUP_MODE
+    mode = _resolve_group_mode()
+    if _CACHED_GROUP_MODE != mode:
+        _CACHED_GROUP_MODE = mode
+        NNTP_GROUPS = None
     if NNTP_GROUPS is None:
         NNTP_GROUPS = _load_groups()
     return NNTP_GROUPS
