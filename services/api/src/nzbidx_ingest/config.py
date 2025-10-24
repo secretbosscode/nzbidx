@@ -184,6 +184,12 @@ def _resolve_group_mode() -> str:
     return "curated"
 
 
+def get_group_mode() -> str:
+    """Expose the effective NNTP group selection mode."""
+
+    return _resolve_group_mode()
+
+
 def is_curated_mode() -> bool:
     """Return ``True`` when the curated group list is active."""
 
