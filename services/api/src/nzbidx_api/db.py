@@ -219,14 +219,17 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
     async def _ensure_release_partitions(
         conn: Any, *, migrate_only: bool = False
-    ) -> None:
+    ) -> bool:
         dialect_name = getattr(getattr(conn, "dialect", None), "name", None)
         if not hasattr(conn, "run_sync") or (
             dialect_name and dialect_name != "postgresql"
         ):
-            return
+            return False
+
+        needs_migration = False
 
         def _ensure(sync_conn: Any) -> None:
+            nonlocal needs_migration
             raw = sync_conn.connection.dbapi_connection
             cur = raw.cursor()
             for cat in [c for c in CATEGORY_RANGES if c != "other"]:
@@ -249,7 +252,10 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 )
                 partitioned = bool(cur.fetchone()[0])
                 if exists and not partitioned:
-                    migrate_release_partitions_by_date(raw, cat)
+                    if migrate_only:
+                        needs_migration = True
+                    else:
+                        migrate_release_partitions_by_date(raw, cat)
             if migrate_only:
                 return
             try:
@@ -259,6 +265,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 pass
 
         await conn.run_sync(_ensure)
+        return needs_migration
 
     async def _drop_privileges(conn: Any) -> None:
         """Revoke superuser rights from the current role if possible."""
@@ -288,8 +295,18 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     for attempt in range(1, max_attempts + 1):
         try:
             async with engine.connect() as conn:
-                await _ensure_release_partitions(conn, migrate_only=True)
-                await _apply(conn)
+                needs_migration = await _ensure_release_partitions(
+                    conn, migrate_only=True
+                )
+                try:
+                    await _apply(conn)
+                except Exception as exc:
+                    msg = str(getattr(exc, "orig", exc)).lower()
+                    if needs_migration and "not partitioned" in msg:
+                        await _ensure_release_partitions(conn)
+                        await _apply(conn)
+                    else:
+                        raise
                 await _run_migrations(conn)
                 await _ensure_release_partitions(conn)
                 await _drop_privileges(conn)

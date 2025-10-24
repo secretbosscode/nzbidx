@@ -693,6 +693,24 @@ def prune_group(conn: Any, group: str) -> None:
     conn.commit()
 
 
+def prune_non_curated_groups(conn: Any, groups: Iterable[str]) -> None:
+    """Delete releases whose ``source_group`` is not present in ``groups``."""
+
+    allowed = sorted({g for g in groups if g})
+    cur = conn.cursor()
+    cur.execute("DELETE FROM release WHERE source_group IS NULL OR source_group = ''")
+    if not allowed:
+        conn.commit()
+        return
+    placeholder = sql_placeholder(conn)
+    placeholders = ", ".join([placeholder] * len(allowed))
+    cur.execute(
+        f"DELETE FROM release WHERE source_group NOT IN ({placeholders})",
+        tuple(allowed),
+    )
+    conn.commit()
+
+
 @lru_cache(maxsize=4096)
 def _infer_category(
     subject: str,

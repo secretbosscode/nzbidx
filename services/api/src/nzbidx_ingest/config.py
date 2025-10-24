@@ -6,6 +6,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 from typing import List
 
@@ -54,7 +55,87 @@ from .nntp_client import NNTPClient  # noqa: E402
 NNTP_GROUP_WILDCARD: str = os.getenv("NNTP_GROUP_WILDCARD", "alt.binaries.*")
 
 
-def _load_groups() -> List[str]:
+def _parse_group_list(raw: str) -> List[str]:
+    parts = re.split(r"[\n,]", raw)
+    return [g.strip() for g in parts if g.strip()]
+
+
+def _resolve_group_mode() -> str:
+    """Return the active group selection mode."""
+
+    mode_env = (os.getenv("NNTP_GROUP_MODE") or "").strip().lower()
+    valid_modes = {"curated", "configured", "auto"}
+    if mode_env:
+        if mode_env not in valid_modes:
+            logger.warning(
+                "unknown_group_mode", extra={"event": "unknown_group_mode", "mode": mode_env}
+            )
+        else:
+            return mode_env
+
+    if os.getenv("NNTP_GROUPS") or os.getenv("NNTP_GROUP_FILE"):
+        return "configured"
+    if mode_env:
+        # Unknown mode falls back to curated by default.
+        return "curated"
+    return "curated"
+
+
+def is_curated_mode() -> bool:
+    """Return ``True`` when the curated group list is active."""
+
+    return _resolve_group_mode() == "curated"
+
+
+def _load_curated_groups() -> List[str]:
+    env = os.getenv("NNTP_CURATED_GROUPS", "").strip()
+    if env:
+        groups = _parse_group_list(env)
+        logger.info(
+            "Using curated NNTP groups from environment",  # pragma: no cover - logging
+            extra={"event": "ingest_groups_curated_env", "groups": groups},
+        )
+        return groups
+
+    cfg = os.getenv("NNTP_CURATED_GROUP_FILE")
+    if cfg:
+        try:
+            groups = _parse_group_list(Path(cfg).read_text(encoding="utf-8"))
+        except OSError:
+            logger.warning(
+                "curated_group_file_unavailable",
+                extra={"event": "curated_group_file_unavailable", "path": cfg},
+            )
+        else:
+            if groups:
+                logger.info(
+                    "Using curated NNTP groups from file",  # pragma: no cover - logging
+                    extra={
+                        "event": "ingest_groups_curated_file",
+                        "groups": groups,
+                        "path": cfg,
+                    },
+                )
+            return groups
+
+    try:
+        data = resources.files(__package__).joinpath("curated_groups.txt").read_text(
+            encoding="utf-8"
+        )
+    except (FileNotFoundError, OSError):
+        logger.warning("curated_group_file_missing", extra={"event": "curated_group_file_missing"})
+        return []
+
+    groups = _parse_group_list(data)
+    if groups:
+        logger.info(
+            "Using packaged curated NNTP groups",  # pragma: no cover - logging
+            extra={"event": "ingest_groups_curated_packaged", "groups": groups},
+        )
+    return groups
+
+
+def _configured_groups() -> List[str]:
     env = os.getenv("NNTP_GROUPS", "")
     if not env:
         cfg = os.getenv("NNTP_GROUP_FILE")
@@ -64,14 +145,30 @@ def _load_groups() -> List[str]:
             except OSError:
                 env = ""
     if env:
-        parts = re.split(r"[\n,]", env)
-        groups = [g.strip() for g in parts if g.strip()]
+        groups = _parse_group_list(env)
         logger.info(
             "Using configured NNTP groups: %s",
             groups,
             extra={"event": "ingest_groups_config", "groups": groups},
         )
         return groups
+    return []
+
+
+def _load_groups() -> List[str]:
+    mode = _resolve_group_mode()
+    if mode == "curated":
+        curated = _load_curated_groups()
+        if curated:
+            return curated
+        logger.warning("curated_groups_empty", extra={"event": "curated_groups_empty"})
+
+    groups = _configured_groups()
+    if groups:
+        return groups
+
+    if mode == "configured":
+        return []
 
     client = NNTPClient(NNTP_SETTINGS)
     groups = client.list_groups(NNTP_GROUP_WILDCARD)

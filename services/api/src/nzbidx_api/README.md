@@ -25,6 +25,19 @@ Set `NNTP_GROUPS` to a curated list to avoid scanning the entire server.
 Alternatively, increase `NNTP_TOTAL_TIMEOUT` and `NZB_TIMEOUT_SECONDS` to allow
 more time for the NZB build to complete.
 
+### Curated group mode
+
+The ingest worker defaults to a curated group list packaged with the service.
+Set `NNTP_GROUP_MODE=curated` explicitly to enforce the curated list or set it
+to `auto`/`configured` to retain the previous behaviour. When curated mode is
+active the worker removes database rows whose `source_group` is not present in
+the curated set.
+
+Override the curated list with either `NNTP_CURATED_GROUPS` (comma- or
+newline-separated values) or `NNTP_CURATED_GROUP_FILE` pointing to a file on the
+container filesystem. The packaged default is located at
+`nzbidx_ingest/curated_groups.txt`.
+
 ### Docker Compose Examples
 
 Explicit group list for the API service:
