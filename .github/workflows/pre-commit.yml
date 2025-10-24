@@ -25,7 +25,7 @@ jobs:
         continue-on-error: true
         with:
           extra_args: "--files $(git diff --name-only origin/${{ github.base_ref }}...HEAD | tr '\n' ' ')"
-      - uses: stefanzweifel/git-auto-commit-action@v6
+      - uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: apply pre-commit fixes"
           branch: ${{ github.head_ref }}
