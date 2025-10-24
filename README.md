@@ -121,8 +121,11 @@ faster serializer once compatible.
 | `NNTP_USER` | NNTP username | _(required for ingest worker)_ |
 | `NNTP_PASS` | NNTP password | _(required for ingest worker)_ |
 | `NNTP_GROUPS` | NNTP groups to scan (comma separated, wildcards allowed) | _(none)_ |
+| `NNTP_GROUP_MODE` | Group selection strategy: `curated`, `auto`, or `configured` | `curated` |
 | `NNTP_GROUP_WILDCARD` | Pattern used when discovering groups | `alt.binaries.*` |
 | `NNTP_GROUP_LIMIT` | Maximum groups to enumerate when using wildcards | _(unlimited)_ |
+| `NNTP_CURATED_GROUPS` | Override curated groups (comma or newline separated) | _(packaged list)_ |
+| `NNTP_CURATED_GROUP_FILE` | File containing curated groups (one per line or comma separated) | _(unused)_ |
 | `NNTP_IGNORE_GROUPS` | Groups to prune and ignore | _(none)_ |
 | `MAX_RELEASE_BYTES` | Maximum allowed release size in bytes; larger releases are pruned | `0` |
 | `CATEGORY_MIN_SIZES` | Comma separated `category=bytes` overrides for minimum release size | _(none)_ |
@@ -236,6 +239,27 @@ ingest loop manually:
     export NNTP_PASS=secret
     export NNTP_GROUPS=alt.binaries.example  # recommended to set explicitly
     docker compose exec api python -m nzbidx_ingest
+
+### Choosing NNTP group sources
+
+`NNTP_GROUP_MODE` controls how the ingest worker discovers groups:
+
+- **`curated`** (default) loads the packaged `alt.binaries.*` list and prunes
+  database rows whose `source_group` falls outside that set. Override the
+  curated list with `NNTP_CURATED_GROUPS` or `NNTP_CURATED_GROUP_FILE` when you
+  want to maintain your own allow-list.
+- **`configured`** uses only the groups supplied via `NNTP_GROUPS` or
+  `NNTP_GROUP_FILE`. No curated fallbacks run, so validation failures surface
+  immediately if the list is empty.
+- **`auto`** enumerates the provider using `NNTP_GROUP_WILDCARD`, intersects the
+  results with the curated list, and falls back to the packaged curated list if
+  the provider refuses enumeration. This mode keeps the curated defaults but
+  avoids polling groups your provider does not host.
+
+Setting `NNTP_GROUPS` (or `NNTP_GROUP_FILE`) automatically switches the worker
+into `configured` mode so that explicit lists always win. The API container does
+not yet support autodiscovery, so continue providing `NNTP_GROUPS` there even
+when the ingest worker runs in `auto` or `curated` mode.
 
 ### Ingest Checklist
 
