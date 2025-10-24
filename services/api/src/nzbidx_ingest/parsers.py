@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
 import sys
 from functools import lru_cache
 from typing import Optional
@@ -60,7 +61,46 @@ _FILE_EXT_RE = re.compile(r"\.([A-Za-z0-9]{2,4})\b")
 
 logger = logging.getLogger(__name__)
 
-_PYTHON_UNSUPPORTED_FOR_LANGDETECT = sys.version_info >= (3, 13)
+
+def _langdetect_is_supported() -> bool:
+    """Return ``True`` when importing ``langdetect`` is considered safe."""
+
+    if sys.version_info < (3, 13):
+        return True
+
+    try:
+        result = subprocess.run(  # noqa: S603 - controlled input
+            [
+                sys.executable,
+                "-c",
+                "import sys\ntry:\n import langdetect\nexcept Exception:\n sys.exit(111)\nsys.exit(0)",
+            ],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=1,
+        )
+    except Exception:  # pragma: no cover - subprocess failure implies unsafe import
+        return False
+
+    if result.returncode == 0:
+        return True
+
+    if result.returncode == 111:
+        # ``langdetect`` is not installed or raised a regular import-time
+        # exception. Let the normal import path handle this scenario so we can
+        # fall back to the ASCII heuristic.
+        return True
+
+    logger.debug(
+        "langdetect probe exited with code %s; disabling automatic import",
+        result.returncode,
+        extra={"event": "langdetect_probe_failed"},
+    )
+    return False
+
+
+_PYTHON_UNSUPPORTED_FOR_LANGDETECT = not _langdetect_is_supported()
 
 
 def extract_tags(subject: str) -> list[str]:
@@ -114,7 +154,7 @@ def _disable_langdetect() -> None:
 if _PYTHON_UNSUPPORTED_FOR_LANGDETECT:
     _disable_langdetect()
     logger.warning(
-        "langdetect disabled: Python %s.%s is not supported",
+        "langdetect disabled: import probe failed on Python %s.%s",
         sys.version_info.major,
         sys.version_info.minor,
         extra={"event": "langdetect_python_guard"},

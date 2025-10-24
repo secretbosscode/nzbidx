@@ -67,6 +67,11 @@ def test_detect_language_python_guard(monkeypatch):
     import nzbidx_ingest.config as config
     import nzbidx_ingest.parsers as parsers
 
+    class _ProbeResult:
+        returncode = 3
+
+    monkeypatch.setattr(parsers.subprocess, "run", lambda *_, **__: _ProbeResult())
+
     class FailLangdetect(types.ModuleType):
         def __getattr__(self, name: str) -> object:  # pragma: no cover - defensive
             raise AssertionError("langdetect should not be imported when guarded")
@@ -129,6 +134,11 @@ def test_detect_language_python_guard_clears_stale_detect(monkeypatch):
             raise AssertionError(f"unexpected attribute access: {name}")
 
     fail_module = FailLangdetect("langdetect")
+
+    class _ProbeResult:
+        returncode = 3
+
+    monkeypatch.setattr(parsers.subprocess, "run", lambda *_, **__: _ProbeResult())
 
     def failing_detect(text: str) -> str:
         fail_calls.append(text)
