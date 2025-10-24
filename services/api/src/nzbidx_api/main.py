@@ -43,6 +43,8 @@ from .db import (
     analyze,
     reindex,
     vacuum_analyze,
+    prune_old_releases,
+    get_release_retention_days,
 )
 
 try:  # pragma: no cover - optional dependency
@@ -319,6 +321,43 @@ async def stop_backfill_scheduler() -> None:
         _backfill_scheduler_task = None
 
 
+async def enforce_release_retention() -> None:
+    """Ensure only recent ``release`` data is retained."""
+
+    days = get_release_retention_days()
+    if days <= 0:
+        logger.info("release_retention_disabled", extra={"days": days})
+        return
+
+    try:
+        result = await prune_old_releases(retention_days=days)
+    except Exception:  # pragma: no cover - defensive
+        logger.exception(
+            "release_retention_failed",
+            extra={"days": days},
+        )
+        return
+
+    dropped = result.get("dropped", []) if isinstance(result, dict) else []
+    deleted = result.get("deleted", {}) if isinstance(result, dict) else {}
+    total_deleted = 0
+    if isinstance(deleted, dict):
+        for value in deleted.values():
+            try:
+                total_deleted += max(int(value), 0)
+            except (TypeError, ValueError):
+                continue
+
+    logger.info(
+        "release_retention_complete",
+        extra={
+            "days": days,
+            "dropped_partitions": len(dropped),
+            "deleted_rows": total_deleted,
+        },
+    )
+
+
 async def start_db_maintenance() -> None:
     """Start periodic database maintenance tasks."""
     global _db_maintenance_scheduler
@@ -336,10 +375,19 @@ async def start_db_maintenance() -> None:
         removed = await asyncio.to_thread(prune_sizes)
         logger.info("prune_disallowed_complete", extra={"removed": removed})
 
+    retention_days = get_release_retention_days()
+
     scheduler.add_job(vacuum_analyze, "cron", hour=3)
     scheduler.add_job(analyze, "cron", hour=2)
     scheduler.add_job(reindex, "cron", day_of_week="sun", hour=4)
     scheduler.add_job(prune_disallowed, "cron", hour=1)
+    if retention_days > 0:
+        scheduler.add_job(enforce_release_retention, "cron", hour=0, minute=30)
+    else:
+        logger.info(
+            "release_retention_not_scheduled",
+            extra={"days": retention_days},
+        )
     scheduler.start()
     _db_maintenance_scheduler = scheduler
 
@@ -869,6 +917,7 @@ app = Starlette(
         reload_if_env_changed,
         init_engine,
         apply_schema,
+        enforce_release_retention,
         ensure_search_vector,
         start_ingest,
         start_auto_backfill,

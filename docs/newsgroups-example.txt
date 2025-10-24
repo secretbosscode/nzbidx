@@ -1,6 +1,0 @@
-alt.binaries.movies
-alt.binaries.tv
-alt.binaries.games
-alt.binaries.music
-alt.binaries.pictures
-alt.binaries.ebook
