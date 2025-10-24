@@ -40,6 +40,9 @@ def _conn() -> Tuple[Any, str]:
     conn.execute(
         'CREATE TABLE IF NOT EXISTS cursor ("group" TEXT PRIMARY KEY, last_article INTEGER, irrelevant INTEGER DEFAULT 0)'
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cursor_meta (key TEXT PRIMARY KEY, value TEXT)"
+    )
     conn.commit()
     if parsed.scheme.startswith("postgres"):
         try:
@@ -71,6 +74,24 @@ def _conn() -> Tuple[Any, str]:
             conn.rollback()
             raise
     return conn, paramstyle
+
+
+def _set_group_mode(conn: Any, paramstyle: str, mode: str) -> None:
+    """Persist the current group selection ``mode`` for cursor bookkeeping."""
+
+    stmt = (
+        f"INSERT INTO cursor_meta(key, value) VALUES ({paramstyle}, {paramstyle}) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+    )
+    conn.execute(stmt, ("group_mode", mode))
+
+
+def _get_group_mode(conn: Any) -> str | None:
+    """Return the last recorded group selection mode."""
+
+    cur = conn.execute("SELECT value FROM cursor_meta WHERE key = 'group_mode'")
+    row = cur.fetchone()
+    return row[0] if row else None
 
 
 def get_cursors(groups: Iterable[str]) -> dict[str, int]:
@@ -152,3 +173,55 @@ def get_irrelevant_groups() -> list[str]:
     rows = cur.fetchall()
     conn.close()
     return [row[0] for row in rows]
+
+
+def reset(allowed: Iterable[str] | None = None) -> None:
+    """Reset cursor state, optionally keeping entries for ``allowed`` groups."""
+
+    conn, paramstyle = _conn()
+    try:
+        if allowed:
+            allowed_set = sorted({g for g in allowed if g})
+        else:
+            allowed_set = []
+        if not allowed_set:
+            conn.execute("DELETE FROM cursor")
+        else:
+            placeholders = ",".join([paramstyle] * len(allowed_set))
+            conn.execute(
+                f'DELETE FROM cursor WHERE "group" NOT IN ({placeholders})',
+                tuple(allowed_set),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def reset_for_curated() -> bool:
+    """Clear cursor state when switching into curated mode.
+
+    Returns ``True`` if a reset occurred.
+    """
+
+    conn, paramstyle = _conn()
+    try:
+        current = _get_group_mode(conn)
+        if current == "curated":
+            return False
+        conn.execute("DELETE FROM cursor")
+        _set_group_mode(conn, paramstyle, "curated")
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def mark_group_mode(mode: str) -> None:
+    """Record the active group selection ``mode`` without mutating cursors."""
+
+    conn, paramstyle = _conn()
+    try:
+        _set_group_mode(conn, paramstyle, mode)
+        conn.commit()
+    finally:
+        conn.close()
