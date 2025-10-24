@@ -16,9 +16,7 @@ def test_curated_mode_prunes_releases(monkeypatch):
     assert groups == ["alt.keep.one", "alt.keep.two"]
 
     conn = sqlite3.connect(":memory:")
-    conn.execute(
-        "CREATE TABLE release (norm_title TEXT, source_group TEXT)"
-    )
+    conn.execute("CREATE TABLE release (norm_title TEXT, source_group TEXT)")
     conn.executemany(
         "INSERT INTO release (norm_title, source_group) VALUES (?, ?)",
         [

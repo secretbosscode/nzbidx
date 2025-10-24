@@ -170,7 +170,8 @@ def _resolve_group_mode() -> str:
     if mode_env:
         if mode_env not in valid_modes:
             logger.warning(
-                "unknown_group_mode", extra={"event": "unknown_group_mode", "mode": mode_env}
+                "unknown_group_mode",
+                extra={"event": "unknown_group_mode", "mode": mode_env},
             )
         else:
             return mode_env
@@ -221,11 +222,15 @@ def _load_curated_groups() -> List[str]:
             return groups
 
     try:
-        data = resources.files(__package__).joinpath("curated_groups.txt").read_text(
-            encoding="utf-8"
+        data = (
+            resources.files(__package__)
+            .joinpath("curated_groups.txt")
+            .read_text(encoding="utf-8")
         )
     except (FileNotFoundError, OSError):
-        logger.warning("curated_group_file_missing", extra={"event": "curated_group_file_missing"})
+        logger.warning(
+            "curated_group_file_missing", extra={"event": "curated_group_file_missing"}
+        )
         return []
 
     groups = _parse_group_list(data)
