@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime
+import re
+from datetime import datetime, date, timezone
 from typing import Any, Iterable
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,8 @@ CATEGORY_RANGES: dict[str, tuple[int, int] | None] = {
     "books": (7000, 8000),
     "other": None,
 }
+
+_PARTITION_RANGE_RE = re.compile(r"FROM \('([^']+)'\) TO \('([^']+)'\)")
 
 
 def _format_partition_bound(value: int | str) -> str:
@@ -318,6 +321,95 @@ def ensure_current_and_next_year_partitions(conn: Any) -> None:
             continue
         ensure_release_year_partition(conn, category, year)
         ensure_release_year_partition(conn, category, year + 1)
+
+
+def drop_release_partitions_before(
+    conn: Any, cutoff: datetime | date
+) -> dict[str, object]:
+    """Drop ``release`` partitions whose upper bound is before ``cutoff``."""
+
+    if isinstance(cutoff, datetime):
+        if cutoff.tzinfo is not None:
+            cutoff = cutoff.astimezone(timezone.utc)
+        cutoff_date = cutoff.date()
+    elif isinstance(cutoff, date):
+        cutoff_date = cutoff
+    else:  # pragma: no cover - defensive programming
+        raise TypeError("cutoff must be a date or datetime instance")
+
+    dropped: list[str] = []
+    deleted: dict[str, int] = {}
+    cur = conn.cursor()
+
+    for category, bounds in CATEGORY_RANGES.items():
+        if bounds is None:
+            continue
+
+        parent = f"release_{category}"
+        cur.execute(
+            """
+            SELECT c.relname, pg_get_expr(c.relpartbound, c.oid)
+            FROM pg_inherits i
+            JOIN pg_class c ON c.oid = i.inhrelid
+            WHERE i.inhparent = $1::regclass
+            """,
+            (parent,),
+        )
+        rows = cur.fetchall()
+        for table, bound in rows:
+            if not bound or table.endswith("_default"):
+                continue
+            match = _PARTITION_RANGE_RE.search(bound)
+            if not match:
+                logger.debug(
+                    "partition_bound_unparsed",
+                    extra={"table": table, "bound": bound},
+                )
+                continue
+            lower_literal, upper_literal = match.groups()
+            try:
+                lower_date = datetime.fromisoformat(lower_literal).date()
+                upper_date = datetime.fromisoformat(upper_literal).date()
+            except ValueError:
+                logger.debug(
+                    "partition_bound_invalid",
+                    extra={"table": table, "bound": bound},
+                )
+                continue
+            if upper_date <= cutoff_date:
+                cur.execute(f"DROP TABLE IF EXISTS {table}")
+                dropped.append(table)
+                continue
+            if lower_date < cutoff_date:
+                cur.execute(
+                    f"DELETE FROM {table} "
+                    "WHERE posted_at IS NOT NULL AND posted_at < $1",
+                    (cutoff_date,),
+                )
+                count = cur.rowcount or 0
+                if count < 0:
+                    count = 0
+                if count:
+                    deleted[table] = deleted.get(table, 0) + int(count)
+
+        default_table = f"{parent}_default"
+        cur.execute("SELECT to_regclass($1)", (default_table,))
+        regclass = cur.fetchone()
+        if not regclass or regclass[0] is None:
+            continue
+        cur.execute(
+            f"DELETE FROM {default_table} "
+            "WHERE posted_at IS NOT NULL AND posted_at < $1",
+            (cutoff_date,),
+        )
+        count = cur.rowcount or 0
+        if count < 0:
+            count = 0
+        deleted[default_table] = deleted.get(default_table, 0) + int(count)
+
+    conn.commit()
+    dropped.sort()
+    return {"dropped": dropped, "deleted": deleted}
 
 
 def drop_unused_release_partitions(
