@@ -37,6 +37,7 @@ src/nzbidx_api/migrations/__init__.py
 src/nzbidx_ingest/__init__.py
 src/nzbidx_ingest/__main__.py
 src/nzbidx_ingest/config.py
+src/nzbidx_ingest/curated_groups.txt
 src/nzbidx_ingest/cursors.py
 src/nzbidx_ingest/db_migrations.py
 src/nzbidx_ingest/embeddings.py
@@ -49,6 +50,7 @@ src/nzbidx_ingest/parsers.py
 src/nzbidx_ingest/resource_monitor.py
 src/nzbidx_ingest/segment_schema.py
 src/nzbidx_ingest/sql.py
+tests/test_curated_groups.py
 tests/test_ingest_commit_failure.py
 tests/test_ingest_nul_bytes.py
 tests/test_ingest_reconnect_probe.py
