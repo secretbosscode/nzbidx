@@ -104,7 +104,7 @@ def test_drop_release_partitions_before_trims_partial_year(monkeypatch):
 
     dropped = result["dropped"]
     deleted = result["deleted"]
-    assert f"release_movies_2023" in dropped
+    assert "release_movies_2023" in dropped
     assert deleted.get("release_movies_2024") == 1
 
     cur.execute("SELECT to_regclass(%s)", ("release_movies_2023",))
