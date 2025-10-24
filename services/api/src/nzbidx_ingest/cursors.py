@@ -41,7 +41,7 @@ def _conn() -> Tuple[Any, str]:
         'CREATE TABLE IF NOT EXISTS cursor ("group" TEXT PRIMARY KEY, last_article INTEGER, irrelevant INTEGER DEFAULT 0)'
     )
     conn.execute(
-        'CREATE TABLE IF NOT EXISTS cursor_meta (key TEXT PRIMARY KEY, value TEXT)'
+        "CREATE TABLE IF NOT EXISTS cursor_meta (key TEXT PRIMARY KEY, value TEXT)"
     )
     conn.commit()
     if parsed.scheme.startswith("postgres"):
@@ -185,7 +185,7 @@ def reset(allowed: Iterable[str] | None = None) -> None:
         else:
             allowed_set = []
         if not allowed_set:
-            conn.execute('DELETE FROM cursor')
+            conn.execute("DELETE FROM cursor")
         else:
             placeholders = ",".join([paramstyle] * len(allowed_set))
             conn.execute(
@@ -208,7 +208,7 @@ def reset_for_curated() -> bool:
         current = _get_group_mode(conn)
         if current == "curated":
             return False
-        conn.execute('DELETE FROM cursor')
+        conn.execute("DELETE FROM cursor")
         _set_group_mode(conn, paramstyle, "curated")
         conn.commit()
         return True
