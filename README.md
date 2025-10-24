@@ -152,13 +152,12 @@ performance cost. Results are cached using an LRU strategy, yet disabling
 language detection (e.g. `DETECT_LANGUAGE=0`) may be desirable when ingest speed
 is preferred over precise language tags.
 
-> **Python 3.13+ note**: the optional `langdetect` dependency currently crashes
-> on the latest CPython nightlies. The ingest worker automatically skips the
-> import on unsupported interpreters (logging `langdetect_python_guard`) and
-> falls back to the ASCII heuristic that only returns `"en"` or `None`. To
-> restore full language detection you must either continue running on Python
-> 3.12 or upgrade once `langdetect` ships Python 3.13 support (at which point the
-> guard can be removed or patched to re-enable the library).
+> **Python 3.13+ note**: some historical `langdetect` releases crashed during the
+> import phase on newer CPython builds. The ingest worker now probes the import
+> in a subprocess, disabling integration (and logging `langdetect_python_guard`)
+> only when the probe fails. When that happens the worker falls back to the ASCII
+> heuristic that returns `"en"` or `None`. Upgrading to a `langdetect` build that
+> supports your interpreter re-enables full language detection automatically.
 
 Additional optional variables tune behaviour (e.g. `SEARCH_TTL_SECONDS`,
 `CORS_ORIGINS`, tracing via `OTEL_EXPORTER_OTLP_ENDPOINT`, or custom category
