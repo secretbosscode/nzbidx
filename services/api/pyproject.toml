@@ -32,3 +32,6 @@ orjson = ["orjson"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+nzbidx_ingest = ["curated_groups.txt"]
+

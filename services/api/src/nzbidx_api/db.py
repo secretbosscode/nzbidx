@@ -14,7 +14,6 @@ import importlib
 import logging
 import os
 import pkgutil
-from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
@@ -29,7 +28,6 @@ from nzbidx_ingest.db_migrations import (
     create_release_posted_at_index,
     CATEGORY_RANGES,
     ensure_current_and_next_year_partitions,
-    drop_release_partitions_before,
 )
 
 # Optional SQLAlchemy dependency
@@ -79,29 +77,6 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost:5432/postgres")
 DATABASE_URL = os.path.expandvars(DATABASE_URL)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-
-_DEFAULT_RELEASE_RETENTION_DAYS = 365
-
-
-def _parse_retention_days(value: str | None) -> int:
-    if not value:
-        return _DEFAULT_RELEASE_RETENTION_DAYS
-    try:
-        return int(value)
-    except ValueError:
-        logger.warning(
-            "invalid_release_retention_days",
-            extra={"value": value},
-        )
-        return _DEFAULT_RELEASE_RETENTION_DAYS
-
-
-def get_release_retention_days() -> int:
-    """Return configured retention window for ``release`` data in days."""
-
-    env_value = os.getenv("RELEASE_RETENTION_DAYS", "").strip()
-    return _parse_retention_days(env_value or None)
-
 
 # Engine lifecycle management -------------------------------------------------
 if create_async_engine:
@@ -244,14 +219,17 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
 
     async def _ensure_release_partitions(
         conn: Any, *, migrate_only: bool = False
-    ) -> None:
+    ) -> bool:
         dialect_name = getattr(getattr(conn, "dialect", None), "name", None)
         if not hasattr(conn, "run_sync") or (
             dialect_name and dialect_name != "postgresql"
         ):
-            return
+            return False
+
+        needs_migration = False
 
         def _ensure(sync_conn: Any) -> None:
+            nonlocal needs_migration
             raw = sync_conn.connection.dbapi_connection
             cur = raw.cursor()
             for cat in [c for c in CATEGORY_RANGES if c != "other"]:
@@ -274,7 +252,10 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 )
                 partitioned = bool(cur.fetchone()[0])
                 if exists and not partitioned:
-                    migrate_release_partitions_by_date(raw, cat)
+                    if migrate_only:
+                        needs_migration = True
+                    else:
+                        migrate_release_partitions_by_date(raw, cat)
             if migrate_only:
                 return
             try:
@@ -284,6 +265,7 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
                 pass
 
         await conn.run_sync(_ensure)
+        return needs_migration
 
     async def _drop_privileges(conn: Any) -> None:
         """Revoke superuser rights from the current role if possible."""
@@ -313,16 +295,15 @@ async def apply_schema(max_attempts: int = 5, retry_delay: float = 1.0) -> None:
     for attempt in range(1, max_attempts + 1):
         try:
             async with engine.connect() as conn:
+                needs_migration = await _ensure_release_partitions(
+                    conn, migrate_only=True
+                )
                 try:
                     await _apply(conn)
                 except Exception as exc:
                     msg = str(getattr(exc, "orig", exc)).lower()
-                    if "not partitioned" in msg:
-                        logger.info(
-                            "release_partition_migration_retry",
-                            extra={"error": msg},
-                        )
-                        await _ensure_release_partitions(conn, migrate_only=True)
+                    if needs_migration and "not partitioned" in msg:
+                        await _ensure_release_partitions(conn)
                         await _apply(conn)
                     else:
                         raise
@@ -434,33 +415,6 @@ async def analyze(table: str | None = None) -> None:
     if table:
         stmt += f" {table}"
     await _maintenance(stmt)
-
-
-async def prune_old_releases(retention_days: int | None = None) -> dict[str, object]:
-    """Drop release partitions and rows older than the configured retention."""
-
-    engine = get_engine()
-    if not engine:
-        return {"dropped": [], "deleted": {}}
-
-    days = (
-        retention_days if retention_days is not None else get_release_retention_days()
-    )
-    if days <= 0:
-        return {"dropped": [], "deleted": {}}
-
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-
-    async with engine.connect() as conn:
-
-        def _prune(sync_conn: Any) -> dict[str, object]:
-            raw = sync_conn.connection.dbapi_connection
-            return drop_release_partitions_before(raw, cutoff)
-
-        result = await conn.run_sync(_prune)
-    if not isinstance(result, dict):  # pragma: no cover - defensive
-        return {"dropped": [], "deleted": {}}
-    return result
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,5 @@
+alt.binaries.hdtv
+alt.binaries.movies
+alt.binaries.tv
+alt.binaries.e-book
+alt.binaries.music.flac

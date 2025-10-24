@@ -18,6 +18,7 @@ from .config import (
     INGEST_SLEEP_MS,
     INGEST_DB_LATENCY_MS,
     min_size_for_release,
+    is_curated_mode,
 )
 from . import config, cursors
 from .nntp_client import NNTPClient
@@ -34,6 +35,7 @@ from .main import (
     connect_db,
     CATEGORY_MAP,
     prune_group,
+    prune_non_curated_groups,
 )
 from .sql import sql_placeholder
 from email.utils import parsedate_to_datetime
@@ -548,6 +550,8 @@ def run_once(client: NNTPClient | None = None) -> float:
         if created_client:
             client.connect()
         db = connect_db()
+        if is_curated_mode():
+            prune_non_curated_groups(db, groups_all)
         delay = _process_groups(client, db, groups, ignored)
         if _group_probes:
             now = time.monotonic()
