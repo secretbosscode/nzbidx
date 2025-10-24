@@ -53,6 +53,108 @@ from .nntp_client import NNTPClient  # noqa: E402
 
 NNTP_GROUP_WILDCARD: str = os.getenv("NNTP_GROUP_WILDCARD", "alt.binaries.*")
 
+# Curated list of Binsearch-compatible alt.binaries groups.
+BINSEARCH_GROUPS: tuple[str, ...] = (
+    "alt.binaries.a51",
+    "alt.binaries.alt",
+    "alt.binaries.amazing",
+    "alt.binaries.anime",
+    "alt.binaries.ath",
+    "alt.binaries.bloaf",
+    "alt.binaries.blu-ray",
+    "alt.binaries.boneless",
+    "alt.binaries.brg",
+    "alt.binaries.cd.image",
+    "alt.binaries.cd.image.ps2.dvdiso",
+    "alt.binaries.chello",
+    "alt.binaries.comics.dcp",
+    "alt.binaries.comp",
+    "alt.binaries.coolkidweb",
+    "alt.binaries.cores",
+    "alt.binaries.department.pron",
+    "alt.binaries.documentaries.french",
+    "alt.binaries.drwho",
+    "alt.binaries.dvd",
+    "alt.binaries.e-book",
+    "alt.binaries.e-book.flood",
+    "alt.binaries.e-book.german",
+    "alt.binaries.e-book.magazines",
+    "alt.binaries.e-book.rpg",
+    "alt.binaries.e-books",
+    "alt.binaries.ebook",
+    "alt.binaries.ebook.french",
+    "alt.binaries.ebook.german",
+    "alt.binaries.ebooks.german",
+    "alt.binaries.encrypted",
+    "alt.binaries.erotica",
+    "alt.binaries.erotica.pornstars.80s",
+    "alt.binaries.etc",
+    "alt.binaries.faded-glory",
+    "alt.binaries.flowed",
+    "alt.binaries.font",
+    "alt.binaries.frogs",
+    "alt.binaries.ftn",
+    "alt.binaries.games",
+    "alt.binaries.ghosts",
+    "alt.binaries.hdtv.x264",
+    "alt.binaries.holiday",
+    "alt.binaries.ijsklontje",
+    "alt.binaries.inner-sanctum",
+    "alt.binaries.kenpsx",
+    "alt.binaries.misc",
+    "alt.binaries.mom",
+    "alt.binaries.movies",
+    "alt.binaries.movies.divx",
+    "alt.binaries.mp3",
+    "alt.binaries.mp3.audiobooks.repost",
+    "alt.binaries.mpeg.video.music",
+    "alt.binaries.multimedia",
+    "alt.binaries.multimedia.alias",
+    "alt.binaries.multimedia.anime.highspeed",
+    "alt.binaries.multimedia.erotica.amateur",
+    "alt.binaries.music.classical",
+    "alt.binaries.newznzb.alpha",
+    "alt.binaries.newznzb.charlie",
+    "alt.binaries.newznzb.delta",
+    "alt.binaries.newznzb.oscar",
+    "alt.binaries.newznzb.romeo",
+    "alt.binaries.newznzb.sierra",
+    "alt.binaries.nl",
+    "alt.binaries.nordic.password.protected",
+    "alt.binaries.nospam.female.bodyhair.pubes",
+    "alt.binaries.pictures.earlmiller",
+    "alt.binaries.pwp",
+    "alt.binaries.rar.pw-required",
+    "alt.binaries.scary.exe.files",
+    "alt.binaries.sounds.flac",
+    "alt.binaries.sounds.lossless.24bit",
+    "alt.binaries.sounds.lossless.jazz",
+    "alt.binaries.sounds.mp3",
+    "alt.binaries.sounds.mp3.1950s",
+    "alt.binaries.sounds.mp3.1970s",
+    "alt.binaries.sounds.mp3.ambient",
+    "alt.binaries.sounds.mp3.classical",
+    "alt.binaries.sounds.mp3.complete_cd",
+    "alt.binaries.sounds.mp3.dance",
+    "alt.binaries.sounds.mp3.holland",
+    "alt.binaries.superman",
+    "alt.binaries.swedish",
+    "alt.binaries.teevee",
+    "alt.binaries.test",
+    "alt.binaries.town",
+    "alt.binaries.tv",
+    "alt.binaries.tv.deutsch",
+    "alt.binaries.tv.swedish",
+    "alt.binaries.u-4all",
+    "alt.binaries.usenet2day",
+    "alt.binaries.warez",
+    "alt.binaries.warez.quebec-hackers",
+    "alt.binaries.warez.uk",
+    "alt.binaries.welovelori",
+    "alt.binaries.wood",
+    "alt.binaries.x",
+)
+
 
 def _load_groups() -> List[str]:
     env = os.getenv("NNTP_GROUPS", "")
@@ -73,18 +175,37 @@ def _load_groups() -> List[str]:
         )
         return groups
 
+    curated = list(BINSEARCH_GROUPS)
     client = NNTPClient(NNTP_SETTINGS)
-    groups = client.list_groups(NNTP_GROUP_WILDCARD)
-    if groups:
-        logger.info(
-            "Discovered %d NNTP groups from server",
-            len(groups),
-            extra={"event": "ingest_groups_discovered", "groups": groups},
+    discovered = client.list_groups(NNTP_GROUP_WILDCARD)
+    if discovered:
+        available = {name for name in discovered}
+        groups = [group for group in curated if group in available]
+        missing = sorted(set(curated) - available)
+        if groups:
+            logger.info(
+                "Using %d curated NNTP groups discovered on server",
+                len(groups),
+                extra={
+                    "event": "ingest_groups_curated",
+                    "groups": groups,
+                    "missing_groups": missing,
+                },
+            )
+            return groups
+        logger.warning(
+            "No curated NNTP groups available on server",
+            extra={"event": "ingest_groups_curated_empty", "missing_groups": missing},
         )
     else:
         host = os.getenv("NNTP_HOST_1") or os.getenv("NNTP_HOST")
         logger.warning("ingest_groups_missing", extra={"host": host})
-    return groups
+
+    logger.info(
+        "Falling back to curated Binsearch group list",
+        extra={"event": "ingest_groups_curated_fallback", "groups": curated},
+    )
+    return curated
 
 
 NNTP_GROUPS: List[str] | None = None

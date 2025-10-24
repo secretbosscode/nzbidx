@@ -220,10 +220,12 @@ Repeat requests report the current progress while the backfill runs.
 
 The API container also runs an ingest worker which polls NNTP groups and stores
 release metadata. Set the required NNTP environment variables and start the
-stack. Supply `NNTP_GROUPS` with a curated comma-separated list for better
-performance. Wildcard patterns like `alt.binaries.*` (controlled by
-`NNTP_GROUP_WILDCARD`) are expanded via `server.list`; set `NNTP_GROUP_LIMIT` to
-cap enumeration. Use `NNTP_TIMEOUT` to
+stack. Supply `NNTP_GROUPS` with a curated comma-separated list for best
+performance. When `NNTP_GROUPS` is unset the worker now defaults to the
+Binsearch-compatible `alt.binaries.*` list (see `docs/binsearch-newsgroups.txt`)
+and filters the provider's wildcard enumeration to that set. Wildcard patterns
+like `alt.binaries.*` (controlled by `NNTP_GROUP_WILDCARD`) are expanded via
+`server.list`; set `NNTP_GROUP_LIMIT` to cap enumeration. Use `NNTP_TIMEOUT` to
 adjust the socket timeout for slow or flaky providers and `NNTP_TOTAL_TIMEOUT`
 to cap overall retry time. `NNTP_CONNECT_ATTEMPTS` and `NNTP_CONNECT_DELAY`
 control how often the worker retries initial connections. To invoke a one-off
