@@ -19,7 +19,7 @@ jobs:
     env:
       PYTHONPATH: .
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -31,7 +31,7 @@ jobs:
     env:
       PYTHONPATH: .
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -42,7 +42,7 @@ jobs:
   sbom:
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
