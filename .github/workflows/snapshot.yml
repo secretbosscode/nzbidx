@@ -12,5 +12,5 @@ jobs:
     env:
       SNAPSHOT_SCHEDULE: ${{ vars.SNAPSHOT_SCHEDULE || 'false' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: bash scripts/snapshot.sh
