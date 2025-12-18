@@ -1,3 +1,10 @@
+x-db-env: &db_env
+  DATABASE_URL: ${DATABASE_URL:-}
+  PGDATABASE: ${PGDATABASE:-}
+  PGUSER: ${PGUSER:-}
+  PGPASSWORD: ${PGPASSWORD:-}
+  POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+
 version: '3.9'
 services:
   nzbidx:
@@ -16,6 +23,25 @@ services:
       AUTO_MIGRATE_PARTITIONS: ${AUTO_MIGRATE_PARTITIONS:-1}
       NNTP_TOTAL_TIMEOUT: ${NNTP_TOTAL_TIMEOUT:-600}
       NZB_TIMEOUT_SECONDS: ${NZB_TIMEOUT_SECONDS:-600} # should be ≥ NNTP_TOTAL_TIMEOUT
+      <<: *db_env
+  maintenance:
+    image: nzbidx:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      <<: *db_env
+      MAX_RELEASE_BYTES: ${MAX_RELEASE_BYTES:-0}
+      CATEGORY_MIN_SIZES: ${CATEGORY_MIN_SIZES:-}
+      RELEASE_MIN_SIZES: ${RELEASE_MIN_SIZES:-}
+      RELEASE_RETENTION_DAYS: ${RELEASE_RETENTION_DAYS:-30}
+    command: ["python", "scripts/db_maintenance.py"]
   postgres:
     restart: unless-stopped
     image: pgvector/pgvector:pg17

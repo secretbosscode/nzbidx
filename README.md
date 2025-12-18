@@ -32,9 +32,10 @@ without superuser rights cannot install extensions.
 Routine maintenance keeps PostgreSQL statistics and indexes fresh. The
 `scripts/db_maintenance.py` helper uses APScheduler to run `VACUUM (ANALYZE)`,
 `ANALYZE`, `REINDEX`, and automatic pruning of releases outside the configured
-size thresholds. The compose file includes a long-running `maintenance` service
-that executes this script and shares its database connection settings with the
-main `nzbidx` container:
+size thresholds or allowed file-type list, as well as expiry driven by
+`RELEASE_RETENTION_DAYS`. The compose files include a long-running
+`maintenance` service that executes this script and shares its database
+connection settings with the main `nzbidx` container:
 
 ```yaml
 maintenance:
@@ -184,10 +185,10 @@ meet the configured limits, run the pruning helper:
 
     docker compose exec nzbidx python scripts/prune_disallowed_sizes.py
 
-For scheduled pruning (along with regular VACUUM/ANALYZE maintenance), start
-the maintenance scheduler instead:
+For scheduled pruning (along with regular VACUUM/ANALYZE maintenance), keep the
+`maintenance` service running alongside `nzbidx`:
 
-    docker compose exec nzbidx python scripts/db_maintenance.py
+    docker compose up -d maintenance
 
 Manual SQL remains an option for bespoke cases, but the helpers above cover
 common scenarios without hand-crafted queries.

@@ -45,6 +45,18 @@ services:
       CATEGORY_MIN_SIZES: ${CATEGORY_MIN_SIZES:-}
       RELEASE_MIN_SIZES: ${RELEASE_MIN_SIZES:-}
       RELEASE_RETENTION_DAYS: ${RELEASE_RETENTION_DAYS:-30}
+  maintenance:
+    image: nzbidx:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *db_env
+      MAX_RELEASE_BYTES: ${MAX_RELEASE_BYTES:-0}
+      CATEGORY_MIN_SIZES: ${CATEGORY_MIN_SIZES:-}
+      RELEASE_MIN_SIZES: ${RELEASE_MIN_SIZES:-}
+      RELEASE_RETENTION_DAYS: ${RELEASE_RETENTION_DAYS:-30}
+    command: ["python", "scripts/db_maintenance.py"]
   postgres:
     image: pgvector/pgvector:pg17
     environment:
