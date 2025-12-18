@@ -107,6 +107,17 @@ except Exception:  # pragma: no cover - fallback for non-package layout
     except Exception:  # pragma: no cover - unavailable
         prune_sizes = None  # type: ignore
 
+try:  # pragma: no cover - optional prune helper
+    from nzbidx_ingest.main import prune_disallowed_filetypes
+except Exception:  # pragma: no cover - fallback for non-package layout
+    try:
+        ROOT = Path(__file__).resolve().parents[4]
+        sys.path.append(str(ROOT / "services" / "api" / "src"))
+        sys.path.append(str(ROOT / "scripts"))
+        from nzbidx_ingest.main import prune_disallowed_filetypes
+    except Exception:  # pragma: no cover - unavailable
+        prune_disallowed_filetypes = None  # type: ignore
+
 SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "nzbidx-api")
 
 _stop_metrics: Callable[[], None] | None = None
@@ -369,11 +380,26 @@ async def start_db_maintenance() -> None:
     scheduler = AsyncIOScheduler()
 
     async def prune_disallowed() -> None:
+        removed_sizes = None
+        removed_types = None
+
         if prune_sizes is None:
             logger.info("prune_sizes_unavailable")
-            return
-        removed = await asyncio.to_thread(prune_sizes)
-        logger.info("prune_disallowed_complete", extra={"removed": removed})
+        else:
+            removed_sizes = await asyncio.to_thread(prune_sizes)
+
+        if prune_disallowed_filetypes is None:
+            logger.info("prune_filetypes_unavailable")
+        else:
+            removed_types = await asyncio.to_thread(prune_disallowed_filetypes)
+
+        logger.info(
+            "prune_disallowed_complete",
+            extra={
+                "removed_sizes": removed_sizes,
+                "removed_filetypes": removed_types,
+            },
+        )
 
     retention_days = get_release_retention_days()
 
