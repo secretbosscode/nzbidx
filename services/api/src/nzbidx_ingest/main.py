@@ -269,10 +269,42 @@ def prune_disallowed_filetypes(
         return 0
     if conn is None:
         conn = connect_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS extension TEXT"
+        )
+        conn.commit()
+    except Exception:
+        try:
+            cur = conn.cursor()
+            cur.execute("PRAGMA table_info(release)")
+            columns = {row[1] for row in cur.fetchall()}
+            if "extension" not in columns:
+                cur.execute("ALTER TABLE release ADD COLUMN extension TEXT")
+            conn.commit()
+        except Exception:
+            logger.warning("release_extension_column_missing")
     bs = batch_size or int(os.getenv("PRUNE_BATCH_SIZE", "1000"))
     placeholder = sql_placeholder(conn)
     total = 0
     tables = ["release"]
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT tablename FROM pg_tables WHERE tablename LIKE 'release_%'"
+        )
+        tables.extend(row[0] for row in cur.fetchall())
+    except Exception:
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'release_%'"
+            )
+            tables.extend(row[0] for row in cur.fetchall())
+        except Exception:
+            logger.warning("release_partition_discovery_failed")
+    tables = list(dict.fromkeys(tables))
     for table in tables:
         while True:
             placeholders = ",".join([placeholder] * len(allowed))
@@ -342,7 +374,8 @@ def connect_db() -> Any:
             engine = create_engine(u, echo=False, future=True)
             with engine.begin() as conn_sync:  # type: ignore[call-arg]
                 conn_sync.execute(
-                    text("""
+                    text(
+                        """
                         CREATE TABLE IF NOT EXISTS release (
                             id BIGSERIAL PRIMARY KEY,
                             norm_title TEXT,
@@ -350,6 +383,7 @@ def connect_db() -> Any:
                             category_id INT,
                             language TEXT NOT NULL DEFAULT 'und',
                             tags TEXT NOT NULL DEFAULT '',
+                            extension TEXT,
                             source_group TEXT,
                             size_bytes BIGINT,
                             posted_at TIMESTAMPTZ,
@@ -357,11 +391,17 @@ def connect_db() -> Any:
                             has_parts BOOLEAN NOT NULL DEFAULT FALSE,
                             part_count INT NOT NULL DEFAULT 0
                         )
-                    """)
+                    """
+                    )
                 )
                 conn_sync.execute(
                     text(
                         "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
+                    )
+                )
+                conn_sync.execute(
+                    text(
+                        "ALTER TABLE IF EXISTS release ADD COLUMN IF NOT EXISTS extension TEXT"
                     )
                 )
                 conn_sync.execute(
@@ -436,6 +476,7 @@ def connect_db() -> Any:
             category_id INT,
             language TEXT NOT NULL DEFAULT 'und',
             tags TEXT NOT NULL DEFAULT '',
+            extension TEXT,
             source_group TEXT,
             size_bytes BIGINT,
             posted_at TIMESTAMPTZ,
@@ -445,6 +486,7 @@ def connect_db() -> Any:
         )
         """
     )
+    conn.execute("ALTER TABLE release ADD COLUMN IF NOT EXISTS extension TEXT")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS release_source_group_idx ON release (source_group)"
     )
