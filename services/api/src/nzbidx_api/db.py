@@ -418,12 +418,45 @@ async def _maintenance(stmt: str) -> None:
         await conn.execution_options(isolation_level="AUTOCOMMIT").execute(text(stmt))
 
 
+async def _list_vacuum_tables(conn: Any) -> list[str]:
+    """Return fully-qualified user tables eligible for vacuuming."""
+
+    if not text:
+        return []
+
+    result = await conn.execute(
+        text(
+            """
+            SELECT quote_ident(schemaname) || '.' || quote_ident(tablename)
+            FROM pg_tables
+            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY schemaname, tablename
+            """
+        )
+    )
+
+    try:
+        return list(result.scalars().all())
+    except AttributeError:  # pragma: no cover - fallback when scalars is missing
+        return [row[0] for row in result]
+
+
 async def vacuum_analyze(table: str | None = None) -> None:
-    """Run ``VACUUM (ANALYZE)`` on the database or a specific table."""
-    stmt = "VACUUM (ANALYZE)"
+    """Run ``VACUUM (ANALYZE)`` on user tables or a specific table."""
+
     if table:
-        stmt += f" {table}"
-    await _maintenance(stmt)
+        await _maintenance(f"VACUUM (ANALYZE) {table}")
+        return
+
+    engine = get_engine()
+    if not engine or not text:
+        return
+
+    async with engine.connect() as conn:
+        tables = await _list_vacuum_tables(conn)
+
+    for table_name in tables:
+        await _maintenance(f"VACUUM (ANALYZE) {table_name}")
 
 
 async def reindex(table: str | None = None) -> None:

@@ -35,13 +35,24 @@ def run(coro):
 
 
 def test_vacuum_analyze(monkeypatch):
+    executed = []
+
+    async def fake_maintenance(stmt: str):
+        executed.append(stmt)
+
+    async def fake_list(_conn):
+        return ["public.release"]
+
     conn = DummyConn()
     engine = DummyEngine(conn)
     monkeypatch.setattr(db, "get_engine", lambda: engine)
+    monkeypatch.setattr(db, "_maintenance", fake_maintenance)
+    monkeypatch.setattr(db, "_list_vacuum_tables", fake_list)
     monkeypatch.setattr(db, "text", lambda s: s)
+
     run(db.vacuum_analyze())
-    assert conn.executed == ["VACUUM (ANALYZE)"]
-    assert conn.opts == {"isolation_level": "AUTOCOMMIT"}
+
+    assert executed == ["VACUUM (ANALYZE) public.release"]
 
 
 def test_reindex(monkeypatch):
