@@ -73,3 +73,31 @@ def test_analyze(monkeypatch):
     run(db.analyze(table="release"))
     assert conn.executed == ["ANALYZE release"]
     assert conn.opts == {"isolation_level": "AUTOCOMMIT"}
+
+
+def test_list_vacuum_tables_filters_system_schemas(monkeypatch):
+    conn = DummyConn()
+    engine = DummyEngine(conn)
+    monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+
+    class DummyResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return ["public.release"]
+
+    async def fake_execute(stmt):
+        conn.executed.append(stmt)
+        return DummyResult()
+
+    monkeypatch.setattr(conn, "execute", fake_execute)
+
+    async def run_list():
+        async with engine.connect() as c:
+            return await db._list_vacuum_tables(c)
+
+    result = asyncio.run(run_list())
+    assert result == ["public.release"]
+    assert any("NOT LIKE 'pg_%'" in stmt for stmt in conn.executed)
