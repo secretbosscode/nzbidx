@@ -429,7 +429,8 @@ async def _list_vacuum_tables(conn: Any) -> list[str]:
             """
             SELECT quote_ident(schemaname) || '.' || quote_ident(tablename)
             FROM pg_tables
-            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+            WHERE schemaname NOT LIKE 'pg_%'
+              AND schemaname <> 'information_schema'
             ORDER BY schemaname, tablename
             """
         )
