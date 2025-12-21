@@ -431,6 +431,10 @@ async def _list_vacuum_tables(conn: Any) -> list[str]:
             FROM pg_tables
             WHERE schemaname NOT LIKE 'pg_%'
               AND schemaname <> 'information_schema'
+              AND has_table_privilege(
+                quote_ident(schemaname) || '.' || quote_ident(tablename),
+                'vacuum'
+              )
             ORDER BY schemaname, tablename
             """
         )
@@ -442,10 +446,35 @@ async def _list_vacuum_tables(conn: Any) -> list[str]:
         return [row[0] for row in result]
 
 
+async def _has_vacuum_privilege(table: str) -> bool:
+    """Return ``True`` when the current role may vacuum ``table``."""
+
+    engine = get_engine()
+    if not engine or not text:
+        return False
+
+    async with engine.connect() as conn:
+        try:
+            allowed = await conn.scalar(
+                text("SELECT has_table_privilege(:table, 'vacuum')"),
+                {"table": table},
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "vacuum_privilege_check_failed",
+                extra={"table": table, "error": str(exc)},
+            )
+            return False
+    return bool(allowed)
+
+
 async def vacuum_analyze(table: str | None = None) -> None:
     """Run ``VACUUM (ANALYZE)`` on user tables or a specific table."""
 
     if table:
+        if not await _has_vacuum_privilege(table):
+            logger.info("vacuum_skipped_no_privilege", extra={"table": table})
+            return
         await _maintenance(f"VACUUM (ANALYZE) {table}")
         return
 
