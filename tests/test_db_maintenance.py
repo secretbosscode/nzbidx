@@ -49,6 +49,7 @@ def test_vacuum_analyze(monkeypatch):
     monkeypatch.setattr(db, "_maintenance", fake_maintenance)
     monkeypatch.setattr(db, "_list_vacuum_tables", fake_list)
     monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db, "_has_vacuum_privilege", lambda *_: True)
 
     run(db.vacuum_analyze())
 
@@ -73,6 +74,27 @@ def test_analyze(monkeypatch):
     run(db.analyze(table="release"))
     assert conn.executed == ["ANALYZE release"]
     assert conn.opts == {"isolation_level": "AUTOCOMMIT"}
+
+
+def test_vacuum_analyze_skips_unprivileged_table(monkeypatch):
+    executed = []
+
+    async def fake_maintenance(stmt: str):
+        executed.append(stmt)
+
+    async def fake_has_privilege(*_args):
+        return False
+
+    conn = DummyConn()
+    engine = DummyEngine(conn)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    monkeypatch.setattr(db, "_maintenance", fake_maintenance)
+    monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db, "_has_vacuum_privilege", fake_has_privilege)
+
+    run(db.vacuum_analyze(table="public.release"))
+
+    assert executed == []
 
 
 def test_list_vacuum_tables_filters_system_schemas(monkeypatch):
@@ -101,3 +123,4 @@ def test_list_vacuum_tables_filters_system_schemas(monkeypatch):
     result = asyncio.run(run_list())
     assert result == ["public.release"]
     assert any("NOT LIKE 'pg_%'" in stmt for stmt in conn.executed)
+    assert any("has_table_privilege" in stmt for stmt in conn.executed)
