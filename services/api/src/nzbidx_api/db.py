@@ -427,15 +427,13 @@ async def _list_vacuum_tables(conn: Any) -> list[str]:
     result = await conn.execute(
         text(
             """
-            SELECT quote_ident(schemaname) || '.' || quote_ident(tablename)
-            FROM pg_tables
-            WHERE schemaname NOT LIKE 'pg_%'
-              AND schemaname <> 'information_schema'
-              AND has_table_privilege(
-                quote_ident(schemaname) || '.' || quote_ident(tablename),
+            SELECT quote_ident(schemaname) || '.' || quote_ident(relname)
+            FROM pg_stat_user_tables
+            WHERE has_table_privilege(
+                quote_ident(schemaname) || '.' || quote_ident(relname),
                 'vacuum'
-              )
-            ORDER BY schemaname, tablename
+            )
+            ORDER BY schemaname, relname
             """
         )
     )
@@ -472,6 +470,10 @@ async def vacuum_analyze(table: str | None = None) -> None:
     """Run ``VACUUM (ANALYZE)`` on user tables or a specific table."""
 
     if table:
+        schema = table.split(".", 1)[0].strip('"')
+        if schema.startswith("pg_") or schema == "information_schema":
+            logger.info("vacuum_skipped_system_table", extra={"table": table})
+            return
         if not await _has_vacuum_privilege(table):
             logger.info("vacuum_skipped_no_privilege", extra={"table": table})
             return
