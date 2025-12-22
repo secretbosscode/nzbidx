@@ -97,6 +97,30 @@ def test_vacuum_analyze_skips_unprivileged_table(monkeypatch):
     assert executed == []
 
 
+def test_vacuum_analyze_skips_system_table(monkeypatch):
+    executed = []
+    privilege_checks = []
+
+    async def fake_maintenance(stmt: str):
+        executed.append(stmt)
+
+    async def fake_has_privilege(*args):
+        privilege_checks.append(args)
+        return True
+
+    conn = DummyConn()
+    engine = DummyEngine(conn)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    monkeypatch.setattr(db, "_maintenance", fake_maintenance)
+    monkeypatch.setattr(db, "text", lambda s: s)
+    monkeypatch.setattr(db, "_has_vacuum_privilege", fake_has_privilege)
+
+    run(db.vacuum_analyze(table="pg_catalog.pg_authid"))
+
+    assert executed == []
+    assert privilege_checks == []
+
+
 def test_list_vacuum_tables_filters_system_schemas(monkeypatch):
     conn = DummyConn()
     engine = DummyEngine(conn)
@@ -122,5 +146,5 @@ def test_list_vacuum_tables_filters_system_schemas(monkeypatch):
 
     result = asyncio.run(run_list())
     assert result == ["public.release"]
-    assert any("NOT LIKE 'pg_%'" in stmt for stmt in conn.executed)
+    assert any("pg_stat_user_tables" in stmt for stmt in conn.executed)
     assert any("has_table_privilege" in stmt for stmt in conn.executed)
