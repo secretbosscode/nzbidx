@@ -176,7 +176,7 @@ def _resolve_group_mode() -> str:
         else:
             return mode_env
 
-    if os.getenv("NNTP_GROUPS") or os.getenv("NNTP_GROUP_FILE"):
+    if _configured_groups():
         return "configured"
     if mode_env:
         # Unknown mode falls back to curated by default.
@@ -249,7 +249,7 @@ def _load_curated_groups() -> List[str]:
 
 
 def _configured_groups() -> List[str]:
-    env = os.getenv("NNTP_GROUPS", "")
+    env = (os.getenv("NNTP_GROUPS", "") or "").strip()
     if not env:
         cfg = os.getenv("NNTP_GROUP_FILE")
         if cfg:
@@ -259,12 +259,13 @@ def _configured_groups() -> List[str]:
                 env = ""
     if env:
         groups = _parse_group_list(env)
-        logger.info(
-            "Using configured NNTP groups: %s",
-            groups,
-            extra={"event": "ingest_groups_config", "groups": groups},
-        )
-        return groups
+        if groups:
+            logger.info(
+                "Using configured NNTP groups: %s",
+                groups,
+                extra={"event": "ingest_groups_config", "groups": groups},
+            )
+            return groups
     return []
 
 
