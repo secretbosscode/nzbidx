@@ -198,7 +198,7 @@ def _process_groups(
                     )
                     _group_probes[group] = time.monotonic() + probe_delay
                     break
-                if high > 0:
+                if high > 0 and remaining > 0:
                     _group_failures[group] = 0
                     _group_probes.pop(group, None)
                     cursors.mark_irrelevant(group)
