@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Optional, Tuple
@@ -91,10 +92,9 @@ def install_signal_handlers() -> None:
     import signal
 
     def _handler(signum, _frame):  # pragma: no cover - OS-level signals
-        try:
-            logger.warning("signal_received", extra={"signal": signum})
-        finally:
-            raise SystemExit(0)
+        logger.warning("signal_received", extra={"signal": signum})
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
 
     monitored_signal_names = (
         "SIGTERM",
