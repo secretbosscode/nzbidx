@@ -336,9 +336,11 @@ TV_EPISODE_RE = re.compile(r"s\d{1,2}e\d{1,2}")
 
 try:  # pragma: no cover - optional dependency
     from sqlalchemy import create_engine, text
+    from sqlalchemy.pool import NullPool
 except Exception:  # pragma: no cover - optional dependency
     create_engine = None  # type: ignore
     text = None  # type: ignore
+    NullPool = None  # type: ignore
 
 
 def connect_db() -> Any:
@@ -369,7 +371,10 @@ def connect_db() -> Any:
         parsed = urlparse(url)
 
         def _connect(u: str) -> Any:
-            engine = create_engine(u, echo=False, future=True)
+            engine_kwargs = {"echo": False, "future": True}
+            if NullPool is not None:
+                engine_kwargs["poolclass"] = NullPool
+            engine = create_engine(u, **engine_kwargs)
             with engine.begin() as conn_sync:  # type: ignore[call-arg]
                 conn_sync.execute(
                     text(
@@ -447,9 +452,14 @@ def connect_db() -> Any:
                 raise
             dbname = parsed.path.lstrip("/")
             admin_url = urlunparse(parsed._replace(path="/postgres"))
-            engine = create_engine(
-                admin_url, echo=False, future=True, isolation_level="AUTOCOMMIT"
-            )
+            engine_kwargs = {
+                "echo": False,
+                "future": True,
+                "isolation_level": "AUTOCOMMIT",
+            }
+            if NullPool is not None:
+                engine_kwargs["poolclass"] = NullPool
+            engine = create_engine(admin_url, **engine_kwargs)
             with engine.connect() as conn:  # type: ignore[call-arg]
                 conn.execute(text(f'CREATE DATABASE "{dbname}"'))
             engine.dispose()
