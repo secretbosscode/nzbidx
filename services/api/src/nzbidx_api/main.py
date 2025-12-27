@@ -17,7 +17,7 @@ from urllib.parse import urlencode
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from nzbidx_ingest import ingest_loop
+from nzbidx_ingest import ingest_loop, config as ingest_config
 from nzbidx_ingest.resource_monitor import (
     install_signal_handlers,
     start_memory_logger,
@@ -270,6 +270,12 @@ INGEST_STALE_SECONDS = int(os.getenv("INGEST_STALE_SECONDS", "600"))
 
 def start_ingest() -> None:
     global _ingest_stop, _ingest_thread
+    if not ingest_config.NNTP_SETTINGS.host:
+        logger.warning(
+            "ingest_disabled_missing_nntp_host",
+            extra={"event": "ingest_disabled_missing_nntp_host"},
+        )
+        return
     _ingest_stop = threading.Event()
     _ingest_thread = threading.Thread(
         target=ingest_loop.run_forever, args=(_ingest_stop,), daemon=True
@@ -501,16 +507,23 @@ async def health(request: Request) -> ORJSONResponse:
     db_status = "ok" if await ping() else "down"
     req_id = getattr(getattr(request, "state", None), "request_id", "")
     payload = {"status": "ok", "db": db_status, "request_id": req_id}
-    last = getattr(ingest_loop, "last_run", 0.0)
-    last_wall = getattr(ingest_loop, "last_run_wall", 0.0)
-    payload["ingest_last_run"] = int(last_wall)
-    age = time.monotonic() - last if last else None
-    payload["ingest_age_seconds"] = int(age) if age is not None else None
-    if age is None or age > INGEST_STALE_SECONDS:
-        payload["ingest"] = "stale"
+    if not ingest_config.NNTP_SETTINGS.host:
+        payload["ingest"] = "disabled"
+        payload["ingest_reason"] = "missing_nntp_host"
+        payload["ingest_last_run"] = None
+        payload["ingest_age_seconds"] = None
         payload["status"] = "warn"
     else:
-        payload["ingest"] = "ok"
+        last = getattr(ingest_loop, "last_run", 0.0)
+        last_wall = getattr(ingest_loop, "last_run_wall", 0.0)
+        payload["ingest_last_run"] = int(last_wall)
+        age = time.monotonic() - last if last else None
+        payload["ingest_age_seconds"] = int(age) if age is not None else None
+        if age is None or age > INGEST_STALE_SECONDS:
+            payload["ingest"] = "stale"
+            payload["status"] = "warn"
+        else:
+            payload["ingest"] = "ok"
     payload["version"] = VERSION or "dev"
     payload["uptime_ms"] = int((time.monotonic() - _START_TIME) * 1000)
     payload["build"] = BUILD
