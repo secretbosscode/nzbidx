@@ -327,7 +327,10 @@ def get_nntp_groups() -> List[str]:
 
     global NNTP_GROUPS, _LAST_GROUP_MODE
     mode = _resolve_group_mode()
-    if NNTP_GROUPS is None or _LAST_GROUP_MODE != mode:
+    should_reload = NNTP_GROUPS is None or _LAST_GROUP_MODE != mode
+    if not should_reload and mode != "configured" and not NNTP_GROUPS:
+        should_reload = True
+    if should_reload:
         NNTP_GROUPS = _load_groups(mode)
         _LAST_GROUP_MODE = mode
     return NNTP_GROUPS
