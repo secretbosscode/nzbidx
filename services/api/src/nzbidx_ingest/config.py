@@ -401,7 +401,7 @@ ALLOWED_MOVIE_EXTENSIONS: list[str] = [
     ext.strip().lower()
     for ext in os.getenv(
         "ALLOWED_MOVIE_EXTENSIONS",
-        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts",
+        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts,rar,r00,7z,zip,001",
     ).split(",")
     if ext.strip()
 ]
@@ -409,7 +409,7 @@ ALLOWED_TV_EXTENSIONS: list[str] = [
     ext.strip().lower()
     for ext in os.getenv(
         "ALLOWED_TV_EXTENSIONS",
-        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts",
+        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts,rar,r00,7z,zip,001",
     ).split(",")
     if ext.strip()
 ]
@@ -417,7 +417,7 @@ ALLOWED_ADULT_EXTENSIONS: list[str] = [
     ext.strip().lower()
     for ext in os.getenv(
         "ALLOWED_ADULT_EXTENSIONS",
-        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts",
+        "mkv,mp4,mov,m4v,mpg,mpeg,avi,flv,webm,wmv,vob,evo,iso,m2ts,ts,rar,r00,7z,zip,001",
     ).split(",")
     if ext.strip()
 ]
