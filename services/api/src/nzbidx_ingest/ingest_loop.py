@@ -110,6 +110,7 @@ def _process_groups(
     db: object,
     groups: list[str],
     ignored: set[str],
+    curated_mode: bool,
 ) -> float:
     aggregate = _AggregateMetrics()
     db_errors: tuple[type[BaseException], ...] = ()
@@ -201,7 +202,8 @@ def _process_groups(
                 if high > 0 and remaining > 0:
                     _group_failures[group] = 0
                     _group_probes.pop(group, None)
-                    cursors.mark_irrelevant(group)
+                    if not curated_mode:
+                        cursors.mark_irrelevant(group)
                 break
         if not headers:
             continue
@@ -464,7 +466,7 @@ def _process_groups(
             extra=metrics,
         )
         aggregate.add(metrics)
-        if metrics["inserted"] == 0:
+        if metrics["inserted"] == 0 and not curated_mode:
             cursors.mark_irrelevant(group)
         sleep_ms = 0
         if INGEST_SLEEP_MS > 0 and avg_db_ms > INGEST_DB_LATENCY_MS:
@@ -518,9 +520,11 @@ def run_once(client: NNTPClient | None = None) -> float:
         last_run = time.monotonic()
         last_run_wall = time.time()
         return INGEST_POLL_MAX_SECONDS
-    skip = set(cursors.get_irrelevant_groups())
-    if skip:
-        groups_all = [g for g in groups_all if g not in skip]
+    skip = set()
+    if not curated_mode:
+        skip = set(cursors.get_irrelevant_groups())
+        if skip:
+            groups_all = [g for g in groups_all if g not in skip]
     if not groups_all:
         logger.info("ingest_no_groups")
         last_run = time.monotonic()
@@ -562,7 +566,7 @@ def run_once(client: NNTPClient | None = None) -> float:
         db = connect_db()
         if curated_mode:
             prune_non_curated_groups(db, groups_all)
-        delay = _process_groups(client, db, groups, ignored)
+        delay = _process_groups(client, db, groups, ignored, curated_mode)
         if _group_probes:
             now = time.monotonic()
             next_probe = min(_group_probes.values())
