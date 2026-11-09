@@ -13,7 +13,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "httpx",
-    "sqlalchemy>=2",
+    "sqlalchemy>=2.1.8",
     "aiosqlite",
     "asyncpg",
     "psycopg[binary]>=3.1",
