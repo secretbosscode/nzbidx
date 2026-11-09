@@ -10,7 +10,7 @@ Requires-Dist: aiosqlite
 Requires-Dist: asyncpg
 Requires-Dist: psycopg[binary]>=3.1
 Requires-Dist: python-dotenv
-Requires-Dist: setuptools>=78.1.1
+Requires-Dist: setuptools>=84.2.1
 Requires-Dist: apscheduler
 Requires-Dist: langdetect
 Requires-Dist: cachetools
