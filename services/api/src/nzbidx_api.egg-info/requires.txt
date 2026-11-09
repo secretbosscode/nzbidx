@@ -4,7 +4,7 @@ httpx
 sqlalchemy>=2
 aiosqlite
 asyncpg
-psycopg[binary]>=3.1
+psycopg[binary]>=3.3.8
 python-dotenv
 setuptools>=78.1.1
 apscheduler
