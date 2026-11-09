@@ -5,7 +5,7 @@ Author: NZBidx Contributors
 Requires-Dist: fastapi
 Requires-Dist: uvicorn[standard]
 Requires-Dist: httpx
-Requires-Dist: sqlalchemy>=2
+Requires-Dist: sqlalchemy>=2.1.8
 Requires-Dist: aiosqlite
 Requires-Dist: asyncpg
 Requires-Dist: psycopg[binary]>=3.1
