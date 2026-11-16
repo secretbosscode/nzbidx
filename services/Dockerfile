@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 RUN addgroup --system --gid 1000 nzbidx && \
     adduser --system --uid 1000 --gid 1000 nzbidx
