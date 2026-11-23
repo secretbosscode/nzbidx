@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 httpx
-sqlalchemy>=2.1.8
+sqlalchemy>=2.1.9
 aiosqlite
 asyncpg
 psycopg[binary]>=3.1
